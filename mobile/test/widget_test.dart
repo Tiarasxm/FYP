@@ -7,7 +7,6 @@ void main() {
     await tester.pumpWidget(const ShapeRushApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('Hello, Christopher'), findsOneWidget);
-    expect(find.text('Your daily progress'), findsOneWidget);
+    expect(find.text('Welcome to\nShapeRush.'), findsOneWidget);
   });
 }

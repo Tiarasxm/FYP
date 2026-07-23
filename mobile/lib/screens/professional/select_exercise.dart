@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../data/professional/mock_exercises.dart';
 import '../../models/professional/library_exercise.dart';
 import '../../models/professional/workout_plan.dart';
 import '../../widgets/professional/mobile_page_wrapper.dart';
+import 'create_exercise.dart';
 
 class SelectExercise extends StatefulWidget {
   const SelectExercise({super.key});
@@ -16,10 +18,74 @@ class _SelectExerciseState extends State<SelectExercise> {
   String searchText = '';
   String selectedMuscleGroup = 'All';
   String selectedEquipment = 'All';
+  bool showMineOnly = true;
   LibraryExercise? selectedExercise;
 
+  List<LibraryExercise> _exercises = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExercises();
+  }
+
+  Future<void> _loadExercises() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+
+      final response = await Supabase.instance.client
+          .from('exercise_library')
+          .select(
+              'professional_id, name, muscle_group, equipment, default_rep_min, default_rep_max, default_rest_sec')
+          .order('name');
+
+      setState(() {
+        _exercises = (response as List<dynamic>)
+            .map((row) => LibraryExercise(
+                  name: row['name'] as String,
+                  muscleGroup: row['muscle_group'] as String,
+                  equipment: row['equipment'] as String,
+                  repMin: row['default_rep_min'] as int?,
+                  repMax: row['default_rep_max'] as int?,
+                  restSec: row['default_rest_sec'] as int?,
+                  byMe: row['professional_id'] == userId,
+                ))
+            .toList();
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load exercises: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _openCreateExercise() async {
+    final created = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const CreateExercise(),
+      ),
+    );
+
+    if (created == true) {
+      _loadExercises();
+    }
+  }
+
   List<LibraryExercise> get filteredExercises {
-    return exerciseLibrary.where((exercise) {
+    return _exercises.where((exercise) {
       final matchesSearch = exercise.name.toLowerCase().contains(
             searchText.toLowerCase(),
           );
@@ -30,7 +96,9 @@ class _SelectExerciseState extends State<SelectExercise> {
       final matchesEquipment =
           selectedEquipment == 'All' || exercise.equipment == selectedEquipment;
 
-      return matchesSearch && matchesMuscle && matchesEquipment;
+      final matchesOwner = !showMineOnly || exercise.byMe;
+
+      return matchesSearch && matchesMuscle && matchesEquipment && matchesOwner;
     }).toList();
   }
 
@@ -133,9 +201,13 @@ class _SelectExerciseState extends State<SelectExercise> {
       return;
     }
 
+    final picked = selectedExercise!;
+    final reps = picked.repsLabel.isEmpty ? '10-12 reps' : picked.repsLabel;
+    final rest = picked.restSec != null ? '${picked.restSec}s rest' : '60s rest';
+
     final exercise = Exercise(
-      name: selectedExercise!.name,
-      detail: '3 × 10-12 • 60s rest',
+      name: picked.name,
+      detail: '3 × $reps • $rest',
     );
 
     Navigator.pop(context, exercise);
@@ -261,27 +333,75 @@ class _SelectExerciseState extends State<SelectExercise> {
                 ],
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 12),
+
+              Row(
+                children: [
+                  _OwnerChip(
+                    label: 'My exercises',
+                    selected: showMineOnly,
+                    onTap: () {
+                      setState(() {
+                        showMineOnly = true;
+                        selectedExercise = null;
+                      });
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  _OwnerChip(
+                    label: 'All',
+                    selected: !showMineOnly,
+                    onTap: () {
+                      setState(() {
+                        showMineOnly = false;
+                        selectedExercise = null;
+                      });
+                    },
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 18),
 
               Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  itemCount: filteredExercises.length,
-                  itemBuilder: (context, index) {
-                    final exercise = filteredExercises[index];
-                    final isSelected = selectedExercise == exercise;
-
-                    return _SelectableExerciseCard(
-                      exercise: exercise,
-                      selected: isSelected,
-                      onTap: () {
-                        setState(() {
-                          selectedExercise = exercise;
-                        });
-                      },
-                    );
-                  },
-                ),
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : ListView(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        children: [
+                          if (filteredExercises.isEmpty)
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 24),
+                              child: Center(
+                                child: Text(
+                                  showMineOnly
+                                      ? 'You have no exercises yet. Create one below.'
+                                      : 'No exercises found.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          for (final exercise in filteredExercises)
+                            _SelectableExerciseCard(
+                              exercise: exercise,
+                              selected: selectedExercise == exercise,
+                              onTap: () {
+                                setState(() {
+                                  selectedExercise = exercise;
+                                });
+                              },
+                            ),
+                          _CreateExerciseButton(
+                            onTap: _openCreateExercise,
+                          ),
+                        ],
+                      ),
               ),
 
               SizedBox(
@@ -360,6 +480,89 @@ class _FilterButton extends StatelessWidget {
   }
 }
 
+class _OwnerChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _OwnerChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? const Color(0xFFE4E1FF) : const Color(0xFFF3F2FA),
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: selected ? const Color(0xFF6C63FF) : Colors.black87,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CreateExerciseButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _CreateExerciseButton({
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          height: 52,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: Colors.grey.shade400,
+              width: 1.2,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.add,
+                size: 18,
+                color: Colors.grey.shade700,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Create new exercise',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _SelectableExerciseCard extends StatelessWidget {
   final LibraryExercise exercise;
   final bool selected;
@@ -423,7 +626,16 @@ class _SelectableExerciseCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        exercise.muscleGroup,
+                        [
+                          exercise.muscleGroup,
+                          if (exercise.repsLabel.isNotEmpty)
+                            exercise.repsLabel,
+                          if (exercise.restSec != null)
+                            '${exercise.restSec}s rest',
+                          if (exercise.byMe) 'by you',
+                        ].join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 11,
                           color: Colors.grey.shade600,
