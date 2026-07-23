@@ -12,18 +12,10 @@ class CreateExercise extends StatefulWidget {
 }
 
 class _CreateExerciseState extends State<CreateExercise> {
-  final TextEditingController nameController = TextEditingController(
-    text: 'Chest Press (Barbell)',
-  );
-  final TextEditingController repsController = TextEditingController(
-    text: '6 - 8',
-  );
-  final TextEditingController restController = TextEditingController(
-    text: '120',
-  );
-  final TextEditingController instructionController = TextEditingController(
-    text: 'Keep back flat, lower bar to mid-chest...',
-  );
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController repsController = TextEditingController();
+  final TextEditingController restController = TextEditingController();
+  final TextEditingController instructionController = TextEditingController();
 
   String muscleGroup = 'Chest';
   String equipment = 'Barbell';
@@ -135,6 +127,7 @@ class _CreateExerciseState extends State<CreateExercise> {
                       _InputField(
                         label: 'Name',
                         controller: nameController,
+                        hint: 'Chest Press (Barbell)',
                       ),
 
                       const SizedBox(height: 18),
@@ -171,6 +164,7 @@ class _CreateExerciseState extends State<CreateExercise> {
                             child: _InputField(
                               label: 'Default reps',
                               controller: repsController,
+                              hint: '6 - 8',
                             ),
                           ),
                           const SizedBox(width: 14),
@@ -178,6 +172,7 @@ class _CreateExerciseState extends State<CreateExercise> {
                             child: _InputField(
                               label: 'Rest (sec)',
                               controller: restController,
+                              hint: '120',
                               keyboardType: TextInputType.number,
                             ),
                           ),
@@ -189,6 +184,7 @@ class _CreateExerciseState extends State<CreateExercise> {
                       _InputField(
                         label: 'Instructions',
                         controller: instructionController,
+                        hint: 'Keep back flat, lower bar to mid-chest...',
                         maxLines: 3,
                       ),
 
@@ -276,12 +272,14 @@ class _CreateExerciseState extends State<CreateExercise> {
 class _InputField extends StatelessWidget {
   final String label;
   final TextEditingController controller;
+  final String? hint;
   final int maxLines;
   final TextInputType keyboardType;
 
   const _InputField({
     required this.label,
     required this.controller,
+    this.hint,
     this.maxLines = 1,
     this.keyboardType = TextInputType.text,
   });
@@ -305,6 +303,12 @@ class _InputField extends StatelessWidget {
           maxLines: maxLines,
           keyboardType: keyboardType,
           decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(
+              color: Colors.grey.shade500,
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+            ),
             filled: true,
             fillColor: const Color(0xFFF3F2FA),
             contentPadding: const EdgeInsets.symmetric(
