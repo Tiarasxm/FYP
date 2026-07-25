@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../auth/welcome_screen.dart';
 import 'my_profile_page.dart';
 import 'manage_account_page.dart';
 import 'membership_page.dart';
@@ -10,8 +12,50 @@ import 'faq_page.dart';
 import 'privacy_policy_page.dart';
 import 'terms_conditions_page.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  bool isLoading = true;
+  String fullName = '';
+  String email = '';
+  String userType = 'free';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final data = await Supabase.instance.client
+          .from('profiles')
+          .select('full_name, email, user_type')
+          .eq('id', Supabase.instance.client.auth.currentUser!.id)
+          .single();
+
+      if (!mounted) return;
+      setState(() {
+        fullName = data['full_name'] as String? ?? '';
+        email = data['email'] as String? ?? '';
+        userType = data['user_type'] as String? ?? 'free';
+        isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load profile: $e')),
+      );
+    }
+  }
 
   void _openPage(BuildContext context, Widget page) {
     Navigator.push(
@@ -19,6 +63,20 @@ class ProfileScreen extends StatelessWidget {
       MaterialPageRoute(
         builder: (_) => page,
       ),
+    );
+  }
+
+  Future<void> _logout(BuildContext context) async {
+    await Supabase.instance.client.auth.signOut();
+
+    if (!context.mounted) return;
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const WelcomeScreen(),
+      ),
+      (route) => false,
     );
   }
 
@@ -41,26 +99,7 @@ class ProfileScreen extends StatelessWidget {
             TextButton(
               onPressed: () {
                 Navigator.pop(dialogContext);
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Logout function will be connected later."),
-                  ),
-                );
-
-                // 以后连接 Supabase Authentication：
-                //
-                // await Supabase.instance.client.auth.signOut();
-                //
-                // if (context.mounted) {
-                //   Navigator.pushAndRemoveUntil(
-                //     context,
-                //     MaterialPageRoute(
-                //       builder: (_) => const LoginPage(),
-                //     ),
-                //     (route) => false,
-                //   );
-                // }
+                _logout(context);
               },
               child: const Text("Logout"),
             ),
@@ -72,6 +111,15 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -127,9 +175,9 @@ class ProfileScreen extends StatelessWidget {
                                   ),
                                   borderRadius: BorderRadius.circular(20),
                                 ),
-                                child: const Text(
-                                  "PRIORITY",
-                                  style: TextStyle(
+                                child: Text(
+                                  userType == 'priority' ? "PRIORITY" : "FREE",
+                                  style: const TextStyle(
                                     color: Colors.deepPurpleAccent,
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
@@ -137,18 +185,18 @@ class ProfileScreen extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              const Text(
-                                "Christopher Heron",
+                              Text(
+                                fullName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
+                                style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
                                 ),
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                "example123@gmail.com",
+                                email,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(

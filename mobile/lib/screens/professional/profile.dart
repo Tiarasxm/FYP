@@ -10,8 +10,46 @@ import 'faqs.dart';
 import 'privacy_policy.dart';
 import 'terms_conditions.dart';
 
-class ProfessionalProfile extends StatelessWidget {
+class ProfessionalProfile extends StatefulWidget {
   const ProfessionalProfile({super.key});
+
+  @override
+  State<ProfessionalProfile> createState() => _ProfessionalProfileState();
+}
+
+class _ProfessionalProfileState extends State<ProfessionalProfile> {
+  bool isLoading = true;
+  String fullName = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final data = await Supabase.instance.client
+          .from('profiles')
+          .select('full_name, email')
+          .eq('id', Supabase.instance.client.auth.currentUser!.id)
+          .single();
+
+      if (!mounted) return;
+      setState(() {
+        fullName = data['full_name'] as String? ?? '';
+        isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load profile: $e')),
+      );
+    }
+  }
 
   Future<void> logout(BuildContext context) async {
     await Supabase.instance.client.auth.signOut();
@@ -29,6 +67,14 @@ class ProfessionalProfile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return const MobilePageWrapper(
+        child: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     return MobilePageWrapper(
       child: SafeArea(
         bottom: false,
@@ -58,12 +104,12 @@ class ProfessionalProfile extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        const CircleAvatar(
+                        CircleAvatar(
                           radius: 38,
                           backgroundColor: Colors.black,
                           child: Text(
-                            'W',
-                            style: TextStyle(
+                            fullName.isNotEmpty ? fullName[0].toUpperCase() : '',
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 26,
                               fontWeight: FontWeight.w800,
@@ -98,9 +144,9 @@ class ProfessionalProfile extends StatelessWidget {
 
                               const SizedBox(height: 8),
 
-                              const Text(
-                                'Wade Warren',
-                                style: TextStyle(
+                              Text(
+                                fullName,
+                                style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w800,
                                   color: Colors.black,
