@@ -43,10 +43,16 @@ class _FitnessPlanScreenState extends State<FitnessPlanScreen> {
         const SizedBox(height: 18),
         _dayBanner(),
         const SizedBox(height: 16),
-        for (var i = 0; i < MockData.dayExercises.length; i++) ...[
-          _exerciseRow(i),
-          const SizedBox(height: 10),
-        ],
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: Center(
+            child: Text(
+              'Select a plan from the Workout tab to start.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -144,56 +150,4 @@ class _FitnessPlanScreenState extends State<FitnessPlanScreen> {
     );
   }
 
-  Widget _exerciseRow(int index) {
-    final exercise = MockData.dayExercises[index];
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.cardMuted,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            alignment: Alignment.center,
-            decoration: const BoxDecoration(
-              color: AppColors.primarySoft,
-              shape: BoxShape.circle,
-            ),
-            child: Text(
-              '${index + 1}',
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: AppColors.primary,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                exercise.name,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                exercise.meta,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 }

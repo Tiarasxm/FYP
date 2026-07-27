@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../data/mock_data.dart';
 import '../../models/client/professional.dart';
 import '../../models/client/workout_plan.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/client/filter_chips.dart';
+import '../../widgets/client/pill_tag.dart';
 import '../../widgets/client/plan_card.dart';
 import '../../widgets/client/section_card.dart';
 import '../../widgets/client/section_header.dart';
@@ -25,20 +27,70 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   String _proFilter = 'All';
   bool _fpUnlocked = false;
   late final WorkoutPlan _activePlan;
-  late final List<WorkoutPlan> _freePlans;
+
+  bool _isLoadingPlans = true;
+  List<Map<String, dynamic>> _freePlansData = [];
 
   @override
   void initState() {
     super.initState();
     _activePlan = MockData.activePlan();
-    _freePlans = MockData.freePlans();
+    _loadPlans();
   }
 
-  List<WorkoutPlan> get _visiblePlans {
-    if (_filter == 'All') return _freePlans;
-    return _freePlans
-        .where((p) => p.categories.contains(_filter))
-        .toList();
+  Future<void> _loadPlans() async {
+    setState(() {
+      _isLoadingPlans = true;
+    });
+
+    try {
+      final client = Supabase.instance.client;
+      final userId = client.auth.currentUser!.id;
+
+      final profile = await client
+          .from('profiles')
+          .select('user_type')
+          .eq('id', userId)
+          .single();
+
+      final userType = profile['user_type'] as String?;
+
+      final baseQuery = client
+          .from('free_plans')
+          .select('id, title, tag1, tag2, tag3, visibility')
+          .eq('status', 'published');
+
+      final filtered = userType == 'priority'
+          ? baseQuery
+          : baseQuery.eq('visibility', 'Public');
+
+      final response =
+          await filtered.order('created_at', ascending: false);
+
+      if (!mounted) return;
+      setState(() {
+        _freePlansData = List<Map<String, dynamic>>.from(response as List);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load plans: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingPlans = false;
+        });
+      }
+    }
+  }
+
+  List<Map<String, dynamic>> get _visiblePlans {
+    if (_filter == 'All') return _freePlansData;
+    return _freePlansData.where((p) {
+      final tags = [p['tag1'], p['tag2'], p['tag3']].whereType<String>();
+      return tags.contains(_filter);
+    }).toList();
   }
 
   @override
@@ -136,7 +188,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         plan: _activePlan,
         onBookmarkTap: () =>
             setState(() => _activePlan.bookmarked = !_activePlan.bookmarked),
-        onTap: () => _openPlan(_activePlan.title),
+        // Active plan assignment isn't wired yet, so there's no real plan id here.
+        onTap: () => _openPlan('', _activePlan.title),
       ),
       const SizedBox(height: 24),
       const SectionHeader('Free Plans'),
@@ -147,31 +200,98 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         onSelected: (value) => setState(() => _filter = value),
       ),
       const SizedBox(height: 16),
-      for (final plan in _visiblePlans) ...[
-        PlanCard(
-          plan: plan,
-          onBookmarkTap: () =>
-              setState(() => plan.bookmarked = !plan.bookmarked),
-          onTap: () => _openPlan(plan.title),
-        ),
-        const SizedBox(height: 14),
-      ],
-      if (_visiblePlans.isEmpty)
+      if (_isLoadingPlans)
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 24),
-          child: Center(
-            child: Text(
-              'No plans in this category yet.',
-              style: TextStyle(color: AppColors.textSecondary),
+          child: Center(child: CircularProgressIndicator()),
+        )
+      else ...[
+        for (final plan in _visiblePlans) ...[
+          _freePlanCard(plan),
+          const SizedBox(height: 14),
+        ],
+        if (_visiblePlans.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(
+              child: Text(
+                'No plans in this category yet.',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
             ),
           ),
-        ),
+      ],
     ];
   }
 
-  void _openPlan(String title) {
+  Widget _freePlanCard(Map<String, dynamic> plan) {
+    final tags = [plan['tag1'], plan['tag2'], plan['tag3']]
+        .whereType<String>()
+        .toList();
+    final isPrivate = plan['visibility'] == 'Private';
+
+    return GestureDetector(
+      onTap: () => _openPlan(
+        plan['id'] as String,
+        plan['title'] as String? ?? 'Untitled Plan',
+      ),
+      child: SectionCard(
+        color: AppColors.cardMuted,
+        radius: 16,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    plan['title'] as String? ?? 'Untitled Plan',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                if (isPrivate)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppColors.card,
+                      borderRadius:
+                          BorderRadius.circular(AppSpacing.pillRadius),
+                    ),
+                    child: const Text(
+                      'PRIVATE',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primary,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [for (final t in tags) PillTag(t)],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openPlan(String planId, String title) {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => PlanDetailScreen(title: title)),
+      MaterialPageRoute(
+        builder: (_) => PlanDetailScreen(planId: planId, title: title),
+      ),
     );
   }
 
