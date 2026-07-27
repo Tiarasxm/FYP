@@ -1,10 +1,18 @@
 class Exercise {
   final String name;
   final String detail;
+  final String? exerciseId;
+  final int? repMin;
+  final int? repMax;
+  final int? restSec;
 
   const Exercise({
     required this.name,
     required this.detail,
+    this.exerciseId,
+    this.repMin,
+    this.repMax,
+    this.restSec,
   });
 }
 

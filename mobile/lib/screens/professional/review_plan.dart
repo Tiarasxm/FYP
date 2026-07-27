@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/professional/workout_plan.dart';
 import '../../widgets/professional/mobile_page_wrapper.dart';
 import 'home.dart';
+import 'professional_shell.dart';
 
-class ReviewPlan extends StatelessWidget {
+class ReviewPlan extends StatefulWidget {
   final String planName;
   final List<String> tags;
   final String visibility;
@@ -30,7 +32,14 @@ class ReviewPlan extends StatelessWidget {
     this.buttonText = 'Update Changes',
   });
 
-  void finish(BuildContext context) {
+  @override
+  State<ReviewPlan> createState() => _ReviewPlanState();
+}
+
+class _ReviewPlanState extends State<ReviewPlan> {
+  bool isSaving = false;
+
+  void finish() {
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
@@ -38,6 +47,84 @@ class ReviewPlan extends StatelessWidget {
       ),
       (route) => false,
     );
+  }
+
+  Future<void> _publishPlan() async {
+    setState(() {
+      isSaving = true;
+    });
+
+    try {
+      final client = Supabase.instance.client;
+      final userId = client.auth.currentUser!.id;
+
+      final planRow = await client
+          .from('free_plans')
+          .insert({
+            'professional_id': userId,
+            'title': widget.planName,
+            'tag1': widget.tags.isNotEmpty ? widget.tags[0] : null,
+            'tag2': widget.tags.length > 1 ? widget.tags[1] : null,
+            'tag3': widget.tags.length > 2 ? widget.tags[2] : null,
+            'visibility': widget.visibility,
+            'status': 'published',
+          })
+          .select('id')
+          .single();
+
+      final planId = planRow['id'] as String;
+
+      final dayRow = await client
+          .from('plan_days')
+          .insert({
+            'plan_id': planId,
+            'week_number': widget.weekNumber,
+            'day_number': widget.dayNumber,
+            'label': widget.dayName,
+            'is_rest_day': widget.isRestDay,
+          })
+          .select('id')
+          .single();
+
+      final planDayId = dayRow['id'] as String;
+
+      if (!widget.isRestDay) {
+        for (var i = 0; i < widget.exercises.length; i++) {
+          final exercise = widget.exercises[i];
+          if (exercise.exerciseId == null) continue;
+
+          await client.from('plan_exercises').insert({
+            'plan_day_id': planDayId,
+            'exercise_id': exercise.exerciseId,
+            'set_count': 3,
+            'rep_min': exercise.repMin,
+            'rep_max': exercise.repMax,
+            'rest_sec': exercise.restSec,
+            'order_index': i,
+          });
+        }
+      }
+
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const ProfessionalShell(),
+        ),
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to publish plan: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isSaving = false;
+        });
+      }
+    }
   }
 
   @override
@@ -59,7 +146,7 @@ class ReviewPlan extends StatelessWidget {
                   const SizedBox(width: 16),
                   Expanded(
                     child: Text(
-                      planName,
+                      widget.planName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -77,9 +164,9 @@ class ReviewPlan extends StatelessWidget {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  ...tags.map((tag) => _InfoChip(text: tag)),
-                  _InfoChip(text: visibility),
-                  _InfoChip(text: duration),
+                  ...widget.tags.map((tag) => _InfoChip(text: tag)),
+                  _InfoChip(text: widget.visibility),
+                  _InfoChip(text: widget.duration),
                 ],
               ),
 
@@ -110,7 +197,7 @@ class ReviewPlan extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Week $weekNumber · Day $dayNumber — $dayName',
+                        'Week ${widget.weekNumber} · Day ${widget.dayNumber} — ${widget.dayName}',
                         style: const TextStyle(
                           fontSize: 15,
                           color: Colors.white,
@@ -125,9 +212,9 @@ class ReviewPlan extends StatelessWidget {
               const SizedBox(height: 8),
 
               Text(
-                isRestDay
+                widget.isRestDay
                     ? 'Rest Day'
-                    : '${exercises.length} exercises • ~45 min',
+                    : '${widget.exercises.length} exercises • ~45 min',
                 style: TextStyle(
                   fontSize: 13,
                   color: Colors.grey.shade600,
@@ -138,7 +225,7 @@ class ReviewPlan extends StatelessWidget {
               const SizedBox(height: 18),
 
               Expanded(
-                child: isRestDay
+                child: widget.isRestDay
                     ? Center(
                         child: Text(
                           'This day is marked as a rest day.',
@@ -149,9 +236,9 @@ class ReviewPlan extends StatelessWidget {
                         ),
                       )
                     : ListView.builder(
-                        itemCount: exercises.length,
+                        itemCount: widget.exercises.length,
                         itemBuilder: (context, index) {
-                          final exercise = exercises[index];
+                          final exercise = widget.exercises[index];
 
                           return Container(
                             margin: const EdgeInsets.only(bottom: 10),
@@ -206,9 +293,15 @@ class ReviewPlan extends StatelessWidget {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: () {
-                    finish(context);
-                  },
+                  onPressed: isSaving
+                      ? null
+                      : () {
+                          if (widget.buttonText == 'Publish Plan') {
+                            _publishPlan();
+                          } else {
+                            finish();
+                          }
+                        },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF6C63FF),
                     foregroundColor: Colors.white,
@@ -217,13 +310,24 @@ class ReviewPlan extends StatelessWidget {
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
-                  child: Text(
-                    buttonText,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
+                  child: isSaving
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        )
+                      : Text(
+                          widget.buttonText,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                 ),
               ),
             ],

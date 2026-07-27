@@ -246,6 +246,10 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                             exercises[index] = Exercise(
                               name: exercise.name,
                               detail: newDetail,
+                              exerciseId: exercise.exerciseId,
+                              repMin: int.tryParse(minRepController.text),
+                              repMax: int.tryParse(maxRepController.text),
+                              restSec: int.tryParse(restController.text),
                             );
                           });
 

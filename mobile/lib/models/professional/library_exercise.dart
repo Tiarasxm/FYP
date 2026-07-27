@@ -1,4 +1,5 @@
 class LibraryExercise {
+  final String? id;
   final String name;
   final String muscleGroup;
   final String equipment;
@@ -8,6 +9,7 @@ class LibraryExercise {
   final bool byMe;
 
   const LibraryExercise({
+    this.id,
     required this.name,
     required this.muscleGroup,
     required this.equipment,
