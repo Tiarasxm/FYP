@@ -75,6 +75,22 @@ class _SignInScreenState extends State<SignInScreen> {
       if (!mounted) return;
 
       if (userType == 'fitness professional') {
+        final Map<String, dynamic>? proData = await supabase
+            .from('fitness_professional')
+            .select('approved')
+            .eq('id', user.id)
+            .maybeSingle();
+
+        final bool approved = proData?['approved'] == true;
+
+        if (!approved) {
+          await supabase.auth.signOut();
+          showError('Your application is pending admin approval.');
+          return;
+        }
+
+        if (!mounted) return;
+
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
