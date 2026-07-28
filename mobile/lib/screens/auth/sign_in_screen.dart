@@ -78,7 +78,7 @@ class _SignInScreenState extends State<SignInScreen> {
         final Map<String, dynamic>? proData = await supabase
             .from('fitness_professional')
             .select('approved')
-            .eq('id', user.id)
+            .eq('profile_id', user.id)
             .maybeSingle();
 
         final bool approved = proData?['approved'] == true;
