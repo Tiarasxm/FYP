@@ -41,13 +41,13 @@ class _SelectExerciseState extends State<SelectExercise> {
       final response = await Supabase.instance.client
           .from('exercise_library')
           .select(
-              'id, professional_id, name, muscle_group, equipment, default_rep_min, default_rep_max, default_rest_sec')
+              'exercise_id, professional_id, name, muscle_group, equipment, default_rep_min, default_rep_max, default_rest_sec')
           .order('name');
 
       setState(() {
         _exercises = (response as List<dynamic>)
             .map((row) => LibraryExercise(
-                  id: row['id'] as String,
+                  id: row['exercise_id'] as String,
                   name: row['name'] as String,
                   muscleGroup: row['muscle_group'] as String,
                   equipment: row['equipment'] as String,
