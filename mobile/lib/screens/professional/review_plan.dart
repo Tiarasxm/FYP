@@ -69,24 +69,24 @@ class _ReviewPlanState extends State<ReviewPlan> {
             'visibility': widget.visibility,
             'status': 'published',
           })
-          .select('id')
+          .select('free_plan_id')
           .single();
 
-      final planId = planRow['id'] as String;
+      final planId = planRow['free_plan_id'] as String;
 
       final dayRow = await client
           .from('plan_days')
           .insert({
-            'plan_id': planId,
+            'free_plan_id': planId,
             'week_number': widget.weekNumber,
             'day_number': widget.dayNumber,
-            'label': widget.dayName,
+            'day_name': widget.dayName,
             'is_rest_day': widget.isRestDay,
           })
-          .select('id')
+          .select('plan_day_id')
           .single();
 
-      final planDayId = dayRow['id'] as String;
+      final planDayId = dayRow['plan_day_id'] as String;
 
       if (!widget.isRestDay) {
         for (var i = 0; i < widget.exercises.length; i++) {
@@ -96,7 +96,7 @@ class _ReviewPlanState extends State<ReviewPlan> {
           await client.from('plan_exercises').insert({
             'plan_day_id': planDayId,
             'exercise_id': exercise.exerciseId,
-            'set_count': 3,
+            'sets': 3,
             'rep_min': exercise.repMin,
             'rep_max': exercise.repMax,
             'rest_sec': exercise.restSec,
@@ -106,6 +106,9 @@ class _ReviewPlanState extends State<ReviewPlan> {
       }
 
       if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Plan published successfully!')),
+      );
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
