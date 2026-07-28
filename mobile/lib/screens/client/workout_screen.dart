@@ -57,7 +57,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
       final baseQuery = client
           .from('free_plans')
-          .select('id, title, tag1, tag2, tag3, visibility')
+          .select('id, plan_name, tag1, tag2, tag3, visibility')
           .eq('status', 'published');
 
       final filtered = userType == 'priority'
@@ -233,7 +233,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     return GestureDetector(
       onTap: () => _openPlan(
         plan['id'] as String,
-        plan['title'] as String? ?? 'Untitled Plan',
+        plan['plan_name'] as String? ?? 'Untitled Plan',
       ),
       child: SectionCard(
         color: AppColors.cardMuted,
@@ -246,7 +246,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    plan['title'] as String? ?? 'Untitled Plan',
+                    plan['plan_name'] as String? ?? 'Untitled Plan',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,

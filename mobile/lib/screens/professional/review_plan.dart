@@ -62,7 +62,7 @@ class _ReviewPlanState extends State<ReviewPlan> {
           .from('free_plans')
           .insert({
             'professional_id': userId,
-            'title': widget.planName,
+            'plan_name': widget.planName,
             'tag1': widget.tags.isNotEmpty ? widget.tags[0] : null,
             'tag2': widget.tags.length > 1 ? widget.tags[1] : null,
             'tag3': widget.tags.length > 2 ? widget.tags[2] : null,
