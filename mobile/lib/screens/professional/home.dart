@@ -182,28 +182,17 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
         .map((tag) => tag.toString())
         .toList();
 
-    if (visibility.toLowerCase() == 'private') {
-      tags.add('Private');
-    }
-
     if (tags.isEmpty) {
       tags.add('General');
     }
 
     return WorkoutPlan(
+      freePlanId: row['free_plan_id']?.toString(),
       title: row['plan_name']?.toString() ?? 'Untitled Plan',
       days: days,
       duration: '~45 min',
       tags: tags,
-      workoutDays: const [
-        WorkoutDay(
-          dayNumber: 1,
-          title: 'Day 1',
-          duration: '~45 min',
-          exerciseCount: 0,
-          exercises: [],
-        ),
-      ],
+      workoutDays: const [],
     );
   }
 
@@ -213,13 +202,17 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
     return int.tryParse(value.toString());
   }
 
-  void openPlanDetail(BuildContext context, WorkoutPlan plan) {
-    Navigator.push(
+  Future<void> openPlanDetail(BuildContext context, WorkoutPlan plan) async {
+    final deletedOrChanged = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (context) => PlanDetailScreen(plan: plan),
       ),
     );
+
+    if (deletedOrChanged == true && mounted) {
+      loadPublicPlans();
+    }
   }
 
   void openEditPlan(BuildContext context, WorkoutPlan plan) {
