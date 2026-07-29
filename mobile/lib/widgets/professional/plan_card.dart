@@ -15,6 +15,11 @@ class PlanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final displayChips = [
+      ...plan.tags,
+      plan.visibility,
+    ];
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -53,24 +58,35 @@ class PlanCard extends StatelessWidget {
                 Wrap(
                   spacing: 6,
                   runSpacing: 6,
-                  children: plan.tags.map((tag) {
+                  children: displayChips.map((chip) {
+                    final isVisibility =
+                        chip.toLowerCase() == 'public' ||
+                        chip.toLowerCase() == 'private';
+
                     return Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 9,
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
+                        color: isVisibility
+                            ? const Color(0xFFECE9FF)
+                            : Colors.white,
                         border: Border.all(
-                          color: Colors.grey.shade300,
+                          color: isVisibility
+                              ? const Color(0xFFECE9FF)
+                              : Colors.grey.shade300,
                         ),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        tag,
+                        chip,
                         style: TextStyle(
                           fontSize: 10.5,
-                          color: Colors.grey.shade700,
-                          fontWeight: FontWeight.w500,
+                          color: isVisibility
+                              ? const Color(0xFF6C63FF)
+                              : Colors.grey.shade700,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     );

@@ -185,9 +185,7 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                       borderRadius: BorderRadius.circular(20),
                     ),
                   ),
-
                   const SizedBox(height: 18),
-
                   const Text(
                     'Add Exercise',
                     style: TextStyle(
@@ -195,9 +193,7 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-
                   const SizedBox(height: 14),
-
                   _SheetOption(
                     icon: Icons.list_alt,
                     title: 'Select from Exercise Library',
@@ -206,9 +202,7 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                       addExistingExercise();
                     },
                   ),
-
                   const SizedBox(height: 10),
-
                   _SheetOption(
                     icon: Icons.add_circle_outline,
                     title: 'Create New Exercise',
@@ -274,9 +268,7 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                         borderRadius: BorderRadius.circular(20),
                       ),
                     ),
-
                     const SizedBox(height: 14),
-
                     Text(
                       exercise.name,
                       style: const TextStyle(
@@ -284,18 +276,13 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-
                     const SizedBox(height: 18),
-
                     const _SheetLabel('Set'),
                     const SizedBox(height: 8),
                     _SheetInput(controller: setController),
-
                     const SizedBox(height: 16),
-
                     const _SheetLabel('Reps'),
                     const SizedBox(height: 8),
-
                     Row(
                       children: [
                         Expanded(
@@ -313,60 +300,95 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                         ),
                       ],
                     ),
-
                     const SizedBox(height: 16),
-
                     const _SheetLabel('Rest'),
                     const SizedBox(height: 8),
                     _SheetInput(
                       controller: restController,
                       suffixText: 'seconds',
                     ),
-
                     const SizedBox(height: 22),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 48,
+                            child: OutlinedButton(
+                              onPressed: () {
+                                setState(() {
+                                  currentDay.exercises.removeAt(index);
+                                });
 
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          final sets = int.tryParse(setController.text) ?? 3;
-                          final repMin = int.tryParse(minRepController.text);
-                          final repMax = int.tryParse(maxRepController.text);
-                          final restSec = int.tryParse(restController.text);
-
-                          final newDetail =
-                              '$sets × ${minRepController.text}-${maxRepController.text} • ${restController.text}s rest';
-
-                          setState(() {
-                            currentDay.exercises[index] = Exercise(
-                              name: exercise.name,
-                              detail: newDetail,
-                              exerciseId: exercise.exerciseId,
-                              sets: sets,
-                              repMin: repMin,
-                              repMax: repMax,
-                              restSec: restSec,
-                            );
-                          });
-
-                          Navigator.pop(context);
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF6C63FF),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
+                                Navigator.pop(context);
+                              },
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.red,
+                                side: const BorderSide(
+                                  color: Colors.red,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              child: const Text(
+                                'Delete',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
-                        child: const Text(
-                          'Save',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: SizedBox(
+                            height: 48,
+                            child: ElevatedButton(
+                              onPressed: () {
+                                final sets =
+                                    int.tryParse(setController.text) ?? 3;
+                                final repMin =
+                                    int.tryParse(minRepController.text);
+                                final repMax =
+                                    int.tryParse(maxRepController.text);
+                                final restSec =
+                                    int.tryParse(restController.text);
+
+                                final newDetail =
+                                    '$sets × ${minRepController.text}-${maxRepController.text} • ${restController.text}s rest';
+
+                                setState(() {
+                                  currentDay.exercises[index] = Exercise(
+                                    name: exercise.name,
+                                    detail: newDetail,
+                                    exerciseId: exercise.exerciseId,
+                                    sets: sets,
+                                    repMin: repMin,
+                                    repMax: repMax,
+                                    restSec: restSec,
+                                  );
+                                });
+
+                                Navigator.pop(context);
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF6C63FF),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              child: const Text(
+                                'Save',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ),
                   ],
                 ),
@@ -453,9 +475,7 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 28),
-
               const Text(
                 'Week',
                 style: TextStyle(
@@ -463,9 +483,7 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                   fontWeight: FontWeight.w800,
                 ),
               ),
-
               const SizedBox(height: 10),
-
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
@@ -486,9 +504,7 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 22),
-
               const Text(
                 'Day',
                 style: TextStyle(
@@ -496,9 +512,7 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                   fontWeight: FontWeight.w800,
                 ),
               ),
-
               const SizedBox(height: 10),
-
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
@@ -519,9 +533,7 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 20),
-
               const Text(
                 'Day Name',
                 style: TextStyle(
@@ -529,9 +541,7 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                   fontWeight: FontWeight.w800,
                 ),
               ),
-
               const SizedBox(height: 8),
-
               TextField(
                 controller: dayNameController,
                 onChanged: (value) {
@@ -556,9 +566,7 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 16),
-
               Expanded(
                 child: day.exercises.isEmpty
                     ? Center(
@@ -586,7 +594,6 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                         },
                       ),
               ),
-
               SizedBox(
                 width: double.infinity,
                 height: 42,
@@ -612,9 +619,7 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 10),
-
               Row(
                 children: [
                   Checkbox(
@@ -640,9 +645,7 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 10),
-
               SizedBox(
                 width: double.infinity,
                 height: 56,

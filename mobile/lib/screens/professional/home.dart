@@ -20,7 +20,9 @@ class ProfessionalHome extends StatefulWidget {
 
 class _ProfessionalHomeState extends State<ProfessionalHome> {
   bool isLoading = true;
+
   List<WorkoutPlan> publicPlans = [];
+  List<WorkoutPlan> privatePlans = [];
 
   String displayName = 'Professional';
   String avatarLetter = 'P';
@@ -34,7 +36,7 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
   Future<void> loadHomeData() async {
     await Future.wait([
       loadProfessionalProfile(),
-      loadPublicPlans(),
+      loadPlans(),
     ]);
   }
 
@@ -112,11 +114,11 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
         avatarLetter = getFirstLetter(name);
       });
     } catch (_) {
-      // Profile loading failure should not stop the home page.
+      // 如果 profile 读取失败，不影响 plan 显示。
     }
   }
 
-  Future<void> loadPublicPlans() async {
+  Future<void> loadPlans() async {
     setState(() {
       isLoading = true;
     });
@@ -128,6 +130,7 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
       if (userId == null) {
         setState(() {
           publicPlans = [];
+          privatePlans = [];
         });
         return;
       }
@@ -142,15 +145,24 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
 
       final rows = response as List<dynamic>;
 
-      final plans = rows
-          .map((row) => buildWorkoutPlanFromRow(row as Map<String, dynamic>))
-          .where((plan) {
-        final lowerTags = plan.tags.map((tag) => tag.toLowerCase()).toList();
-        return !lowerTags.contains('private');
+      final allPlans = rows.map((row) {
+        return buildWorkoutPlanFromRow(row as Map<String, dynamic>);
       }).toList();
 
+      final publicList = <WorkoutPlan>[];
+      final privateList = <WorkoutPlan>[];
+
+      for (final plan in allPlans) {
+        if (plan.visibility.toLowerCase() == 'private') {
+          privateList.add(plan);
+        } else {
+          publicList.add(plan);
+        }
+      }
+
       setState(() {
-        publicPlans = plans;
+        publicPlans = publicList;
+        privatePlans = privateList;
       });
     } catch (error) {
       if (!mounted) return;
@@ -171,7 +183,9 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
     final durationWeeks = parseInt(row['duration_weeks']);
     final days = durationWeeks == null ? 30 : durationWeeks * 7;
 
-    final visibility = row['visibility']?.toString() ?? 'Public';
+    final visibilityValue = row['visibility']?.toString().trim();
+    final visibility =
+        visibilityValue == null || visibilityValue.isEmpty ? 'Public' : visibilityValue;
 
     final tags = [
       row['tag1'],
@@ -191,6 +205,8 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
       title: row['plan_name']?.toString() ?? 'Untitled Plan',
       days: days,
       duration: '~45 min',
+      durationWeeks: durationWeeks,
+      visibility: visibility,
       tags: tags,
       workoutDays: const [],
     );
@@ -203,25 +219,29 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
   }
 
   Future<void> openPlanDetail(BuildContext context, WorkoutPlan plan) async {
-    final deletedOrChanged = await Navigator.push<bool>(
+    final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (context) => PlanDetailScreen(plan: plan),
       ),
     );
 
-    if (deletedOrChanged == true && mounted) {
-      loadPublicPlans();
+    if (result == true && mounted) {
+      loadPlans();
     }
   }
 
-  void openEditPlan(BuildContext context, WorkoutPlan plan) {
-    Navigator.push(
+  Future<void> openEditPlan(BuildContext context, WorkoutPlan plan) async {
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => EditPlan(plan: plan),
       ),
     );
+
+    if (mounted) {
+      loadPlans();
+    }
   }
 
   Future<void> openCreatePlan(BuildContext context) async {
@@ -233,7 +253,20 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
     );
 
     if (mounted) {
-      loadPublicPlans();
+      loadPlans();
+    }
+  }
+
+  Future<void> openAllPlans(BuildContext context) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const AllPlansScreen(),
+      ),
+    );
+
+    if (mounted) {
+      loadPlans();
     }
   }
 
@@ -246,10 +279,11 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
           onRefresh: loadHomeData,
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 26),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // top area
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -303,6 +337,7 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
 
                 const SizedBox(height: 22),
 
+                // All Plans / Exercise Library
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
@@ -316,17 +351,8 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
                           icon: Icons.calendar_month,
                           iconColor: const Color(0xFFDFFF5F),
                           title: 'All Plans',
-                          onTap: () async {
-                            await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const AllPlansScreen(),
-                              ),
-                            );
-
-                            if (mounted) {
-                              loadPublicPlans();
-                            }
+                          onTap: () {
+                            openAllPlans(context);
                           },
                         ),
                       ),
@@ -352,6 +378,7 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
 
                 const SizedBox(height: 14),
 
+                // create button
                 SizedBox(
                   width: double.infinity,
                   height: 42,
@@ -383,74 +410,38 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
 
                 const SizedBox(height: 18),
 
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(14, 18, 14, 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF4F4F5),
-                    borderRadius: BorderRadius.circular(18),
+                if (isLoading)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 60),
+                    child: Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                else ...[
+                  _PlanSection(
+                    title: 'My Public Plans',
+                    plans: publicPlans,
+                    onView: (plan) {
+                      openPlanDetail(context, plan);
+                    },
+                    onEdit: (plan) {
+                      openEditPlan(context, plan);
+                    },
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text.rich(
-                        TextSpan(
-                          text: 'My Public Plans ',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.black,
-                          ),
-                          children: [
-                            TextSpan(
-                              text: '(${publicPlans.length})',
-                              style: TextStyle(
-                                color: Colors.grey.shade500,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
 
-                      const SizedBox(height: 14),
+                  const SizedBox(height: 18),
 
-                      if (isLoading)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 30),
-                          child: Center(
-                            child: CircularProgressIndicator(),
-                          ),
-                        )
-                      else if (publicPlans.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 30),
-                          child: Center(
-                            child: Text(
-                              'No public plans yet.',
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        )
-                      else
-                        ...publicPlans.take(3).map((plan) {
-                          return PlanCard(
-                            plan: plan,
-                            onView: () {
-                              openPlanDetail(context, plan);
-                            },
-                            onEdit: () {
-                              openEditPlan(context, plan);
-                            },
-                          );
-                        }),
-                    ],
+                  _PlanSection(
+                    title: 'Private Plans',
+                    plans: privatePlans,
+                    onView: (plan) {
+                      openPlanDetail(context, plan);
+                    },
+                    onEdit: (plan) {
+                      openEditPlan(context, plan);
+                    },
                   ),
-                ),
+                ],
               ],
             ),
           ),
@@ -515,6 +506,85 @@ class _PlanMenuCard extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _PlanSection extends StatelessWidget {
+  final String title;
+  final List<WorkoutPlan> plans;
+  final void Function(WorkoutPlan plan) onView;
+  final void Function(WorkoutPlan plan) onEdit;
+
+  const _PlanSection({
+    required this.title,
+    required this.plans,
+    required this.onView,
+    required this.onEdit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 18, 14, 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4F4F5),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text.rich(
+            TextSpan(
+              text: '$title ',
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+                color: Colors.black,
+              ),
+              children: [
+                TextSpan(
+                  text: '(${plans.length})',
+                  style: TextStyle(
+                    color: Colors.grey.shade500,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 14),
+
+          if (plans.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 22),
+              child: Center(
+                child: Text(
+                  'No plans yet.',
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            )
+          else
+            ...plans.map((plan) {
+              return PlanCard(
+                plan: plan,
+                onView: () {
+                  onView(plan);
+                },
+                onEdit: () {
+                  onEdit(plan);
+                },
+              );
+            }),
+        ],
       ),
     );
   }

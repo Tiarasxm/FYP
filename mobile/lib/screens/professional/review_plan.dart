@@ -6,6 +6,8 @@ import '../../widgets/professional/mobile_page_wrapper.dart';
 import 'professional_shell.dart';
 
 class ReviewPlan extends StatefulWidget {
+  final String? freePlanId;
+
   final String planName;
   final List<String> tags;
   final String visibility;
@@ -22,6 +24,7 @@ class ReviewPlan extends StatefulWidget {
 
   const ReviewPlan({
     super.key,
+    this.freePlanId,
     required this.planName,
     required this.tags,
     required this.visibility,
@@ -72,6 +75,13 @@ class _ReviewPlanState extends State<ReviewPlan> {
     return int.tryParse(match.group(0)!);
   }
 
+  int get totalExerciseCount {
+    return reviewDays.fold<int>(
+      0,
+      (sum, day) => sum + day.exercises.length,
+    );
+  }
+
   void finish() {
     Navigator.pushAndRemoveUntil(
       context,
@@ -80,6 +90,23 @@ class _ReviewPlanState extends State<ReviewPlan> {
       ),
       (route) => false,
     );
+  }
+
+  bool validatePlan() {
+    for (final day in reviewDays) {
+      final validExercises = day.exercises
+          .where((exercise) => exercise.exerciseId != null)
+          .toList();
+
+      if (!day.isRestDay && validExercises.isEmpty) {
+        showMessage(
+          'Week ${day.weekNumber} Day ${day.dayNumber} needs exercise or rest day.',
+        );
+        return false;
+      }
+    }
+
+    return true;
   }
 
   Future<void> publishPlan() async {
@@ -91,17 +118,7 @@ class _ReviewPlanState extends State<ReviewPlan> {
       return;
     }
 
-    for (final day in reviewDays) {
-      final validExercises =
-          day.exercises.where((exercise) => exercise.exerciseId != null).toList();
-
-      if (!day.isRestDay && validExercises.isEmpty) {
-        showMessage(
-          'Week ${day.weekNumber} Day ${day.dayNumber} needs exercise or rest day.',
-        );
-        return;
-      }
-    }
+    if (!validatePlan()) return;
 
     setState(() {
       isSaving = true;
@@ -126,47 +143,7 @@ class _ReviewPlanState extends State<ReviewPlan> {
 
       final planId = planRow['free_plan_id'] as String;
 
-      for (final day in reviewDays) {
-        final dayRow = await client
-            .from('plan_days')
-            .insert({
-              'free_plan_id': planId,
-              'week_number': day.weekNumber,
-              'day_number': day.dayNumber,
-              'day_name': day.displayName,
-              'is_rest_day': day.isRestDay,
-            })
-            .select('plan_day_id')
-            .single();
-
-        final planDayId = dayRow['plan_day_id'] as String;
-
-        if (!day.isRestDay) {
-          final validExercises = day.exercises
-              .where((exercise) => exercise.exerciseId != null)
-              .toList();
-
-          final exerciseRows = <Map<String, dynamic>>[];
-
-          for (int i = 0; i < validExercises.length; i++) {
-            final exercise = validExercises[i];
-
-            exerciseRows.add({
-              'plan_day_id': planDayId,
-              'exercise_id': exercise.exerciseId,
-              'order_index': i + 1,
-              'sets': exercise.sets ?? 3,
-              'rep_min': exercise.repMin,
-              'rep_max': exercise.repMax,
-              'rest_sec': exercise.restSec,
-            });
-          }
-
-          if (exerciseRows.isNotEmpty) {
-            await client.from('plan_exercises').insert(exerciseRows);
-          }
-        }
-      }
+      await insertPlanDaysAndExercises(planId);
 
       if (!mounted) return;
 
@@ -184,16 +161,141 @@ class _ReviewPlanState extends State<ReviewPlan> {
     }
   }
 
+  Future<void> updatePlan() async {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+    final planId = widget.freePlanId;
+
+    if (userId == null) {
+      showMessage('You must be signed in to update a plan.');
+      return;
+    }
+
+    if (planId == null || planId.isEmpty) {
+      showMessage('Missing plan id. Cannot update this plan.');
+      return;
+    }
+
+    if (!validatePlan()) return;
+
+    setState(() {
+      isSaving = true;
+    });
+
+    try {
+      await client
+          .from('free_plans')
+          .update({
+            'plan_name': widget.planName,
+            'category': widget.tags.isNotEmpty ? widget.tags.first : null,
+            'status': 'published',
+            'tag1': widget.tags.isNotEmpty ? widget.tags[0] : null,
+            'tag2': widget.tags.length > 1 ? widget.tags[1] : null,
+            'tag3': widget.tags.length > 2 ? widget.tags[2] : null,
+            'visibility': widget.visibility,
+            'duration_weeks': durationWeeks,
+          })
+          .eq('free_plan_id', planId)
+          .eq('professional_id', userId);
+
+      await deleteExistingPlanChildren(planId);
+      await insertPlanDaysAndExercises(planId);
+
+      if (!mounted) return;
+
+      showMessage('Plan updated successfully.');
+      finish();
+    } catch (error) {
+      if (!mounted) return;
+      showMessage('Failed to update plan: $error');
+    } finally {
+      if (mounted) {
+        setState(() {
+          isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> deleteExistingPlanChildren(String planId) async {
+    final client = Supabase.instance.client;
+
+    final dayRowsResponse = await client
+        .from('plan_days')
+        .select('plan_day_id')
+        .eq('free_plan_id', planId);
+
+    final dayRows = dayRowsResponse as List<dynamic>;
+
+    final planDayIds = dayRows
+        .map((row) => (row as Map<String, dynamic>)['plan_day_id']?.toString())
+        .whereType<String>()
+        .toList();
+
+    for (final dayId in planDayIds) {
+      await client.from('plan_exercises').delete().eq('plan_day_id', dayId);
+    }
+
+    await client.from('plan_days').delete().eq('free_plan_id', planId);
+  }
+
+  Future<void> insertPlanDaysAndExercises(String planId) async {
+    final client = Supabase.instance.client;
+
+    for (final day in reviewDays) {
+      final dayRow = await client
+          .from('plan_days')
+          .insert({
+            'free_plan_id': planId,
+            'week_number': day.weekNumber,
+            'day_number': day.dayNumber,
+            'day_name': day.displayName,
+            'is_rest_day': day.isRestDay,
+          })
+          .select('plan_day_id')
+          .single();
+
+      final planDayId = dayRow['plan_day_id'] as String;
+
+      if (!day.isRestDay) {
+        final validExercises = day.exercises
+            .where((exercise) => exercise.exerciseId != null)
+            .toList();
+
+        final exerciseRows = <Map<String, dynamic>>[];
+
+        for (int i = 0; i < validExercises.length; i++) {
+          final exercise = validExercises[i];
+
+          exerciseRows.add({
+            'plan_day_id': planDayId,
+            'exercise_id': exercise.exerciseId,
+            'order_index': i + 1,
+            'sets': exercise.sets ?? 3,
+            'rep_min': exercise.repMin,
+            'rep_max': exercise.repMax,
+            'rest_sec': exercise.restSec,
+          });
+        }
+
+        if (exerciseRows.isNotEmpty) {
+          await client.from('plan_exercises').insert(exerciseRows);
+        }
+      }
+    }
+  }
+
+  void handleMainButton() {
+    if (widget.buttonText == 'Publish Plan') {
+      publishPlan();
+    } else {
+      updatePlan();
+    }
+  }
+
   void showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
-    );
-  }
-
-  int get totalExerciseCount {
-    return reviewDays.fold<int>(
-      0,
-      (sum, day) => sum + day.exercises.length,
     );
   }
 
@@ -272,15 +374,7 @@ class _ReviewPlanState extends State<ReviewPlan> {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: isSaving
-                      ? null
-                      : () {
-                          if (widget.buttonText == 'Publish Plan') {
-                            publishPlan();
-                          } else {
-                            finish();
-                          }
-                        },
+                  onPressed: isSaving ? null : handleMainButton,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF6C63FF),
                     foregroundColor: Colors.white,

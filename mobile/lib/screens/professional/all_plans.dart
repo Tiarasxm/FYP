@@ -58,11 +58,7 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
       final privateList = <WorkoutPlan>[];
 
       for (final plan in allPlans) {
-        final visibilityTag = plan.tags
-            .map((tag) => tag.toLowerCase())
-            .contains('private');
-
-        if (visibilityTag) {
+        if (plan.visibility.toLowerCase() == 'private') {
           privateList.add(plan);
         } else {
           publicList.add(plan);
@@ -92,7 +88,9 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
     final durationWeeks = parseInt(row['duration_weeks']);
     final days = durationWeeks == null ? 30 : durationWeeks * 7;
 
-    final visibility = row['visibility']?.toString() ?? 'Public';
+    final visibility = row['visibility']?.toString().trim().isEmpty == true
+      ? 'Public'
+      : row['visibility']?.toString() ?? 'Public';
 
     final tags = [
       row['tag1'],
@@ -112,6 +110,8 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
       title: row['plan_name']?.toString() ?? 'Untitled Plan',
       days: days,
       duration: '~45 min',
+      durationWeeks: durationWeeks,
+      visibility: visibility,
       tags: tags,
       workoutDays: const [],
     );
