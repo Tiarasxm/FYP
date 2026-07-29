@@ -22,10 +22,98 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
   bool isLoading = true;
   List<WorkoutPlan> publicPlans = [];
 
+  String displayName = 'Professional';
+  String avatarLetter = 'P';
+
   @override
   void initState() {
     super.initState();
-    loadPublicPlans();
+    loadHomeData();
+  }
+
+  Future<void> loadHomeData() async {
+    await Future.wait([
+      loadProfessionalProfile(),
+      loadPublicPlans(),
+    ]);
+  }
+
+  String getTodayText() {
+    final now = DateTime.now();
+
+    const weekdays = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+
+    return '${weekdays[now.weekday - 1]} ${now.day} ${months[now.month - 1]}';
+  }
+
+  String getFirstLetter(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return 'P';
+    return trimmed[0].toUpperCase();
+  }
+
+  Future<void> loadProfessionalProfile() async {
+    try {
+      final client = Supabase.instance.client;
+      final userId = client.auth.currentUser?.id;
+
+      if (userId == null) return;
+
+      final profileRow = await client
+          .from('profiles')
+          .select('full_name, email')
+          .eq('id', userId)
+          .maybeSingle();
+
+      final professionalRow = await client
+          .from('fitness_professional')
+          .select('display_name')
+          .eq('profile_id', userId)
+          .maybeSingle();
+
+      final professionalName =
+          professionalRow?['display_name']?.toString().trim() ?? '';
+
+      final profileName = profileRow?['full_name']?.toString().trim() ?? '';
+
+      final name = professionalName.isNotEmpty
+          ? professionalName
+          : profileName.isNotEmpty
+              ? profileName
+              : 'Professional';
+
+      if (!mounted) return;
+
+      setState(() {
+        displayName = name;
+        avatarLetter = getFirstLetter(name);
+      });
+    } catch (_) {
+      // Profile loading failure should not stop the home page.
+    }
   }
 
   Future<void> loadPublicPlans() async {
@@ -162,14 +250,13 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
       child: SafeArea(
         bottom: false,
         child: RefreshIndicator(
-          onRefresh: loadPublicPlans,
+          onRefresh: loadHomeData,
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 顶部日期 + 用户名 + 头像
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -177,7 +264,7 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Saturday 23 May',
+                          getTodayText(),
                           style: TextStyle(
                             fontSize: 14,
                             color: Colors.grey.shade700,
@@ -185,9 +272,9 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
                           ),
                         ),
                         const SizedBox(height: 6),
-                        const Text(
-                          'Hello, Wade',
-                          style: TextStyle(
+                        Text(
+                          'Hello, $displayName',
+                          style: const TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.w800,
                             color: Colors.black,
@@ -195,12 +282,12 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
                         ),
                       ],
                     ),
-                    const CircleAvatar(
+                    CircleAvatar(
                       radius: 30,
                       backgroundColor: Colors.black,
                       child: Text(
-                        'W',
-                        style: TextStyle(
+                        avatarLetter,
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 22,
                           fontWeight: FontWeight.w800,
