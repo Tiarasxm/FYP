@@ -27,22 +27,21 @@ class CreatePlanSchedule extends StatefulWidget {
 class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
   int selectedWeek = 1;
   int selectedDay = 1;
-  bool markAsRestDay = false;
 
-  final TextEditingController dayNameController = TextEditingController(
-    text: 'Full Body Strength',
-  );
+  final List<int> weeks = [1];
+  final Map<int, List<int>> daysByWeek = {
+    1: [1],
+  };
 
-  final List<Exercise> exercises = [
-    const Exercise(
-      name: 'Barbell Squats',
-      detail: '3 × 10-12 • 60s rest',
-    ),
-    const Exercise(
-      name: 'Barbell Bench Press',
-      detail: '3 × 6-8 • 120s rest',
-    ),
-  ];
+  final Map<String, PlanDayDraft> dayDrafts = {};
+
+  final TextEditingController dayNameController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    ensureDayExists(1, 1);
+  }
 
   @override
   void dispose() {
@@ -50,7 +49,76 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
     super.dispose();
   }
 
+  String dayKey(int week, int day) {
+    return '$week-$day';
+  }
+
+  PlanDayDraft ensureDayExists(int week, int day) {
+    final key = dayKey(week, day);
+
+    if (!dayDrafts.containsKey(key)) {
+      dayDrafts[key] = PlanDayDraft(
+        weekNumber: week,
+        dayNumber: day,
+      );
+    }
+
+    return dayDrafts[key]!;
+  }
+
+  PlanDayDraft get currentDay {
+    return ensureDayExists(selectedWeek, selectedDay);
+  }
+
+  void selectWeek(int week) {
+    final availableDays = daysByWeek[week] ?? [1];
+
+    setState(() {
+      selectedWeek = week;
+      selectedDay = availableDays.first;
+      dayNameController.text = currentDay.dayName;
+    });
+  }
+
+  void selectDay(int day) {
+    setState(() {
+      selectedDay = day;
+      dayNameController.text = currentDay.dayName;
+    });
+  }
+
+  void addWeek() {
+    final nextWeek = weeks.last + 1;
+
+    setState(() {
+      weeks.add(nextWeek);
+      daysByWeek[nextWeek] = [1];
+      selectedWeek = nextWeek;
+      selectedDay = 1;
+      ensureDayExists(nextWeek, 1);
+      dayNameController.text = currentDay.dayName;
+    });
+  }
+
+  void addDay() {
+    final currentDays = daysByWeek[selectedWeek] ?? [1];
+    final nextDay = currentDays.last + 1;
+
+    setState(() {
+      currentDays.add(nextDay);
+      daysByWeek[selectedWeek] = currentDays;
+      selectedDay = nextDay;
+      ensureDayExists(selectedWeek, nextDay);
+      dayNameController.text = currentDay.dayName;
+    });
+  }
+
   Future<void> addExistingExercise() async {
+    if (currentDay.isRestDay) {
+      showMessage('This day is marked as rest day.');
+      return;
+    }
+
     final result = await Navigator.push<Exercise>(
       context,
       MaterialPageRoute(
@@ -60,21 +128,36 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
 
     if (result != null) {
       setState(() {
-        exercises.add(result);
+        currentDay.exercises.add(result);
+        currentDay.isRestDay = false;
       });
     }
   }
 
   Future<void> createNewExercise() async {
-    await Navigator.push<bool>(
+    if (currentDay.isRestDay) {
+      showMessage('This day is marked as rest day.');
+      return;
+    }
+
+    final created = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (context) => const CreateExercise(),
       ),
     );
+
+    if (created == true && mounted) {
+      await addExistingExercise();
+    }
   }
 
   void showAddExerciseOptions() {
+    if (currentDay.isRestDay) {
+      showMessage('This day is marked as rest day.');
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -144,12 +227,20 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
   }
 
   void editExercise(int index) {
-    final exercise = exercises[index];
+    final exercise = currentDay.exercises[index];
 
-    final setController = TextEditingController(text: '3');
-    final minRepController = TextEditingController(text: '10');
-    final maxRepController = TextEditingController(text: '12');
-    final restController = TextEditingController(text: '60');
+    final setController = TextEditingController(
+      text: exercise.sets?.toString() ?? '3',
+    );
+    final minRepController = TextEditingController(
+      text: exercise.repMin?.toString() ?? '10',
+    );
+    final maxRepController = TextEditingController(
+      text: exercise.repMax?.toString() ?? '12',
+    );
+    final restController = TextEditingController(
+      text: exercise.restSec?.toString() ?? '60',
+    );
 
     showModalBottomSheet(
       context: context,
@@ -239,17 +330,23 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                       height: 48,
                       child: ElevatedButton(
                         onPressed: () {
+                          final sets = int.tryParse(setController.text) ?? 3;
+                          final repMin = int.tryParse(minRepController.text);
+                          final repMax = int.tryParse(maxRepController.text);
+                          final restSec = int.tryParse(restController.text);
+
                           final newDetail =
-                              '${setController.text} × ${minRepController.text}-${maxRepController.text} • ${restController.text}s rest';
+                              '$sets × ${minRepController.text}-${maxRepController.text} • ${restController.text}s rest';
 
                           setState(() {
-                            exercises[index] = Exercise(
+                            currentDay.exercises[index] = Exercise(
                               name: exercise.name,
                               detail: newDetail,
                               exerciseId: exercise.exerciseId,
-                              repMin: int.tryParse(minRepController.text),
-                              repMax: int.tryParse(maxRepController.text),
-                              restSec: int.tryParse(restController.text),
+                              sets: sets,
+                              repMin: repMin,
+                              repMax: repMax,
+                              restSec: restSec,
                             );
                           });
 
@@ -281,7 +378,30 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
     );
   }
 
+  List<PlanDayDraft> get allPlanDays {
+    final allDays = dayDrafts.values.toList();
+
+    allDays.sort((a, b) {
+      final weekCompare = a.weekNumber.compareTo(b.weekNumber);
+      if (weekCompare != 0) return weekCompare;
+      return a.dayNumber.compareTo(b.dayNumber);
+    });
+
+    return allDays;
+  }
+
   void goToReview() {
+    for (final day in allPlanDays) {
+      final hasExercises = day.exercises.isNotEmpty;
+
+      if (!day.isRestDay && !hasExercises) {
+        showMessage(
+          'Week ${day.weekNumber} Day ${day.dayNumber} needs exercise or rest day.',
+        );
+        return;
+      }
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -290,21 +410,25 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
           tags: widget.tags,
           visibility: widget.visibility,
           duration: widget.duration,
-          weekNumber: selectedWeek,
-          dayNumber: selectedDay,
-          dayName: dayNameController.text.trim().isEmpty
-              ? 'Day $selectedDay'
-              : dayNameController.text.trim(),
-          isRestDay: markAsRestDay,
-          exercises: exercises,
+          planDays: allPlanDays,
           buttonText: 'Publish Plan',
         ),
       ),
     );
   }
 
+  void showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final day = currentDay;
+    final currentDays = daysByWeek[selectedWeek] ?? [1];
+    final hasExercises = day.exercises.isNotEmpty;
+
     return MobilePageWrapper(
       child: SafeArea(
         child: Padding(
@@ -342,23 +466,25 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
 
               const SizedBox(height: 10),
 
-              Row(
-                children: [
-                  for (int i = 1; i <= 3; i++) ...[
-                    _SmallBox(
-                      topText: '',
-                      number: '$i',
-                      selected: selectedWeek == i,
-                      onTap: () {
-                        setState(() {
-                          selectedWeek = i;
-                        });
-                      },
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final week in weeks) ...[
+                      _SmallBox(
+                        number: '$week',
+                        selected: selectedWeek == week,
+                        onTap: () {
+                          selectWeek(week);
+                        },
+                      ),
+                      const SizedBox(width: 10),
+                    ],
+                    _AddSmallBox(
+                      onTap: addWeek,
                     ),
-                    const SizedBox(width: 10),
                   ],
-                  const _AddSmallBox(),
-                ],
+                ),
               ),
 
               const SizedBox(height: 22),
@@ -373,23 +499,25 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
 
               const SizedBox(height: 10),
 
-              Row(
-                children: [
-                  for (int i = 1; i <= 3; i++) ...[
-                    _SmallBox(
-                      topText: '',
-                      number: '$i',
-                      selected: selectedDay == i,
-                      onTap: () {
-                        setState(() {
-                          selectedDay = i;
-                        });
-                      },
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final dayNumber in currentDays) ...[
+                      _SmallBox(
+                        number: '$dayNumber',
+                        selected: selectedDay == dayNumber,
+                        onTap: () {
+                          selectDay(dayNumber);
+                        },
+                      ),
+                      const SizedBox(width: 10),
+                    ],
+                    _AddSmallBox(
+                      onTap: addDay,
                     ),
-                    const SizedBox(width: 10),
                   ],
-                  const _AddSmallBox(),
-                ],
+                ),
               ),
 
               const SizedBox(height: 20),
@@ -406,7 +534,16 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
 
               TextField(
                 controller: dayNameController,
+                onChanged: (value) {
+                  currentDay.dayName = value;
+                },
                 decoration: InputDecoration(
+                  hintText: 'Enter day name',
+                  hintStyle: TextStyle(
+                    color: Colors.grey.shade500,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
                   filled: true,
                   fillColor: const Color(0xFFF3F2FA),
                   contentPadding: const EdgeInsets.symmetric(
@@ -423,25 +560,38 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
               const SizedBox(height: 16),
 
               Expanded(
-                child: ListView.builder(
-                  itemCount: exercises.length,
-                  itemBuilder: (context, index) {
-                    return _ExerciseEditCard(
-                      number: index + 1,
-                      exercise: exercises[index],
-                      onEdit: () {
-                        editExercise(index);
-                      },
-                    );
-                  },
-                ),
+                child: day.exercises.isEmpty
+                    ? Center(
+                        child: Text(
+                          day.isRestDay
+                              ? 'This day is marked as rest day.'
+                              : 'No exercises added yet.',
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: day.exercises.length,
+                        itemBuilder: (context, index) {
+                          return _ExerciseEditCard(
+                            number: index + 1,
+                            exercise: day.exercises[index],
+                            onEdit: () {
+                              editExercise(index);
+                            },
+                          );
+                        },
+                      ),
               ),
 
               SizedBox(
                 width: double.infinity,
                 height: 42,
                 child: OutlinedButton.icon(
-                  onPressed: showAddExerciseOptions,
+                  onPressed: day.isRestDay ? null : showAddExerciseOptions,
                   icon: const Icon(Icons.add, size: 18),
                   label: const Text(
                     'Add Exercise to This Day',
@@ -451,8 +601,10 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                   ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF6C63FF),
-                    side: const BorderSide(
-                      color: Color(0xFF6C63FF),
+                    disabledForegroundColor: Colors.grey,
+                    side: BorderSide(
+                      color:
+                          day.isRestDay ? Colors.grey : const Color(0xFF6C63FF),
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(18),
@@ -466,19 +618,24 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
               Row(
                 children: [
                   Checkbox(
-                    value: markAsRestDay,
+                    value: day.isRestDay,
                     activeColor: const Color(0xFF6C63FF),
-                    onChanged: (value) {
-                      setState(() {
-                        markAsRestDay = value ?? false;
-                      });
-                    },
+                    onChanged: hasExercises
+                        ? null
+                        : (value) {
+                            setState(() {
+                              day.isRestDay = value ?? false;
+                            });
+                          },
                   ),
-                  const Text(
-                    'Mark as Rest Day',
+                  Text(
+                    hasExercises
+                        ? 'Rest Day unavailable after adding exercises'
+                        : 'Mark as Rest Day',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
+                      color: hasExercises ? Colors.grey : Colors.black,
                     ),
                   ),
                 ],
@@ -586,13 +743,11 @@ class _ExerciseEditCard extends StatelessWidget {
 }
 
 class _SmallBox extends StatelessWidget {
-  final String topText;
   final String number;
   final bool selected;
   final VoidCallback onTap;
 
   const _SmallBox({
-    required this.topText,
     required this.number,
     required this.selected,
     required this.onTap,
@@ -607,13 +762,13 @@ class _SmallBox extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(10),
         child: SizedBox(
-          width: 48,
-          height: 44,
+          width: 58,
+          height: 58,
           child: Center(
             child: Text(
               number,
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 17,
                 color: selected ? Colors.white : Colors.black,
                 fontWeight: FontWeight.w900,
               ),
@@ -626,22 +781,34 @@ class _SmallBox extends StatelessWidget {
 }
 
 class _AddSmallBox extends StatelessWidget {
-  const _AddSmallBox();
+  final VoidCallback onTap;
+
+  const _AddSmallBox({
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 48,
-      height: 44,
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: Colors.grey.shade400,
-        ),
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(10),
-      ),
-      child: const Icon(
-        Icons.add,
-        color: Colors.black54,
+        child: Container(
+          width: 58,
+          height: 58,
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: Colors.grey.shade400,
+            ),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(
+            Icons.add,
+            color: Colors.black54,
+          ),
+        ),
       ),
     );
   }

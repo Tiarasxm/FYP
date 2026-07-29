@@ -10,11 +10,14 @@ class ReviewPlan extends StatefulWidget {
   final List<String> tags;
   final String visibility;
   final String duration;
-  final int weekNumber;
-  final int dayNumber;
-  final String dayName;
+  final List<PlanDayDraft>? planDays;
+
+  final int? weekNumber;
+  final int? dayNumber;
+  final String? dayName;
   final bool isRestDay;
   final List<Exercise> exercises;
+
   final String buttonText;
 
   const ReviewPlan({
@@ -23,11 +26,12 @@ class ReviewPlan extends StatefulWidget {
     required this.tags,
     required this.visibility,
     required this.duration,
-    required this.weekNumber,
-    required this.dayNumber,
-    required this.dayName,
-    required this.isRestDay,
-    required this.exercises,
+    this.planDays,
+    this.weekNumber,
+    this.dayNumber,
+    this.dayName,
+    this.isRestDay = false,
+    this.exercises = const [],
     this.buttonText = 'Update Changes',
   });
 
@@ -37,6 +41,30 @@ class ReviewPlan extends StatefulWidget {
 
 class _ReviewPlanState extends State<ReviewPlan> {
   bool isSaving = false;
+
+  List<PlanDayDraft> get reviewDays {
+    if (widget.planDays != null && widget.planDays!.isNotEmpty) {
+      final days = widget.planDays!.toList();
+
+      days.sort((a, b) {
+        final weekCompare = a.weekNumber.compareTo(b.weekNumber);
+        if (weekCompare != 0) return weekCompare;
+        return a.dayNumber.compareTo(b.dayNumber);
+      });
+
+      return days;
+    }
+
+    return [
+      PlanDayDraft(
+        weekNumber: widget.weekNumber ?? 1,
+        dayNumber: widget.dayNumber ?? 1,
+        dayName: widget.dayName ?? '',
+        isRestDay: widget.isRestDay,
+        exercises: widget.exercises,
+      ),
+    ];
+  }
 
   int? get durationWeeks {
     final match = RegExp(r'\d+').firstMatch(widget.duration);
@@ -63,15 +91,16 @@ class _ReviewPlanState extends State<ReviewPlan> {
       return;
     }
 
-    final validExercises = widget.exercises
-        .where((exercise) => exercise.exerciseId != null)
-        .toList();
+    for (final day in reviewDays) {
+      final validExercises =
+          day.exercises.where((exercise) => exercise.exerciseId != null).toList();
 
-    if (!widget.isRestDay && validExercises.isEmpty) {
-      showMessage(
-        'Please select exercises from the exercise library before publishing.',
-      );
-      return;
+      if (!day.isRestDay && validExercises.isEmpty) {
+        showMessage(
+          'Week ${day.weekNumber} Day ${day.dayNumber} needs exercise or rest day.',
+        );
+        return;
+      }
     }
 
     setState(() {
@@ -97,39 +126,45 @@ class _ReviewPlanState extends State<ReviewPlan> {
 
       final planId = planRow['free_plan_id'] as String;
 
-      final dayRow = await client
-          .from('plan_days')
-          .insert({
-            'free_plan_id': planId,
-            'week_number': widget.weekNumber,
-            'day_number': widget.dayNumber,
-            'day_name': widget.dayName,
-            'is_rest_day': widget.isRestDay,
-          })
-          .select('plan_day_id')
-          .single();
+      for (final day in reviewDays) {
+        final dayRow = await client
+            .from('plan_days')
+            .insert({
+              'free_plan_id': planId,
+              'week_number': day.weekNumber,
+              'day_number': day.dayNumber,
+              'day_name': day.displayName,
+              'is_rest_day': day.isRestDay,
+            })
+            .select('plan_day_id')
+            .single();
 
-      final planDayId = dayRow['plan_day_id'] as String;
+        final planDayId = dayRow['plan_day_id'] as String;
 
-      if (!widget.isRestDay) {
-        final exerciseRows = <Map<String, dynamic>>[];
+        if (!day.isRestDay) {
+          final validExercises = day.exercises
+              .where((exercise) => exercise.exerciseId != null)
+              .toList();
 
-        for (int i = 0; i < validExercises.length; i++) {
-          final exercise = validExercises[i];
+          final exerciseRows = <Map<String, dynamic>>[];
 
-          exerciseRows.add({
-            'plan_day_id': planDayId,
-            'exercise_id': exercise.exerciseId,
-            'order_index': i + 1,
-            'sets': 3,
-            'rep_min': exercise.repMin,
-            'rep_max': exercise.repMax,
-            'rest_sec': exercise.restSec,
-          });
-        }
+          for (int i = 0; i < validExercises.length; i++) {
+            final exercise = validExercises[i];
 
-        if (exerciseRows.isNotEmpty) {
-          await client.from('plan_exercises').insert(exerciseRows);
+            exerciseRows.add({
+              'plan_day_id': planDayId,
+              'exercise_id': exercise.exerciseId,
+              'order_index': i + 1,
+              'sets': exercise.sets ?? 3,
+              'rep_min': exercise.repMin,
+              'rep_max': exercise.repMax,
+              'rest_sec': exercise.restSec,
+            });
+          }
+
+          if (exerciseRows.isNotEmpty) {
+            await client.from('plan_exercises').insert(exerciseRows);
+          }
         }
       }
 
@@ -155,8 +190,17 @@ class _ReviewPlanState extends State<ReviewPlan> {
     );
   }
 
+  int get totalExerciseCount {
+    return reviewDays.fold<int>(
+      0,
+      (sum, day) => sum + day.exercises.length,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final days = reviewDays;
+
     return MobilePageWrapper(
       child: SafeArea(
         child: Padding(
@@ -200,51 +244,10 @@ class _ReviewPlanState extends State<ReviewPlan> {
                 ],
               ),
 
-              const SizedBox(height: 22),
-
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [
-                      Color(0xFF6C63FF),
-                      Color(0xFFA49DED),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  children: [
-                    const CircleAvatar(
-                      radius: 20,
-                      backgroundColor: Colors.white24,
-                      child: Icon(
-                        Icons.calendar_month,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Week ${widget.weekNumber} · Day ${widget.dayNumber} — ${widget.dayName}',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 8),
+              const SizedBox(height: 20),
 
               Text(
-                widget.isRestDay
-                    ? 'Rest Day'
-                    : '${widget.exercises.length} exercises • ~45 min',
+                '${days.length} days • $totalExerciseCount exercises',
                 style: TextStyle(
                   fontSize: 13,
                   color: Colors.grey.shade600,
@@ -252,80 +255,17 @@ class _ReviewPlanState extends State<ReviewPlan> {
                 ),
               ),
 
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
 
               Expanded(
-                child: widget.isRestDay
-                    ? Center(
-                        child: Text(
-                          'This day is marked as a rest day.',
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: widget.exercises.length,
-                        itemBuilder: (context, index) {
-                          final exercise = widget.exercises[index];
+                child: ListView.builder(
+                  itemCount: days.length,
+                  itemBuilder: (context, index) {
+                    final day = days[index];
 
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 10),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF4F4F5),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 18,
-                                  backgroundColor: const Color(0xFFECE9FF),
-                                  child: Text(
-                                    '${index + 1}',
-                                    style: const TextStyle(
-                                      color: Color(0xFF6C63FF),
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ),
-
-                                const SizedBox(width: 12),
-
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        exercise.name,
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w800,
-                                          color: Colors.black,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 5),
-                                      Text(
-                                        exercise.detail,
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.grey.shade600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
+                    return _ReviewDayCard(day: day);
+                  },
+                ),
               ),
 
               SizedBox(
@@ -373,6 +313,153 @@ class _ReviewPlanState extends State<ReviewPlan> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ReviewDayCard extends StatelessWidget {
+  final PlanDayDraft day;
+
+  const _ReviewDayCard({
+    required this.day,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4F4F5),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [
+                  Color(0xFF6C63FF),
+                  Color(0xFFA49DED),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                const CircleAvatar(
+                  radius: 18,
+                  backgroundColor: Colors.white24,
+                  child: Icon(
+                    Icons.calendar_month,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Week ${day.weekNumber} · Day ${day.dayNumber} — ${day.displayName}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          if (day.isRestDay)
+            Text(
+              'Rest Day',
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w700,
+              ),
+            )
+          else
+            Column(
+              children: [
+                for (int i = 0; i < day.exercises.length; i++)
+                  _ExerciseRow(
+                    number: i + 1,
+                    exercise: day.exercises[i],
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExerciseRow extends StatelessWidget {
+  final int number;
+  final Exercise exercise;
+
+  const _ExerciseRow({
+    required this.number,
+    required this.exercise,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 11,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: const Color(0xFFECE9FF),
+            child: Text(
+              '$number',
+              style: const TextStyle(
+                color: Color(0xFF6C63FF),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                text: exercise.name,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.black,
+                ),
+                children: [
+                  TextSpan(
+                    text: ' ${exercise.detail}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

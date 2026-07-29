@@ -2,6 +2,7 @@ class Exercise {
   final String name;
   final String detail;
   final String? exerciseId;
+  final int? sets;
   final int? repMin;
   final int? repMax;
   final int? restSec;
@@ -10,6 +11,7 @@ class Exercise {
     required this.name,
     required this.detail,
     this.exerciseId,
+    this.sets,
     this.repMin,
     this.repMax,
     this.restSec,
@@ -46,4 +48,27 @@ class WorkoutPlan {
     required this.tags,
     required this.workoutDays,
   });
+}
+
+class PlanDayDraft {
+  final int weekNumber;
+  final int dayNumber;
+  String dayName;
+  bool isRestDay;
+  List<Exercise> exercises;
+
+  PlanDayDraft({
+    required this.weekNumber,
+    required this.dayNumber,
+    this.dayName = '',
+    this.isRestDay = false,
+    List<Exercise>? exercises,
+  }) : exercises = exercises ?? [];
+
+  String get displayName {
+    if (dayName.trim().isEmpty) {
+      return 'Day $dayNumber';
+    }
+    return dayName.trim();
+  }
 }

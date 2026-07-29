@@ -11,14 +11,9 @@ class CreatePlan extends StatefulWidget {
 }
 
 class _CreatePlanState extends State<CreatePlan> {
-  final TextEditingController planNameController = TextEditingController(
-    text: '30-Day Full Body Fat Burn',
-  );
+  final TextEditingController planNameController = TextEditingController();
 
-  final List<String> selectedTags = [
-    'Fat Loss',
-    'Full Body',
-  ];
+  final List<String> selectedTags = [];
 
   String duration = '4 weeks';
   String visibility = 'Public';
@@ -54,9 +49,8 @@ class _CreatePlanState extends State<CreatePlan> {
   }
 
   void addTag() {
-    final availableTags = tagOptions
-        .where((tag) => !selectedTags.contains(tag))
-        .toList();
+    final availableTags =
+        tagOptions.where((tag) => !selectedTags.contains(tag)).toList();
 
     if (selectedTags.length >= 3) {
       return;
@@ -121,16 +115,27 @@ class _CreatePlanState extends State<CreatePlan> {
   void goToSchedule() {
     final planName = planNameController.text.trim();
 
+    if (planName.isEmpty) {
+      showMessage('Please enter a plan name.');
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => CreatePlanSchedule(
-          planName: planName.isEmpty ? 'Untitled Plan' : planName,
+          planName: planName,
           tags: selectedTags,
           duration: duration,
           visibility: visibility,
         ),
       ),
+    );
+  }
+
+  void showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
     );
   }
 
@@ -172,6 +177,7 @@ class _CreatePlanState extends State<CreatePlan> {
                       _InputField(
                         label: 'Plan Name',
                         controller: planNameController,
+                        hintText: 'Enter plan name',
                       ),
 
                       const SizedBox(height: 22),
@@ -337,10 +343,12 @@ class _TagChip extends StatelessWidget {
 class _InputField extends StatelessWidget {
   final String label;
   final TextEditingController controller;
+  final String hintText;
 
   const _InputField({
     required this.label,
     required this.controller,
+    required this.hintText,
   });
 
   @override
@@ -349,7 +357,14 @@ class _InputField extends StatelessWidget {
       label: label,
       child: TextField(
         controller: controller,
-        decoration: _inputDecoration(),
+        decoration: _inputDecoration().copyWith(
+          hintText: hintText,
+          hintStyle: TextStyle(
+            color: Colors.grey.shade500,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ),
     );
   }
