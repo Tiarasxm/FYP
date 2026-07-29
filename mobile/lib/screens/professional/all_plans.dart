@@ -1,19 +1,153 @@
 import 'package:flutter/material.dart';
-import '../../data/professional/mock_plans.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../models/professional/workout_plan.dart';
 import '../../widgets/professional/mobile_page_wrapper.dart';
 import '../../widgets/professional/plan_card.dart';
-import 'plan_detail.dart';
 import 'edit_plan.dart';
+import 'plan_detail.dart';
 
-class AllPlansScreen extends StatelessWidget {
+class AllPlansScreen extends StatefulWidget {
   const AllPlansScreen({super.key});
+
+  @override
+  State<AllPlansScreen> createState() => _AllPlansScreenState();
+}
+
+class _AllPlansScreenState extends State<AllPlansScreen> {
+  bool isLoading = true;
+  List<WorkoutPlan> publicPlans = [];
+  List<WorkoutPlan> privatePlans = [];
+
+  @override
+  void initState() {
+    super.initState();
+    loadPlans();
+  }
+
+  Future<void> loadPlans() async {
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      final client = Supabase.instance.client;
+      final userId = client.auth.currentUser?.id;
+
+      if (userId == null) {
+        setState(() {
+          publicPlans = [];
+          privatePlans = [];
+        });
+        return;
+      }
+
+      final response = await client
+          .from('free_plans')
+          .select(
+            'free_plan_id, plan_name, tag1, tag2, tag3, visibility, duration_weeks, status, created_at',
+          )
+          .eq('professional_id', userId)
+          .order('created_at', ascending: false);
+
+      final allPlans = (response as List<dynamic>).map((row) {
+        return buildWorkoutPlanFromRow(row as Map<String, dynamic>);
+      }).toList();
+
+      final publicList = <WorkoutPlan>[];
+      final privateList = <WorkoutPlan>[];
+
+      for (final plan in allPlans) {
+        final visibilityTag = plan.tags
+            .map((tag) => tag.toLowerCase())
+            .contains('private');
+
+        if (visibilityTag) {
+          privateList.add(plan);
+        } else {
+          publicList.add(plan);
+        }
+      }
+
+      setState(() {
+        publicPlans = publicList;
+        privatePlans = privateList;
+      });
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load plans: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
+  }
+
+  WorkoutPlan buildWorkoutPlanFromRow(Map<String, dynamic> row) {
+    final durationWeeks = parseInt(row['duration_weeks']);
+    final days = durationWeeks == null ? 30 : durationWeeks * 7;
+
+    final visibility = row['visibility']?.toString() ?? 'Public';
+
+    final tags = [
+      row['tag1'],
+      row['tag2'],
+      row['tag3'],
+    ]
+        .where((tag) => tag != null && tag.toString().trim().isNotEmpty)
+        .map((tag) => tag.toString())
+        .toList();
+
+    if (visibility.toLowerCase() == 'private') {
+      tags.add('Private');
+    }
+
+    if (tags.isEmpty) {
+      tags.add('Full Body');
+    }
+
+    return WorkoutPlan(
+      title: row['plan_name']?.toString() ?? 'Untitled Plan',
+      days: days,
+      duration: '~45 min',
+      tags: tags,
+      workoutDays: const [
+        WorkoutDay(
+          dayNumber: 1,
+          title: 'Day 1',
+          duration: '~45 min',
+          exerciseCount: 0,
+          exercises: [],
+        ),
+      ],
+    );
+  }
+
+  int? parseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    return int.tryParse(value.toString());
+  }
 
   void openPlanDetail(BuildContext context, WorkoutPlan plan) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => PlanDetailScreen(plan: plan),
+      ),
+    );
+  }
+
+  void openEditPlan(BuildContext context, WorkoutPlan plan) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EditPlan(plan: plan),
       ),
     );
   }
@@ -59,34 +193,56 @@ class AllPlansScreen extends StatelessWidget {
                     ),
                   ),
 
-                  const SizedBox(width: 44),
+                  IconButton(
+                    onPressed: loadPlans,
+                    icon: const Icon(
+                      Icons.refresh,
+                      color: Colors.black54,
+                    ),
+                  ),
                 ],
               ),
             ),
 
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
-                child: Column(
-                  children: [
-                    _PlanSection(
-                      title: 'My Public Plans',
-                      count: publicPlans.length,
-                      plans: publicPlans,
-                      onView: (plan) => openPlanDetail(context, plan),
-                    ),
+              child: isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: loadPlans,
+                      child: SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
+                        child: Column(
+                          children: [
+                            _PlanSection(
+                              title: 'My Public Plans',
+                              plans: publicPlans,
+                              onView: (plan) {
+                                openPlanDetail(context, plan);
+                              },
+                              onEdit: (plan) {
+                                openEditPlan(context, plan);
+                              },
+                            ),
 
-                    const SizedBox(height: 18),
+                            const SizedBox(height: 18),
 
-                    _PlanSection(
-                      title: 'Private Plans',
-                      count: privatePlans.length,
-                      plans: privatePlans,
-                      onView: (plan) => openPlanDetail(context, plan),
+                            _PlanSection(
+                              title: 'Private Plans',
+                              plans: privatePlans,
+                              onView: (plan) {
+                                openPlanDetail(context, plan);
+                              },
+                              onEdit: (plan) {
+                                openEditPlan(context, plan);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ],
-                ),
-              ),
             ),
           ],
         ),
@@ -97,20 +253,21 @@ class AllPlansScreen extends StatelessWidget {
 
 class _PlanSection extends StatelessWidget {
   final String title;
-  final int count;
   final List<WorkoutPlan> plans;
   final void Function(WorkoutPlan plan) onView;
+  final void Function(WorkoutPlan plan) onEdit;
 
   const _PlanSection({
     required this.title,
-    required this.count,
     required this.plans,
     required this.onView,
+    required this.onEdit,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 18, 14, 10),
       decoration: BoxDecoration(
         color: const Color(0xFFF4F4F5),
@@ -129,7 +286,7 @@ class _PlanSection extends StatelessWidget {
               ),
               children: [
                 TextSpan(
-                  text: '($count)',
+                  text: '(${plans.length})',
                   style: TextStyle(
                     color: Colors.grey.shade500,
                     fontWeight: FontWeight.w600,
@@ -141,20 +298,32 @@ class _PlanSection extends StatelessWidget {
 
           const SizedBox(height: 14),
 
-          ...plans.map((plan) {
-            return PlanCard(
-              plan: plan,
-              onView: () => onView(plan),
-              onEdit: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => EditPlan(plan: plan),
+          if (plans.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Center(
+                child: Text(
+                  'No plans yet.',
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
                   ),
-                );
-              },
-            );
-          }),
+                ),
+              ),
+            )
+          else
+            ...plans.map((plan) {
+              return PlanCard(
+                plan: plan,
+                onView: () {
+                  onView(plan);
+                },
+                onEdit: () {
+                  onEdit(plan);
+                },
+              );
+            }),
         ],
       ),
     );

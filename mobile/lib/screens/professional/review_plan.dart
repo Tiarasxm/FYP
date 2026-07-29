@@ -3,7 +3,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/professional/workout_plan.dart';
 import '../../widgets/professional/mobile_page_wrapper.dart';
-import 'home.dart';
 import 'professional_shell.dart';
 
 class ReviewPlan extends StatefulWidget {
@@ -39,35 +38,59 @@ class ReviewPlan extends StatefulWidget {
 class _ReviewPlanState extends State<ReviewPlan> {
   bool isSaving = false;
 
+  int? get durationWeeks {
+    final match = RegExp(r'\d+').firstMatch(widget.duration);
+    if (match == null) return null;
+    return int.tryParse(match.group(0)!);
+  }
+
   void finish() {
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
-        builder: (context) => const ProfessionalHome(),
+        builder: (context) => const ProfessionalShell(),
       ),
       (route) => false,
     );
   }
 
-  Future<void> _publishPlan() async {
+  Future<void> publishPlan() async {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+
+    if (userId == null) {
+      showMessage('You must be signed in to publish a plan.');
+      return;
+    }
+
+    final validExercises = widget.exercises
+        .where((exercise) => exercise.exerciseId != null)
+        .toList();
+
+    if (!widget.isRestDay && validExercises.isEmpty) {
+      showMessage(
+        'Please select exercises from the exercise library before publishing.',
+      );
+      return;
+    }
+
     setState(() {
       isSaving = true;
     });
 
     try {
-      final client = Supabase.instance.client;
-      final userId = client.auth.currentUser!.id;
-
       final planRow = await client
           .from('free_plans')
           .insert({
             'professional_id': userId,
             'plan_name': widget.planName,
+            'category': widget.tags.isNotEmpty ? widget.tags.first : null,
+            'status': 'published',
             'tag1': widget.tags.isNotEmpty ? widget.tags[0] : null,
             'tag2': widget.tags.length > 1 ? widget.tags[1] : null,
             'tag3': widget.tags.length > 2 ? widget.tags[2] : null,
             'visibility': widget.visibility,
-            'status': 'published',
+            'duration_weeks': durationWeeks,
           })
           .select('free_plan_id')
           .single();
@@ -89,38 +112,34 @@ class _ReviewPlanState extends State<ReviewPlan> {
       final planDayId = dayRow['plan_day_id'] as String;
 
       if (!widget.isRestDay) {
-        for (var i = 0; i < widget.exercises.length; i++) {
-          final exercise = widget.exercises[i];
-          if (exercise.exerciseId == null) continue;
+        final exerciseRows = <Map<String, dynamic>>[];
 
-          await client.from('plan_exercises').insert({
+        for (int i = 0; i < validExercises.length; i++) {
+          final exercise = validExercises[i];
+
+          exerciseRows.add({
             'plan_day_id': planDayId,
             'exercise_id': exercise.exerciseId,
+            'order_index': i + 1,
             'sets': 3,
             'rep_min': exercise.repMin,
             'rep_max': exercise.repMax,
             'rest_sec': exercise.restSec,
-            'order_index': i,
           });
+        }
+
+        if (exerciseRows.isNotEmpty) {
+          await client.from('plan_exercises').insert(exerciseRows);
         }
       }
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Plan published successfully!')),
-      );
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const ProfessionalShell(),
-        ),
-        (route) => false,
-      );
-    } catch (e) {
+
+      showMessage('Plan published successfully.');
+      finish();
+    } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to publish plan: $e')),
-      );
+      showMessage('Failed to publish plan: $error');
     } finally {
       if (mounted) {
         setState(() {
@@ -128,6 +147,12 @@ class _ReviewPlanState extends State<ReviewPlan> {
         });
       }
     }
+  }
+
+  void showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
@@ -167,7 +192,9 @@ class _ReviewPlanState extends State<ReviewPlan> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  ...widget.tags.map((tag) => _InfoChip(text: tag)),
+                  ...widget.tags.map((tag) {
+                    return _InfoChip(text: tag);
+                  }),
                   _InfoChip(text: widget.visibility),
                   _InfoChip(text: widget.duration),
                 ],
@@ -255,34 +282,43 @@ class _ReviewPlanState extends State<ReviewPlan> {
                             ),
                             child: Row(
                               children: [
-                                Text(
-                                  '${index + 1} :',
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w900,
+                                CircleAvatar(
+                                  radius: 18,
+                                  backgroundColor: const Color(0xFFECE9FF),
+                                  child: Text(
+                                    '${index + 1}',
+                                    style: const TextStyle(
+                                      color: Color(0xFF6C63FF),
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(width: 8),
+
+                                const SizedBox(width: 12),
+
                                 Expanded(
-                                  child: Text.rich(
-                                    TextSpan(
-                                      text: exercise.name,
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w800,
-                                        color: Colors.black,
-                                      ),
-                                      children: [
-                                        TextSpan(
-                                          text: ' ${exercise.detail}',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.grey.shade600,
-                                          ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        exercise.name,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w800,
+                                          color: Colors.black,
                                         ),
-                                      ],
-                                    ),
+                                      ),
+                                      const SizedBox(height: 5),
+                                      Text(
+                                        exercise.detail,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
@@ -300,7 +336,7 @@ class _ReviewPlanState extends State<ReviewPlan> {
                       ? null
                       : () {
                           if (widget.buttonText == 'Publish Plan') {
-                            _publishPlan();
+                            publishPlan();
                           } else {
                             finish();
                           }
@@ -308,6 +344,7 @@ class _ReviewPlanState extends State<ReviewPlan> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF6C63FF),
                     foregroundColor: Colors.white,
+                    disabledBackgroundColor: Colors.grey.shade300,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
