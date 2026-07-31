@@ -54,7 +54,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           .eq('id', userId)
           .single();
 
-      final userType = profile['user_type'] as String?;
+      final userType = (profile['user_type'] as String?)?.trim().toLowerCase();
 
       final response = await client
           .from('free_plans')
@@ -224,7 +224,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final tags = [plan['tag1'], plan['tag2'], plan['tag3']]
         .whereType<String>()
         .toList();
-    final isPrivate = plan['visibility'] == 'Private';
+    final isPrivate = (plan['visibility'] as String?)?.toLowerCase() == 'private';
     final isLocked = isPrivate && _userType != 'priority';
     final title = plan['plan_name'] as String? ?? 'Untitled Plan';
 
