@@ -30,6 +30,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   bool _isLoadingPlans = true;
   List<Map<String, dynamic>> _freePlansData = [];
+  String? _userType;
 
   @override
   void initState() {
@@ -55,20 +56,15 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
       final userType = profile['user_type'] as String?;
 
-      final baseQuery = client
+      final response = await client
           .from('free_plans')
           .select('id, plan_name, tag1, tag2, tag3, visibility')
-          .eq('status', 'published');
-
-      final filtered = userType == 'priority'
-          ? baseQuery
-          : baseQuery.eq('visibility', 'Public');
-
-      final response =
-          await filtered.order('created_at', ascending: false);
+          .eq('status', 'published')
+          .order('created_at', ascending: false);
 
       if (!mounted) return;
       setState(() {
+        _userType = userType;
         _freePlansData = List<Map<String, dynamic>>.from(response as List);
       });
     } catch (e) {
@@ -229,12 +225,17 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         .whereType<String>()
         .toList();
     final isPrivate = plan['visibility'] == 'Private';
+    final isLocked = isPrivate && _userType != 'priority';
+    final title = plan['plan_name'] as String? ?? 'Untitled Plan';
 
     return GestureDetector(
-      onTap: () => _openPlan(
-        plan['id'] as String,
-        plan['plan_name'] as String? ?? 'Untitled Plan',
-      ),
+      onTap: () {
+        if (isLocked) {
+          _showUpgradePrompt();
+        } else {
+          _openPlan(plan['id'] as String, title);
+        }
+      },
       child: SectionCard(
         color: AppColors.cardMuted,
         radius: 16,
@@ -246,7 +247,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    plan['plan_name'] as String? ?? 'Untitled Plan',
+                    title,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
@@ -254,7 +255,33 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                     ),
                   ),
                 ),
-                if (isPrivate)
+                if (isLocked)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppColors.card,
+                      borderRadius:
+                          BorderRadius.circular(AppSpacing.pillRadius),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.lock, size: 12, color: AppColors.primary),
+                        SizedBox(width: 4),
+                        Text(
+                          'PRIORITY',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primary,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else if (isPrivate)
                   Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 5),
@@ -279,7 +306,9 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: [for (final t in tags) PillTag(t)],
+              children: [
+                for (final t in tags) PillTag(t),
+              ],
             ),
           ],
         ),
@@ -292,6 +321,93 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       MaterialPageRoute(
         builder: (_) => PlanDetailScreen(planId: planId, title: title),
       ),
+    );
+  }
+
+  void _showUpgradePrompt() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return SafeArea(
+          top: false,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 34,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Icon(Icons.lock, size: 34, color: AppColors.primary),
+                const SizedBox(height: 14),
+                const Text(
+                  'Priority Plan',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Subscribe to Priority to access this plan and get personalised guidance from fitness professionals.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 22),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: const Text(
+                      'Upgrade to Priority',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text(
+                    'Maybe later',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
