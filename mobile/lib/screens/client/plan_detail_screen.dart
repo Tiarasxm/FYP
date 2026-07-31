@@ -70,8 +70,8 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     try {
       final response = await Supabase.instance.client
           .from('plan_days')
-          .select('id, week_number, day_number, label, is_rest_day')
-          .eq('plan_id', widget.planId)
+          .select('plan_day_id, week_number, day_number, day_name, is_rest_day')
+          .eq('free_plan_id', widget.planId)
           .order('week_number')
           .order('day_number');
 
@@ -115,8 +115,8 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       final response = await Supabase.instance.client
           .from('plan_exercises')
           .select(
-              'set_count, rep_min, rep_max, rest_sec, order_index, exercise_library(name, muscle_group)')
-          .eq('plan_day_id', day['id'] as String)
+              'sets, rep_min, rep_max, rest_sec, order_index, exercise_library(name, muscle_group)')
+          .eq('plan_day_id', day['plan_day_id'] as String)
           .order('order_index');
 
       if (!mounted) return;
@@ -280,7 +280,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     final day = _selectedDay;
     final title = day == null
         ? widget.title
-        : 'Day ${day['day_number']}: ${day['label']}';
+        : 'Day ${day['day_number']}: ${day['day_name']}';
     final meta = _isRestDay ? 'Rest Day' : '${_exercises.length} exercises';
 
     return Container(
@@ -334,7 +334,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
   Widget _exerciseRow(Map<String, dynamic> exercise, int index) {
     final library = exercise['exercise_library'] as Map<String, dynamic>?;
     final name = library?['name'] as String? ?? 'Exercise';
-    final setCount = exercise['set_count'] as int?;
+    final setCount = exercise['sets'] as int?;
     final repMin = exercise['rep_min'] as int?;
     final repMax = exercise['rep_max'] as int?;
     final restSec = exercise['rest_sec'] as int?;

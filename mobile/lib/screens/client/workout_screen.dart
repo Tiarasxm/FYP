@@ -58,7 +58,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
       final response = await client
           .from('free_plans')
-          .select('id, plan_name, tag1, tag2, tag3, visibility')
+          .select('free_plan_id, plan_name, tag1, tag2, tag3, visibility')
           .eq('status', 'published')
           .order('created_at', ascending: false);
 
@@ -233,7 +233,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         if (isLocked) {
           _showUpgradePrompt();
         } else {
-          _openPlan(plan['id'] as String, title);
+          _openPlan(plan['free_plan_id'] as String, title);
         }
       },
       child: SectionCard(
