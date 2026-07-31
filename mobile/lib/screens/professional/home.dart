@@ -24,6 +24,8 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
   List<WorkoutPlan> publicPlans = [];
   List<WorkoutPlan> privatePlans = [];
 
+  String selectedTag = 'All';
+
   String displayName = 'Professional';
   String avatarLetter = 'P';
 
@@ -77,6 +79,51 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
     return trimmed[0].toUpperCase();
   }
 
+  List<String> get availableTags {
+    final tagSet = <String>{};
+
+    for (final plan in [...publicPlans, ...privatePlans]) {
+      for (final tag in plan.tags) {
+        final cleanTag = tag.trim();
+
+        if (cleanTag.isEmpty) continue;
+        if (cleanTag.toLowerCase() == 'public') continue;
+        if (cleanTag.toLowerCase() == 'private') continue;
+
+        tagSet.add(cleanTag);
+      }
+    }
+
+    final tags = tagSet.toList();
+    tags.sort();
+
+    return ['All', ...tags];
+  }
+
+  List<WorkoutPlan> get filteredPublicPlans {
+    if (selectedTag == 'All') {
+      return publicPlans;
+    }
+
+    return publicPlans.where((plan) {
+      return plan.tags.any(
+        (tag) => tag.toLowerCase() == selectedTag.toLowerCase(),
+      );
+    }).toList();
+  }
+
+  List<WorkoutPlan> get filteredPrivatePlans {
+    if (selectedTag == 'All') {
+      return privatePlans;
+    }
+
+    return privatePlans.where((plan) {
+      return plan.tags.any(
+        (tag) => tag.toLowerCase() == selectedTag.toLowerCase(),
+      );
+    }).toList();
+  }
+
   Future<void> loadProfessionalProfile() async {
     try {
       final client = Supabase.instance.client;
@@ -114,7 +161,6 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
         avatarLetter = getFirstLetter(name);
       });
     } catch (_) {
-      // 如果 profile 读取失败，不影响 plan 显示。
     }
   }
 
@@ -163,6 +209,11 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
       setState(() {
         publicPlans = publicList;
         privatePlans = privateList;
+
+        final tags = availableTags;
+        if (!tags.contains(selectedTag)) {
+          selectedTag = 'All';
+        }
       });
     } catch (error) {
       if (!mounted) return;
@@ -283,7 +334,7 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // top area
+                // Top area
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -337,7 +388,6 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
 
                 const SizedBox(height: 22),
 
-                // All Plans / Exercise Library
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
@@ -378,7 +428,6 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
 
                 const SizedBox(height: 14),
 
-                // create button
                 SizedBox(
                   width: double.infinity,
                   height: 42,
@@ -408,6 +457,18 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
                   ),
                 ),
 
+                const SizedBox(height: 14),
+
+                _TagFilterBar(
+                  tags: availableTags,
+                  selectedTag: selectedTag,
+                  onSelected: (tag) {
+                    setState(() {
+                      selectedTag = tag;
+                    });
+                  },
+                ),
+
                 const SizedBox(height: 18),
 
                 if (isLoading)
@@ -420,7 +481,7 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
                 else ...[
                   _PlanSection(
                     title: 'My Public Plans',
-                    plans: publicPlans,
+                    plans: filteredPublicPlans,
                     onView: (plan) {
                       openPlanDetail(context, plan);
                     },
@@ -433,7 +494,7 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
 
                   _PlanSection(
                     title: 'Private Plans',
-                    plans: privatePlans,
+                    plans: filteredPrivatePlans,
                     onView: (plan) {
                       openPlanDetail(context, plan);
                     },
@@ -446,6 +507,61 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _TagFilterBar extends StatelessWidget {
+  final List<String> tags;
+  final String selectedTag;
+  final void Function(String tag) onSelected;
+
+  const _TagFilterBar({
+    required this.tags,
+    required this.selectedTag,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (tags.length <= 1) {
+      return const SizedBox.shrink();
+    }
+
+    return SizedBox(
+      height: 38,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: tags.length,
+        separatorBuilder: (context, index) {
+          return const SizedBox(width: 8);
+        },
+        itemBuilder: (context, index) {
+          final tag = tags[index];
+          final selected = tag == selectedTag;
+
+          return ChoiceChip(
+            label: Text(tag),
+            selected: selected,
+            onSelected: (_) {
+              onSelected(tag);
+            },
+            selectedColor: const Color(0xFF6C63FF),
+            backgroundColor: Colors.white,
+            side: BorderSide(
+              color: selected ? const Color(0xFF6C63FF) : Colors.grey.shade300,
+            ),
+            labelStyle: TextStyle(
+              color: selected ? Colors.white : Colors.grey.shade700,
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+          );
+        },
       ),
     );
   }
@@ -555,15 +671,13 @@ class _PlanSection extends StatelessWidget {
               ],
             ),
           ),
-
           const SizedBox(height: 14),
-
           if (plans.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 22),
               child: Center(
                 child: Text(
-                  'No plans yet.',
+                  'No plans found.',
                   style: TextStyle(
                     color: Colors.grey.shade600,
                     fontSize: 13,

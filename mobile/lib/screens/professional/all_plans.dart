@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/professional/workout_plan.dart';
 import '../../widgets/professional/mobile_page_wrapper.dart';
 import '../../widgets/professional/plan_card.dart';
+
 import 'edit_plan.dart';
 import 'plan_detail.dart';
 
@@ -16,13 +17,61 @@ class AllPlansScreen extends StatefulWidget {
 
 class _AllPlansScreenState extends State<AllPlansScreen> {
   bool isLoading = true;
+
   List<WorkoutPlan> publicPlans = [];
   List<WorkoutPlan> privatePlans = [];
+
+  String selectedTag = 'All';
 
   @override
   void initState() {
     super.initState();
     loadPlans();
+  }
+
+  List<String> get availableTags {
+    final tagSet = <String>{};
+
+    for (final plan in [...publicPlans, ...privatePlans]) {
+      for (final tag in plan.tags) {
+        final cleanTag = tag.trim();
+
+        if (cleanTag.isEmpty) continue;
+        if (cleanTag.toLowerCase() == 'public') continue;
+        if (cleanTag.toLowerCase() == 'private') continue;
+
+        tagSet.add(cleanTag);
+      }
+    }
+
+    final tags = tagSet.toList();
+    tags.sort();
+
+    return ['All', ...tags];
+  }
+
+  List<WorkoutPlan> get filteredPublicPlans {
+    if (selectedTag == 'All') {
+      return publicPlans;
+    }
+
+    return publicPlans.where((plan) {
+      return plan.tags.any(
+        (tag) => tag.toLowerCase() == selectedTag.toLowerCase(),
+      );
+    }).toList();
+  }
+
+  List<WorkoutPlan> get filteredPrivatePlans {
+    if (selectedTag == 'All') {
+      return privatePlans;
+    }
+
+    return privatePlans.where((plan) {
+      return plan.tags.any(
+        (tag) => tag.toLowerCase() == selectedTag.toLowerCase(),
+      );
+    }).toList();
   }
 
   Future<void> loadPlans() async {
@@ -68,6 +117,11 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
       setState(() {
         publicPlans = publicList;
         privatePlans = privateList;
+
+        final tags = availableTags;
+        if (!tags.contains(selectedTag)) {
+          selectedTag = 'All';
+        }
       });
     } catch (error) {
       if (!mounted) return;
@@ -88,9 +142,10 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
     final durationWeeks = parseInt(row['duration_weeks']);
     final days = durationWeeks == null ? 30 : durationWeeks * 7;
 
-    final visibility = row['visibility']?.toString().trim().isEmpty == true
-      ? 'Public'
-      : row['visibility']?.toString() ?? 'Public';
+    final visibilityValue = row['visibility']?.toString().trim();
+    final visibility = visibilityValue == null || visibilityValue.isEmpty
+        ? 'Public'
+        : visibilityValue;
 
     final tags = [
       row['tag1'],
@@ -102,7 +157,7 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
         .toList();
 
     if (tags.isEmpty) {
-      tags.add('Full Body');
+      tags.add('General');
     }
 
     return WorkoutPlan(
@@ -124,25 +179,29 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
   }
 
   Future<void> openPlanDetail(BuildContext context, WorkoutPlan plan) async {
-    final deletedOrChanged = await Navigator.push<bool>(
+    final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (context) => PlanDetailScreen(plan: plan),
       ),
     );
 
-    if (deletedOrChanged == true && mounted) {
+    if (result == true && mounted) {
       loadPlans();
     }
   }
 
-  void openEditPlan(BuildContext context, WorkoutPlan plan) {
-    Navigator.push(
+  Future<void> openEditPlan(BuildContext context, WorkoutPlan plan) async {
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => EditPlan(plan: plan),
       ),
     );
+
+    if (mounted) {
+      loadPlans();
+    }
   }
 
   @override
@@ -186,14 +245,21 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
                     ),
                   ),
 
-                  IconButton(
-                    onPressed: loadPlans,
-                    icon: const Icon(
-                      Icons.refresh,
-                      color: Colors.black54,
-                    ),
-                  ),
+                  const SizedBox(width: 44),
                 ],
+              ),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 4, 18, 10),
+              child: _TagFilterBar(
+                tags: availableTags,
+                selectedTag: selectedTag,
+                onSelected: (tag) {
+                  setState(() {
+                    selectedTag = tag;
+                  });
+                },
               ),
             ),
 
@@ -211,7 +277,7 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
                           children: [
                             _PlanSection(
                               title: 'My Public Plans',
-                              plans: publicPlans,
+                              plans: filteredPublicPlans,
                               onView: (plan) {
                                 openPlanDetail(context, plan);
                               },
@@ -224,7 +290,7 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
 
                             _PlanSection(
                               title: 'Private Plans',
-                              plans: privatePlans,
+                              plans: filteredPrivatePlans,
                               onView: (plan) {
                                 openPlanDetail(context, plan);
                               },
@@ -239,6 +305,61 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _TagFilterBar extends StatelessWidget {
+  final List<String> tags;
+  final String selectedTag;
+  final void Function(String tag) onSelected;
+
+  const _TagFilterBar({
+    required this.tags,
+    required this.selectedTag,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (tags.length <= 1) {
+      return const SizedBox.shrink();
+    }
+
+    return SizedBox(
+      height: 38,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: tags.length,
+        separatorBuilder: (context, index) {
+          return const SizedBox(width: 8);
+        },
+        itemBuilder: (context, index) {
+          final tag = tags[index];
+          final selected = tag == selectedTag;
+
+          return ChoiceChip(
+            label: Text(tag),
+            selected: selected,
+            onSelected: (_) {
+              onSelected(tag);
+            },
+            selectedColor: const Color(0xFF6C63FF),
+            backgroundColor: Colors.white,
+            side: BorderSide(
+              color: selected ? const Color(0xFF6C63FF) : Colors.grey.shade300,
+            ),
+            labelStyle: TextStyle(
+              color: selected ? Colors.white : Colors.grey.shade700,
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+          );
+        },
       ),
     );
   }
@@ -296,7 +417,7 @@ class _PlanSection extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 20),
               child: Center(
                 child: Text(
-                  'No plans yet.',
+                  'No plans found.',
                   style: TextStyle(
                     color: Colors.grey.shade600,
                     fontSize: 13,
