@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../data/mock_data.dart';
 import '../../models/client/menu_item.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/client/calorie_ring.dart';
 import '../../widgets/client/section_card.dart';
+
 import 'achievements_screen.dart';
 import 'fitness_plan_screen.dart';
 import 'leaderboard_screen.dart';
@@ -30,10 +30,24 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _activePlanId;
   String? _activePlanTitle;
   String? _activePlanDayId;
+
   String _todayPlanTitle = 'No active plan';
   String _todayPlanMeta = 'Choose a plan from Workout tab';
   bool _hasActiveWorkoutDay = false;
+
+  int _steps = 0;
+  int _heartRate = 0;
+  int _kcalBurned = 0;
+  int _kcalGoal = 500;
   double _weeklyVolumeKg = 0;
+
+  final List<MenuItem> _homeMenu = const [
+    MenuItem(label: 'Progress', icon: Icons.track_changes),
+    MenuItem(label: 'Leaderboard', icon: Icons.groups),
+    MenuItem(label: 'My Achievements', icon: Icons.emoji_events),
+    MenuItem(label: 'Saved Workout Plans', icon: Icons.bookmark),
+    MenuItem(label: 'Workout History', icon: Icons.history),
+  ];
 
   @override
   void initState() {
@@ -135,8 +149,8 @@ class _HomeScreenState extends State<HomeScreen> {
         .from('plan_days')
         .select('plan_day_id, week_number, day_number, day_name, is_rest_day')
         .eq('free_plan_id', freePlanId)
-        .order('week_number')
-        .order('day_number');
+        .order('week_number', ascending: true)
+        .order('day_number', ascending: true);
 
     final dayRows = List<Map<String, dynamic>>.from(daysResponse as List);
 
@@ -169,7 +183,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    Map<String, dynamic> selectedDay = dayRows.firstWhere(
+    final selectedDay = dayRows.firstWhere(
       (day) => day['is_rest_day'] != true,
       orElse: () => dayRows.first,
     );
@@ -194,9 +208,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ? 'Day $dayNumber'
         : 'Day $dayNumber: $dayName';
 
-    final meta = isRestDay
-        ? 'Rest Day'
-        : '~45 min • $exerciseCount exercises';
+    final meta = isRestDay ? 'Rest Day' : '~45 min • $exerciseCount exercises';
 
     if (!mounted) return;
 
@@ -214,27 +226,26 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadWeeklyVolume(SupabaseClient client, String userId) async {
     final now = DateTime.now();
 
-    final startOfWeek = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    ).subtract(
+    final startOfWeek = DateTime(now.year, now.month, now.day).subtract(
       Duration(days: now.weekday - 1),
     );
 
+    final endOfWeek = startOfWeek.add(const Duration(days: 7));
+
     final logsResponse = await client
-      .from('workout_logs')
-      .select('workout_log_id')
-      .eq('profile_id', userId)
-      .gte('performed_at', startOfWeek.toIso8601String());
+        .from('workout_logs')
+        .select('workout_log_id')
+        .eq('profile_id', userId)
+        .gte('performed_at', startOfWeek.toUtc().toIso8601String())
+        .lt('performed_at', endOfWeek.toUtc().toIso8601String());
 
     final logs = List<Map<String, dynamic>>.from(logsResponse as List);
 
     final workoutLogIds = logs
-      .map((log) => log['workout_log_id']?.toString())
-      .where((id) => id != null && id.isNotEmpty)
-      .cast<String>()
-      .toList();
+        .map((log) => log['workout_log_id']?.toString())
+        .where((id) => id != null && id.isNotEmpty)
+        .cast<String>()
+        .toList();
 
     if (workoutLogIds.isEmpty) {
       if (!mounted) return;
@@ -247,26 +258,25 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     final exercisesResponse = await client
-      .from('workout_exercises')
-      .select('workout_log_id, reps, weight_kg')
-      .inFilter('workout_log_id', workoutLogIds);
+        .from('workout_exercises')
+        .select('workout_log_id, reps, weight_kg')
+        .inFilter('workout_log_id', workoutLogIds);
 
-    final exerciseRows =
-      List<Map<String, dynamic>>.from(exercisesResponse as List);
+    final rows = List<Map<String, dynamic>>.from(exercisesResponse as List);
 
-    double totalVolume = 0;
+    double total = 0;
 
-    for (final row in exerciseRows) {
+    for (final row in rows) {
       final reps = _parseInt(row['reps']) ?? 0;
       final weight = _parseDouble(row['weight_kg']) ?? 0;
 
-      totalVolume += reps * weight;
+      total += reps * weight;
     }
 
     if (!mounted) return;
 
     setState(() {
-      _weeklyVolumeKg = totalVolume;
+      _weeklyVolumeKg = total;
     });
   }
 
@@ -293,7 +303,16 @@ class _HomeScreenState extends State<HomeScreen> {
     if (value == null) return null;
     if (value is double) return value;
     if (value is int) return value.toDouble();
+    if (value is num) return value.toDouble();
     return double.tryParse(value.toString());
+  }
+
+  String _weeklyVolumeText() {
+    if (_weeklyVolumeKg % 1 == 0) {
+      return _weeklyVolumeKg.toInt().toString();
+    }
+
+    return _weeklyVolumeKg.toStringAsFixed(1);
   }
 
   String _todayDateText() {
@@ -440,7 +459,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       iconColor: AppColors.primary,
                       iconBg: AppColors.primarySoft,
                       label: 'Steps',
-                      value: '${MockData.steps}',
+                      value: '$_steps',
                     ),
                     const SizedBox(height: 10),
                     _statTile(
@@ -448,7 +467,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       iconColor: AppColors.red,
                       iconBg: const Color(0xFFFDE8E8),
                       label: 'Heart Rate',
-                      value: '${MockData.heartRate}',
+                      value: '$_heartRate',
                       unit: 'bpm',
                     ),
                     const SizedBox(height: 10),
@@ -457,18 +476,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       iconColor: Colors.white,
                       iconBg: AppColors.dark,
                       label: 'Weekly Volume',
-                      value: _weeklyVolumeKg % 1 == 0
-                          ? _weeklyVolumeKg.toInt().toString()
-                          : _weeklyVolumeKg.toStringAsFixed(1),
+                      value: _weeklyVolumeText(),
                       unit: 'kg',
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 14),
-              const CalorieRing(
-                value: MockData.kcalBurned,
-                goal: MockData.kcalGoal,
+              CalorieRing(
+                value: _kcalBurned,
+                goal: _kcalGoal,
               ),
             ],
           ),
@@ -697,9 +714,9 @@ class _HomeScreenState extends State<HomeScreen> {
         color: Colors.transparent,
         child: Column(
           children: [
-            for (var i = 0; i < MockData.homeMenu.length; i++) ...[
-              _menuRow(context, MockData.homeMenu[i]),
-              if (i != MockData.homeMenu.length - 1)
+            for (var i = 0; i < _homeMenu.length; i++) ...[
+              _menuRow(context, _homeMenu[i]),
+              if (i != _homeMenu.length - 1)
                 const Divider(height: 1, color: AppColors.border),
             ],
           ],
