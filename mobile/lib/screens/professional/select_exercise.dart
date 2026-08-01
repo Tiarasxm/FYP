@@ -48,9 +48,9 @@ class _SelectExerciseState extends State<SelectExercise> {
         _exercises = (response as List<dynamic>)
             .map((row) => LibraryExercise(
                   id: row['exercise_id'] as String,
-                  name: row['name'] as String,
-                  muscleGroup: row['muscle_group'] as String,
-                  equipment: row['equipment'] as String,
+                  name: row['name']?.toString() ?? '',
+                  muscleGroup: row['muscle_group']?.toString() ?? '',
+                  equipment: row['equipment']?.toString() ?? '',
                   repMin: row['default_rep_min'] as int?,
                   repMax: row['default_rep_max'] as int?,
                   restSec: row['default_rest_sec'] as int?,
