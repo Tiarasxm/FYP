@@ -29,10 +29,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     });
 
     try {
-      // 现在没有 steps table，也没有 steps API。
-      // 所以这里不能读取真实数据，也不能用 mock。
-      //
-      // 之后接 API 时，把 API 返回的数据转成：
+      // There is currently no steps table or steps API.
+
+      // Therefore, we cannot read real data here, nor can we use mock data.
+
+      //Later, when connecting to the API, we will convert the data returned by the API into:
       // LeaderboardEntry(
       //   rank: 1,
       //   name: 'User Name',
