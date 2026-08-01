@@ -13,18 +13,29 @@ class CreateExercise extends StatefulWidget {
 
 class _CreateExerciseState extends State<CreateExercise> {
   final TextEditingController nameController = TextEditingController();
-  final TextEditingController repsController = TextEditingController();
+  final TextEditingController repMinController = TextEditingController();
+  final TextEditingController repMaxController = TextEditingController();
   final TextEditingController restController = TextEditingController();
   final TextEditingController instructionController = TextEditingController();
 
-  String muscleGroup = 'Chest';
-  String equipment = 'Barbell';
+  String? muscleGroup;
+  String? equipment;
+
   bool isSaving = false;
+
+  List<String> get muscleGroupOptions {
+    return muscleGroups.where((item) => item != 'All').toList();
+  }
+
+  List<String> get equipmentOptions {
+    return equipmentTypes.where((item) => item != 'All').toList();
+  }
 
   @override
   void dispose() {
     nameController.dispose();
-    repsController.dispose();
+    repMinController.dispose();
+    repMaxController.dispose();
     restController.dispose();
     instructionController.dispose();
     super.dispose();
@@ -32,8 +43,9 @@ class _CreateExerciseState extends State<CreateExercise> {
 
   Future<void> saveExercise() async {
     final name = nameController.text.trim();
-    final reps = repsController.text.trim();
-    final rest = restController.text.trim();
+    final repMin = int.tryParse(repMinController.text.trim());
+    final repMax = int.tryParse(repMaxController.text.trim());
+    final restSec = int.tryParse(restController.text.trim());
     final instructions = instructionController.text.trim();
 
     if (name.isEmpty) {
@@ -41,17 +53,40 @@ class _CreateExerciseState extends State<CreateExercise> {
       return;
     }
 
-    final repNumbers = RegExp(r'\d+')
-        .allMatches(reps)
-        .map((match) => int.parse(match.group(0)!))
-        .toList();
-    final repMin = repNumbers.isNotEmpty ? repNumbers.first : null;
-    final repMax = repNumbers.length > 1 ? repNumbers.last : repMin;
-    final restSec = int.tryParse(rest);
+    if (muscleGroup == null) {
+      showMessage('Please select muscle group.');
+      return;
+    }
+
+    if (equipment == null) {
+      showMessage('Please select equipment.');
+      return;
+    }
+
+    if (repMin == null) {
+      showMessage('Please enter minimum reps.');
+      return;
+    }
+
+    if (repMax == null) {
+      showMessage('Please enter maximum reps.');
+      return;
+    }
+
+    if (repMax < repMin) {
+      showMessage('Maximum reps cannot be smaller than minimum reps.');
+      return;
+    }
+
+    if (restSec == null) {
+      showMessage('Please enter rest seconds.');
+      return;
+    }
 
     final userId = Supabase.instance.client.auth.currentUser?.id;
+
     if (userId == null) {
-      showMessage('You must be signed in to save an exercise.');
+      showMessage('You must be signed in.');
       return;
     }
 
@@ -65,17 +100,21 @@ class _CreateExerciseState extends State<CreateExercise> {
         'name': name,
         'muscle_group': muscleGroup,
         'equipment': equipment,
+        'category': muscleGroup,
         'default_rep_min': repMin,
         'default_rep_max': repMax,
         'default_rest_sec': restSec,
-        'instructions': instructions,
+        'instructions': instructions.isEmpty ? null : instructions,
+        'status': 'active',
       });
 
       if (!mounted) return;
+
+      showMessage('Exercise created successfully.');
       Navigator.pop(context, true);
-    } catch (e) {
+    } catch (error) {
       if (!mounted) return;
-      showMessage('Failed to save exercise: $e');
+      showMessage('Failed to create exercise: $error');
     } finally {
       if (mounted) {
         setState(() {
@@ -98,6 +137,7 @@ class _CreateExerciseState extends State<CreateExercise> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 18, 24, 26),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
@@ -110,7 +150,7 @@ class _CreateExerciseState extends State<CreateExercise> {
                   const Text(
                     'New Exercise',
                     style: TextStyle(
-                      fontSize: 22,
+                      fontSize: 20,
                       fontWeight: FontWeight.w900,
                       color: Colors.black,
                     ),
@@ -127,15 +167,16 @@ class _CreateExerciseState extends State<CreateExercise> {
                       _InputField(
                         label: 'Name',
                         controller: nameController,
-                        hint: 'Chest Press (Barbell)',
+                        hintText: 'Enter exercise name',
                       ),
 
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 20),
 
                       _DropdownField(
                         label: 'Muscle Group',
                         value: muscleGroup,
-                        items: muscleGroups.where((item) => item != 'All').toList(),
+                        hintText: 'Select muscle group',
+                        items: muscleGroupOptions,
                         onChanged: (value) {
                           setState(() {
                             muscleGroup = value;
@@ -143,12 +184,13 @@ class _CreateExerciseState extends State<CreateExercise> {
                         },
                       ),
 
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 20),
 
                       _DropdownField(
                         label: 'Equipment',
                         value: equipment,
-                        items: equipmentTypes.where((item) => item != 'All').toList(),
+                        hintText: 'Select equipment',
+                        items: equipmentOptions,
                         onChanged: (value) {
                           setState(() {
                             equipment = value;
@@ -156,69 +198,80 @@ class _CreateExerciseState extends State<CreateExercise> {
                         },
                       ),
 
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 20),
 
                       Row(
                         children: [
                           Expanded(
                             child: _InputField(
-                              label: 'Default reps',
-                              controller: repsController,
-                              hint: '6 - 8',
+                              label: 'Rep Min',
+                              controller: repMinController,
+                              hintText: 'Min',
+                              keyboardType: TextInputType.number,
                             ),
                           ),
                           const SizedBox(width: 14),
                           Expanded(
                             child: _InputField(
-                              label: 'Rest (sec)',
-                              controller: restController,
-                              hint: '120',
+                              label: 'Rep Max',
+                              controller: repMaxController,
+                              hintText: 'Max',
                               keyboardType: TextInputType.number,
                             ),
                           ),
                         ],
                       ),
 
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 20),
+
+                      _InputField(
+                        label: 'Rest (sec)',
+                        controller: restController,
+                        hintText: 'Enter rest seconds',
+                        keyboardType: TextInputType.number,
+                      ),
+
+                      const SizedBox(height: 20),
 
                       _InputField(
                         label: 'Instructions',
                         controller: instructionController,
-                        hint: 'Keep back flat, lower bar to mid-chest...',
-                        maxLines: 3,
+                        hintText: 'Enter instructions',
+                        maxLines: 4,
                       ),
 
                       const SizedBox(height: 20),
 
                       Container(
                         width: double.infinity,
-                        height: 72,
+                        height: 58,
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                             color: Colors.grey.shade300,
-                            width: 1.3,
                           ),
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.image_outlined,
-                              color: Colors.grey.shade600,
-                              size: 24,
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              'Add demo image / video',
-                              style: TextStyle(
+                        child: Center(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.image_outlined,
                                 color: Colors.grey.shade600,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
+                                size: 22,
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 8),
+                              Text(
+                                'Add demo image / video',
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -236,6 +289,7 @@ class _CreateExerciseState extends State<CreateExercise> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF6C63FF),
                     foregroundColor: Colors.white,
+                    disabledBackgroundColor: Colors.grey.shade300,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -272,75 +326,94 @@ class _CreateExerciseState extends State<CreateExercise> {
 class _InputField extends StatelessWidget {
   final String label;
   final TextEditingController controller;
-  final String? hint;
+  final String hintText;
   final int maxLines;
   final TextInputType keyboardType;
 
   const _InputField({
     required this.label,
     required this.controller,
-    this.hint,
+    required this.hintText,
     this.maxLines = 1,
     this.keyboardType = TextInputType.text,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.grey.shade700,
+    return _FieldWrapper(
+      label: label,
+      child: TextField(
+        controller: controller,
+        maxLines: maxLines,
+        keyboardType: keyboardType,
+        decoration: _inputDecoration().copyWith(
+          hintText: hintText,
+          hintStyle: TextStyle(
+            color: Colors.grey.shade500,
             fontSize: 14,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w500,
           ),
         ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: controller,
-          maxLines: maxLines,
-          keyboardType: keyboardType,
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(
-              color: Colors.grey.shade500,
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
-            ),
-            filled: true,
-            fillColor: const Color(0xFFF3F2FA),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 15,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
-            ),
-          ),
-          style: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
 
 class _DropdownField extends StatelessWidget {
   final String label;
-  final String value;
+  final String? value;
+  final String hintText;
   final List<String> items;
   final void Function(String value) onChanged;
 
   const _DropdownField({
     required this.label,
     required this.value,
+    required this.hintText,
     required this.items,
     required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _FieldWrapper(
+      label: label,
+      child: DropdownButtonFormField<String>(
+        value: value,
+        hint: Text(
+          hintText,
+          style: TextStyle(
+            color: Colors.grey.shade500,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        icon: const Icon(Icons.keyboard_arrow_down),
+        decoration: _inputDecoration(),
+        menuMaxHeight: MediaQuery.of(context).size.height * 0.45,
+        items: items.map((item) {
+          return DropdownMenuItem(
+            value: item,
+            child: Text(item),
+          );
+        }).toList(),
+        onChanged: (value) {
+          if (value != null) {
+            onChanged(value);
+          }
+        },
+      ),
+    );
+  }
+}
+
+class _FieldWrapper extends StatelessWidget {
+  final String label;
+  final Widget child;
+
+  const _FieldWrapper({
+    required this.label,
+    required this.child,
   });
 
   @override
@@ -350,43 +423,31 @@ class _DropdownField extends StatelessWidget {
       children: [
         Text(
           label,
-          style: TextStyle(
-            color: Colors.grey.shade700,
+          style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w800,
           ),
         ),
         const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: value,
-          icon: const Icon(Icons.keyboard_arrow_down),
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: const Color(0xFFF3F2FA),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
-            ),
-          ),
-          items: items.map((item) {
-            return DropdownMenuItem(
-              value: item,
-              child: Text(item),
-            );
-          }).toList(),
-          onChanged: (value) {
-            if (value != null) {
-              onChanged(value);
-            }
-          },
-        ),
+        child,
       ],
     );
   }
+}
+
+InputDecoration _inputDecoration() {
+  return InputDecoration(
+    filled: true,
+    fillColor: const Color(0xFFF3F2FA),
+    contentPadding: const EdgeInsets.symmetric(
+      horizontal: 16,
+      vertical: 15,
+    ),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide.none,
+    ),
+  );
 }
 
 class _BackButton extends StatelessWidget {

@@ -5,6 +5,8 @@ import '../../data/professional/mock_exercises.dart';
 import '../../models/professional/library_exercise.dart';
 import '../../widgets/professional/mobile_page_wrapper.dart';
 
+import 'create_exercise.dart';
+
 class ExerciseLibrary extends StatefulWidget {
   const ExerciseLibrary({super.key});
 
@@ -33,6 +35,7 @@ class _ExerciseLibraryState extends State<ExerciseLibrary> {
 
     try {
       final userId = Supabase.instance.client.auth.currentUser?.id;
+
       if (userId == null) {
         setState(() {
           _exercises = [];
@@ -48,15 +51,18 @@ class _ExerciseLibraryState extends State<ExerciseLibrary> {
 
       setState(() {
         _exercises = (response as List<dynamic>)
-            .map((row) => LibraryExercise(
-                  name: row['name'] as String,
-                  muscleGroup: row['muscle_group'] as String,
-                  equipment: row['equipment'] as String,
-                ))
+            .map(
+              (row) => LibraryExercise(
+                name: row['name']?.toString() ?? '',
+                muscleGroup: row['muscle_group']?.toString() ?? '',
+                equipment: row['equipment']?.toString() ?? '',
+              ),
+            )
             .toList();
       });
     } catch (e) {
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to load exercises: $e')),
       );
@@ -66,6 +72,19 @@ class _ExerciseLibraryState extends State<ExerciseLibrary> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  Future<void> _openCreateExercise() async {
+    final created = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const CreateExercise(),
+      ),
+    );
+
+    if (created == true && mounted) {
+      await _loadExercises();
     }
   }
 
@@ -192,7 +211,7 @@ class _ExerciseLibraryState extends State<ExerciseLibrary> {
     return MobilePageWrapper(
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
           child: Column(
             children: [
               // top bar
@@ -326,25 +345,59 @@ class _ExerciseLibraryState extends State<ExerciseLibrary> {
                         child: CircularProgressIndicator(),
                       )
                     : filteredExercises.isEmpty
-                    ? Center(
-                        child: Text(
-                          'No exercises found',
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.only(bottom: 24),
-                        itemCount: filteredExercises.length,
-                        itemBuilder: (context, index) {
-                          final exercise = filteredExercises[index];
+                        ? Center(
+                            child: Text(
+                              'No exercises found',
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          )
+                        : RefreshIndicator(
+                            onRefresh: _loadExercises,
+                            child: ListView.builder(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              padding: const EdgeInsets.only(bottom: 16),
+                              itemCount: filteredExercises.length,
+                              itemBuilder: (context, index) {
+                                final exercise = filteredExercises[index];
 
-                          return _ExerciseCard(exercise: exercise);
-                        },
-                      ),
+                                return _ExerciseCard(exercise: exercise);
+                              },
+                            ),
+                          ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // bottom create exercise button
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton.icon(
+                  onPressed: _openCreateExercise,
+                  icon: const Icon(
+                    Icons.add,
+                    size: 20,
+                  ),
+                  label: const Text(
+                    'Create Exercise',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6C63FF),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),

@@ -102,7 +102,9 @@ class _EditPlanState extends State<EditPlan> {
   }
 
   void addTag() {
-    if (selectedTags.length >= 3) return;
+    if (selectedTags.length >= 3) {
+      return;
+    }
 
     final availableTags =
         tagOptions.where((tag) => !selectedTags.contains(tag)).toList();
@@ -110,68 +112,81 @@ class _EditPlanState extends State<EditPlan> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (context) {
-        return Center(
+        return SafeArea(
           child: Container(
-            width: 430,
-            padding: const EdgeInsets.fromLTRB(18, 10, 18, 24),
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.65,
+            ),
             decoration: const BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.vertical(
                 top: Radius.circular(28),
               ),
             ),
-            child: SafeArea(
-              top: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 34,
-                    height: 3,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
+            child: Column(
+              children: [
+                const SizedBox(height: 10),
+
+                Container(
+                  width: 34,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(20),
                   ),
+                ),
 
-                  const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-                  const Text(
-                    'Select Tag',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
+                const Text(
+                  'Select Tag',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
                   ),
+                ),
 
-                  const SizedBox(height: 14),
+                const SizedBox(height: 10),
 
-                  if (availableTags.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      child: Text(
-                        'No more tags available.',
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontWeight: FontWeight.w600,
+                Expanded(
+                  child: availableTags.isEmpty
+                      ? Center(
+                          child: Text(
+                            'No more tags available.',
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(18, 0, 18, 20),
+                          itemCount: availableTags.length,
+                          itemBuilder: (context, index) {
+                            final tag = availableTags[index];
+
+                            return ListTile(
+                              title: Text(
+                                tag,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              onTap: () {
+                                setState(() {
+                                  selectedTags.add(tag);
+                                });
+
+                                Navigator.pop(context);
+                              },
+                            );
+                          },
                         ),
-                      ),
-                    )
-                  else
-                    ...availableTags.map((tag) {
-                      return ListTile(
-                        title: Text(tag),
-                        onTap: () {
-                          setState(() {
-                            selectedTags.add(tag);
-                          });
-                          Navigator.pop(context);
-                        },
-                      );
-                    }),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         );

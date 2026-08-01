@@ -15,7 +15,7 @@ class _CreatePlanState extends State<CreatePlan> {
 
   final List<String> selectedTags = [];
 
-  String duration = '4 weeks';
+  String? duration;
   String visibility = 'Public';
 
   final List<String> tagOptions = [
@@ -49,62 +49,91 @@ class _CreatePlanState extends State<CreatePlan> {
   }
 
   void addTag() {
-    final availableTags =
-        tagOptions.where((tag) => !selectedTags.contains(tag)).toList();
-
     if (selectedTags.length >= 3) {
       return;
     }
 
+    final availableTags =
+        tagOptions.where((tag) => !selectedTags.contains(tag)).toList();
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (context) {
-        return Center(
+        return SafeArea(
           child: Container(
-            width: 430,
-            padding: const EdgeInsets.fromLTRB(18, 10, 18, 24),
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.65,
+            ),
             decoration: const BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.vertical(
                 top: Radius.circular(28),
               ),
             ),
-            child: SafeArea(
-              top: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 34,
-                    height: 3,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
+            child: Column(
+              children: [
+                const SizedBox(height: 10),
+
+                Container(
+                  width: 34,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Select Tag',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
+                ),
+
+                const SizedBox(height: 16),
+
+                const Text(
+                  'Select Tag',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
                   ),
-                  const SizedBox(height: 14),
-                  ...availableTags.map((tag) {
-                    return ListTile(
-                      title: Text(tag),
-                      onTap: () {
-                        setState(() {
-                          selectedTags.add(tag);
-                        });
-                        Navigator.pop(context);
-                      },
-                    );
-                  }),
-                ],
-              ),
+                ),
+
+                const SizedBox(height: 10),
+
+                Expanded(
+                  child: availableTags.isEmpty
+                      ? Center(
+                          child: Text(
+                            'No more tags available.',
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(18, 0, 18, 20),
+                          itemCount: availableTags.length,
+                          itemBuilder: (context, index) {
+                            final tag = availableTags[index];
+
+                            return ListTile(
+                              title: Text(
+                                tag,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              onTap: () {
+                                setState(() {
+                                  selectedTags.add(tag);
+                                });
+
+                                Navigator.pop(context);
+                              },
+                            );
+                          },
+                        ),
+                ),
+              ],
             ),
           ),
         );
@@ -120,13 +149,18 @@ class _CreatePlanState extends State<CreatePlan> {
       return;
     }
 
+    if (duration == null) {
+      showMessage('Please select duration.');
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => CreatePlanSchedule(
           planName: planName,
           tags: selectedTags,
-          duration: duration,
+          duration: duration!,
           visibility: visibility,
         ),
       ),
@@ -218,6 +252,7 @@ class _CreatePlanState extends State<CreatePlan> {
                               },
                             );
                           }),
+
                           if (selectedTags.length < 3)
                             GestureDetector(
                               onTap: addTag,
@@ -251,6 +286,7 @@ class _CreatePlanState extends State<CreatePlan> {
                       _DropdownField(
                         label: 'Duration',
                         value: duration,
+                        hintText: 'Select duration',
                         items: durationOptions,
                         onChanged: (value) {
                           setState(() {
@@ -264,6 +300,7 @@ class _CreatePlanState extends State<CreatePlan> {
                       _DropdownField(
                         label: 'Visibility',
                         value: visibility,
+                        hintText: 'Select visibility',
                         items: visibilityOptions,
                         onChanged: (value) {
                           setState(() {
@@ -372,13 +409,15 @@ class _InputField extends StatelessWidget {
 
 class _DropdownField extends StatelessWidget {
   final String label;
-  final String value;
+  final String? value;
+  final String hintText;
   final List<String> items;
   final void Function(String value) onChanged;
 
   const _DropdownField({
     required this.label,
     required this.value,
+    required this.hintText,
     required this.items,
     required this.onChanged,
   });
@@ -389,6 +428,14 @@ class _DropdownField extends StatelessWidget {
       label: label,
       child: DropdownButtonFormField<String>(
         value: value,
+        hint: Text(
+          hintText,
+          style: TextStyle(
+            color: Colors.grey.shade500,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
         icon: const Icon(Icons.keyboard_arrow_down),
         decoration: _inputDecoration(),
         items: items.map((item) {
