@@ -3,13 +3,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../data/mock_data.dart';
 import '../../models/client/professional.dart';
-import '../../models/client/workout_plan.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/client/filter_chips.dart';
 import '../../widgets/client/pill_tag.dart';
-import '../../widgets/client/plan_card.dart';
 import '../../widgets/client/section_card.dart';
 import '../../widgets/client/section_header.dart';
+
 import 'chat_list_screen.dart';
 import 'plan_detail_screen.dart';
 import 'professional_detail_screen.dart';
@@ -23,54 +22,52 @@ class WorkoutScreen extends StatefulWidget {
 
 class _WorkoutScreenState extends State<WorkoutScreen> {
   int _topTab = 0;
+
   String _filter = 'All';
   String _proFilter = 'All';
-  bool _fpUnlocked = false;
-  late final WorkoutPlan _activePlan;
 
+  bool _fpUnlocked = false;
   bool _isLoadingPlans = true;
-  List<Map<String, dynamic>> _freePlansData = [];
-  String? _userType;
+
+  List<Map<String, dynamic>> _publicPlans = [];
+  Map<String, dynamic>? _activePlan;
+  String? _activePlanId;
 
   @override
   void initState() {
     super.initState();
-    _activePlan = MockData.activePlan();
-    _loadPlans();
+    _loadWorkoutData();
   }
 
-  Future<void> _loadPlans() async {
+  Future<void> _loadWorkoutData() async {
     setState(() {
       _isLoadingPlans = true;
     });
 
     try {
       final client = Supabase.instance.client;
-      final userId = client.auth.currentUser!.id;
+      final userId = client.auth.currentUser?.id;
 
-      final profile = await client
-          .from('profiles')
-          .select('user_type')
-          .eq('id', userId)
-          .single();
+      if (userId == null) {
+        throw Exception('User is not signed in.');
+      }
 
-      final userType = (profile['user_type'] as String?)?.trim().toLowerCase();
-
-      final response = await client
-          .from('free_plans')
-          .select('free_plan_id, plan_name, tag1, tag2, tag3, visibility')
-          .eq('status', 'published')
-          .order('created_at', ascending: false);
+      await _loadActivePlan(client, userId);
+      await _loadPublicPlans(client);
 
       if (!mounted) return;
-      setState(() {
-        _userType = userType;
-        _freePlansData = List<Map<String, dynamic>>.from(response as List);
-      });
-    } catch (e) {
+
+      final filters = _workoutFilters;
+      if (!filters.contains(_filter)) {
+        setState(() {
+          _filter = 'All';
+        });
+      }
+    } catch (error) {
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load plans: $e')),
+        SnackBar(content: Text('Failed to load workout data: $error')),
       );
     } finally {
       if (mounted) {
@@ -81,39 +78,225 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     }
   }
 
+  Future<void> _loadActivePlan(SupabaseClient client, String userId) async {
+    final savedRows = await client
+        .from('saved_plans')
+        .select('saved_plan_id, free_plan_id, saved_at')
+        .eq('profile_id', userId)
+        .order('saved_at', ascending: false)
+        .limit(1);
+
+    final rows = List<Map<String, dynamic>>.from(savedRows as List);
+
+    if (rows.isEmpty) {
+      if (!mounted) return;
+
+      setState(() {
+        _activePlanId = null;
+        _activePlan = null;
+      });
+
+      return;
+    }
+
+    final activePlanId = rows.first['free_plan_id']?.toString();
+
+    if (activePlanId == null || activePlanId.isEmpty) {
+      if (!mounted) return;
+
+      setState(() {
+        _activePlanId = null;
+        _activePlan = null;
+      });
+
+      return;
+    }
+
+    final activePlan = await client
+        .from('free_plans')
+        .select(
+          'free_plan_id, professional_id, plan_name, category, tag1, tag2, tag3, visibility, duration_weeks, status, created_at',
+        )
+        .eq('free_plan_id', activePlanId)
+        .maybeSingle();
+
+    if (!mounted) return;
+
+    setState(() {
+      _activePlanId = activePlanId;
+      _activePlan = activePlan;
+    });
+  }
+
+  Future<void> _loadPublicPlans(SupabaseClient client) async {
+    final response = await client
+        .from('free_plans')
+        .select(
+          'free_plan_id, professional_id, plan_name, category, tag1, tag2, tag3, visibility, duration_weeks, status, created_at',
+        )
+        .ilike('visibility', 'public')
+        .order('created_at', ascending: false);
+
+    if (!mounted) return;
+
+    setState(() {
+      _publicPlans = List<Map<String, dynamic>>.from(response as List);
+    });
+  }
+
+  List<String> get _workoutFilters {
+    final tags = <String>{};
+
+    for (final plan in _publicPlans) {
+      for (final tag in _planTags(plan)) {
+        final cleanTag = tag.trim();
+
+        if (cleanTag.isEmpty) continue;
+        if (cleanTag.toLowerCase() == 'public') continue;
+        if (cleanTag.toLowerCase() == 'private') continue;
+
+        tags.add(cleanTag);
+      }
+    }
+
+    final result = tags.toList();
+    result.sort();
+
+    return ['All', ...result];
+  }
+
   List<Map<String, dynamic>> get _visiblePlans {
-    if (_filter == 'All') return _freePlansData;
-    return _freePlansData.where((p) {
-      final tags = [p['tag1'], p['tag2'], p['tag3']].whereType<String>();
-      return tags.contains(_filter);
+    if (_filter == 'All') {
+      return _publicPlans;
+    }
+
+    return _publicPlans.where((plan) {
+      final tags = _planTags(plan);
+
+      return tags.any(
+        (tag) => tag.toLowerCase() == _filter.toLowerCase(),
+      );
     }).toList();
+  }
+
+  List<String> _planTags(Map<String, dynamic> plan) {
+    final tags = [
+      plan['tag1'],
+      plan['tag2'],
+      plan['tag3'],
+    ]
+        .where((tag) => tag != null && tag.toString().trim().isNotEmpty)
+        .map((tag) => tag.toString().trim())
+        .toList();
+
+    final category = plan['category']?.toString().trim();
+
+    if (category != null && category.isNotEmpty) {
+      final alreadyExists = tags.any(
+        (tag) => tag.toLowerCase() == category.toLowerCase(),
+      );
+
+      if (!alreadyExists) {
+        tags.add(category);
+      }
+    }
+
+    if (tags.isEmpty) {
+      tags.add('General');
+    }
+
+    return tags;
+  }
+
+  String _planTitle(Map<String, dynamic> plan) {
+    final title = plan['plan_name']?.toString().trim();
+
+    if (title == null || title.isEmpty) {
+      return 'Untitled Plan';
+    }
+
+    return title;
+  }
+
+  String _durationText(Map<String, dynamic> plan) {
+    final durationWeeks = _parseInt(plan['duration_weeks']);
+
+    if (durationWeeks == null || durationWeeks <= 0) {
+      return '30 Days';
+    }
+
+    return '${durationWeeks * 7} Days';
+  }
+
+  String _sessionLengthText(Map<String, dynamic> plan) {
+    return '~45 min';
+  }
+
+  int? _parseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    return int.tryParse(value.toString());
+  }
+
+  bool _isActivePlan(Map<String, dynamic> plan) {
+    final planId = plan['free_plan_id']?.toString();
+    return planId != null && planId == _activePlanId;
+  }
+
+  Future<void> _openPlan(Map<String, dynamic> plan) async {
+    final planId = plan['free_plan_id']?.toString();
+
+    if (planId == null || planId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Missing plan id.')),
+      );
+      return;
+    }
+
+    final switched = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => PlanDetailScreen(
+          planId: planId,
+          title: _planTitle(plan),
+        ),
+      ),
+    );
+
+    if (switched == true && mounted) {
+      await _loadWorkoutData();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final showChatFab = _topTab == 1 && _fpUnlocked;
+
     return SafeArea(
       bottom: false,
       child: Stack(
         children: [
-          ListView(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.screenPadding,
-              16,
-              AppSpacing.screenPadding,
-              24,
+          RefreshIndicator(
+            onRefresh: _loadWorkoutData,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.screenPadding,
+                16,
+                AppSpacing.screenPadding,
+                24,
+              ),
+              children: [
+                _topToggle(),
+                const SizedBox(height: 22),
+                if (_topTab == 0)
+                  ..._workoutTab()
+                else if (_fpUnlocked)
+                  ..._professionalsTab()
+                else
+                  _professionalLockedTab(),
+              ],
             ),
-            children: [
-              _topToggle(),
-              const SizedBox(height: 22),
-              if (_topTab == 0)
-                ..._workoutTab()
-              else if (_fpUnlocked)
-                ..._professionalsTab()
-              else
-                _professionalTab(),
-            ],
           ),
+
           if (showChatFab)
             Positioned(
               right: 20,
@@ -122,12 +305,15 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                 onPressed: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                        builder: (_) => const ChatListScreen()),
+                      builder: (_) => const ChatListScreen(),
+                    ),
                   );
                 },
                 backgroundColor: AppColors.primary,
-                child: const Icon(Icons.chat_bubble_outline,
-                    color: Colors.white),
+                child: const Icon(
+                  Icons.chat_bubble_outline,
+                  color: Colors.white,
+                ),
               ),
             ),
         ],
@@ -153,9 +339,14 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   Widget _toggleButton(String label, int index) {
     final selected = _topTab == index;
+
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _topTab = index),
+        onTap: () {
+          setState(() {
+            _topTab = index;
+          });
+        },
         child: Container(
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -179,65 +370,101 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   List<Widget> _workoutTab() {
     return [
       const SectionHeader('Active Plan'),
+
       const SizedBox(height: 12),
-      PlanCard(
-        plan: _activePlan,
-        onBookmarkTap: () =>
-            setState(() => _activePlan.bookmarked = !_activePlan.bookmarked),
-        // Active plan assignment isn't wired yet, so there's no real plan id here.
-        onTap: () => _openPlan('', _activePlan.title),
-      ),
-      const SizedBox(height: 24),
-      const SectionHeader('Free Plans'),
-      const SizedBox(height: 12),
-      FilterChips(
-        options: MockData.workoutFilters,
-        selected: _filter,
-        onSelected: (value) => setState(() => _filter = value),
-      ),
-      const SizedBox(height: 16),
+
       if (_isLoadingPlans)
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 24),
           child: Center(child: CircularProgressIndicator()),
         )
-      else ...[
-        for (final plan in _visiblePlans) ...[
-          _freePlanCard(plan),
-          const SizedBox(height: 14),
-        ],
-        if (_visiblePlans.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(
-              child: Text(
-                'No plans in this category yet.',
-                style: TextStyle(color: AppColors.textSecondary),
+      else if (_activePlan == null)
+        SectionCard(
+          color: AppColors.cardMuted,
+          radius: 16,
+          child: const Text(
+            'No active plan yet. Choose a public plan below.',
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        )
+      else
+        _planCard(
+          plan: _activePlan!,
+          active: true,
+          onTap: () {
+            _openPlan(_activePlan!);
+          },
+        ),
+
+      const SizedBox(height: 24),
+
+      const SectionHeader('Free Plans'),
+
+      const SizedBox(height: 12),
+
+      FilterChips(
+        options: _workoutFilters,
+        selected: _filter,
+        onSelected: (value) {
+          setState(() {
+            _filter = value;
+          });
+        },
+      ),
+
+      const SizedBox(height: 16),
+
+      if (_isLoadingPlans)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: Center(child: CircularProgressIndicator()),
+        )
+      else if (_visiblePlans.isEmpty)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: Center(
+            child: Text(
+              'No public plans in this category yet.',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
-      ],
+        )
+      else
+        for (final plan in _visiblePlans) ...[
+          _planCard(
+            plan: plan,
+            active: _isActivePlan(plan),
+            onTap: () {
+              _openPlan(plan);
+            },
+          ),
+          const SizedBox(height: 14),
+        ],
     ];
   }
 
-  Widget _freePlanCard(Map<String, dynamic> plan) {
-    final tags = [plan['tag1'], plan['tag2'], plan['tag3']]
-        .whereType<String>()
-        .toList();
-    final isPrivate = (plan['visibility'] as String?)?.toLowerCase() == 'private';
-    final isLocked = isPrivate && _userType != 'priority';
-    final title = plan['plan_name'] as String? ?? 'Untitled Plan';
+  Widget _planCard({
+    required Map<String, dynamic> plan,
+    required bool active,
+    required VoidCallback onTap,
+  }) {
+    final title = _planTitle(plan);
+    final duration = _durationText(plan);
+    final sessionLength = _sessionLengthText(plan);
+    final tags = _planTags(plan);
 
     return GestureDetector(
-      onTap: () {
-        if (isLocked) {
-          _showUpgradePrompt();
-        } else {
-          _openPlan(plan['free_plan_id'] as String, title);
-        }
-      },
+      onTap: onTap,
       child: SectionCard(
-        color: AppColors.cardMuted,
+        color: active ? AppColors.primarySoft : AppColors.cardMuted,
         radius: 16,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -255,43 +482,21 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                     ),
                   ),
                 ),
-                if (isLocked)
+
+                if (active)
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 5),
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.card,
-                      borderRadius:
-                          BorderRadius.circular(AppSpacing.pillRadius),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.lock, size: 12, color: AppColors.primary),
-                        SizedBox(width: 4),
-                        Text(
-                          'PRIORITY',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.primary,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                else if (isPrivate)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: AppColors.card,
-                      borderRadius:
-                          BorderRadius.circular(AppSpacing.pillRadius),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.pillRadius,
+                      ),
                     ),
                     child: const Text(
-                      'PRIVATE',
+                      'ACTIVE',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
@@ -302,112 +507,29 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                   ),
               ],
             ),
+
+            const SizedBox(height: 6),
+
+            Text(
+              '$duration • $sessionLength',
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
+            ),
+
             const SizedBox(height: 12),
+
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final t in tags) PillTag(t),
+                for (final tag in tags) PillTag(tag),
               ],
             ),
           ],
         ),
       ),
-    );
-  }
-
-  void _openPlan(String planId, String title) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => PlanDetailScreen(planId: planId, title: title),
-      ),
-    );
-  }
-
-  void _showUpgradePrompt() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return SafeArea(
-          top: false,
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 34,
-                  height: 3,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Icon(Icons.lock, size: 34, color: AppColors.primary),
-                const SizedBox(height: 14),
-                const Text(
-                  'Priority Plan',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                const Text(
-                  'Subscribe to Priority to access this plan and get personalised guidance from fitness professionals.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: AppColors.textSecondary,
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 22),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    child: const Text(
-                      'Upgrade to Priority',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text(
-                    'Maybe later',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 
@@ -417,42 +539,61 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         style: const TextStyle(fontSize: 14),
         decoration: InputDecoration(
           hintText: 'Search fitness professionals',
-          hintStyle:
-              const TextStyle(fontSize: 13, color: AppColors.textMuted),
-          suffixIcon: const Icon(Icons.search,
-              size: 20, color: AppColors.textMuted),
+          hintStyle: const TextStyle(
+            fontSize: 13,
+            color: AppColors.textMuted,
+          ),
+          suffixIcon: const Icon(
+            Icons.search,
+            size: 20,
+            color: AppColors.textMuted,
+          ),
           filled: true,
           fillColor: AppColors.cardMuted,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
             borderSide: BorderSide.none,
           ),
         ),
       ),
+
       const SizedBox(height: 20),
+
       const SectionHeader('More Fitness Professionals'),
+
       const SizedBox(height: 12),
+
       FilterChips(
         options: MockData.professionalFilters,
         selected: _proFilter,
-        onSelected: (value) => setState(() => _proFilter = value),
+        onSelected: (value) {
+          setState(() {
+            _proFilter = value;
+          });
+        },
       ),
+
       const SizedBox(height: 16),
-      for (final pro in MockData.professionals) ...[
-        _professionalCard(pro),
+
+      for (final professional in MockData.professionals) ...[
+        _professionalCard(professional),
         const SizedBox(height: 12),
       ],
     ];
   }
 
-  Widget _professionalCard(Professional pro) {
+  Widget _professionalCard(Professional professional) {
     return GestureDetector(
       onTap: () {
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => ProfessionalDetailScreen(professional: pro),
+            builder: (_) => ProfessionalDetailScreen(
+              professional: professional,
+            ),
           ),
         );
       },
@@ -467,36 +608,48 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             const CircleAvatar(
               radius: 24,
               backgroundColor: AppColors.primarySoft,
-              child: Icon(Icons.person, color: AppColors.primary),
+              child: Icon(
+                Icons.person,
+                color: AppColors.primary,
+              ),
             ),
+
             const SizedBox(width: 12),
+
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    pro.name,
+                    professional.name,
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
+
                   const SizedBox(height: 2),
+
                   Text(
-                    pro.specialties,
+                    professional.specialties,
                     style: const TextStyle(
                       fontSize: 12,
                       color: AppColors.textSecondary,
                     ),
                   ),
+
                   const SizedBox(height: 4),
+
                   Row(
                     children: [
-                      const Icon(Icons.star,
-                          size: 14, color: AppColors.amber),
+                      const Icon(
+                        Icons.star,
+                        size: 14,
+                        color: AppColors.amber,
+                      ),
                       const SizedBox(width: 2),
                       Text(
-                        '${pro.rating}',
+                        '${professional.rating}',
                         style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
@@ -504,7 +657,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        '${pro.reviewCount} Reviews',
+                        '${professional.reviewCount} Reviews',
                         style: const TextStyle(
                           fontSize: 11,
                           color: AppColors.textMuted,
@@ -515,14 +668,18 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.textMuted),
+
+            const Icon(
+              Icons.chevron_right,
+              color: AppColors.textMuted,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _professionalTab() {
+  Widget _professionalLockedTab() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.screenPadding,
@@ -545,7 +702,9 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                   color: AppColors.primary,
                 ),
               ),
+
               const SizedBox(height: 14),
+
               const Text(
                 'Get personalised workout plans, professional guidance, and direct messaging with fitness experts.',
                 textAlign: TextAlign.center,
@@ -555,12 +714,21 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                   color: AppColors.textSecondary,
                 ),
               ),
+
               const SizedBox(height: 28),
+
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () => setState(() => _fpUnlocked = true),
-                  icon: const Icon(Icons.workspace_premium, size: 18),
+                  onPressed: () {
+                    setState(() {
+                      _fpUnlocked = true;
+                    });
+                  },
+                  icon: const Icon(
+                    Icons.workspace_premium,
+                    size: 18,
+                  ),
                   label: const Text(
                     'Unlock Priority',
                     style: TextStyle(

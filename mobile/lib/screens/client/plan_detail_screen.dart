@@ -21,6 +21,7 @@ class PlanDetailScreen extends StatefulWidget {
 class _PlanDetailScreenState extends State<PlanDetailScreen> {
   bool _isLoadingDays = true;
   bool _isLoadingExercises = false;
+  bool _isSwitching = false;
 
   List<Map<String, dynamic>> _days = [];
   List<Map<String, dynamic>> _exercises = [];
@@ -36,31 +37,62 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
 
   List<int> get _weekNumbers {
     final weeks = <int>{};
+
     for (final day in _days) {
-      weeks.add(day['week_number'] as int);
+      final weekNumber = _parseInt(day['week_number']);
+      if (weekNumber != null) {
+        weeks.add(weekNumber);
+      }
     }
+
     return weeks.toList()..sort();
   }
 
   List<Map<String, dynamic>> get _daysInSelectedWeek {
     final weeks = _weekNumbers;
-    if (weeks.isEmpty) return [];
+
+    if (weeks.isEmpty) {
+      return [];
+    }
+
+    if (_selectedWeekIndex >= weeks.length) {
+      return [];
+    }
 
     final week = weeks[_selectedWeekIndex];
-    final days = _days.where((d) => d['week_number'] == week).toList();
-    days.sort(
-      (a, b) => (a['day_number'] as int).compareTo(b['day_number'] as int),
-    );
+
+    final days = _days.where((day) {
+      return _parseInt(day['week_number']) == week;
+    }).toList();
+
+    days.sort((a, b) {
+      final aDay = _parseInt(a['day_number']) ?? 0;
+      final bDay = _parseInt(b['day_number']) ?? 0;
+      return aDay.compareTo(bDay);
+    });
+
     return days;
   }
 
   Map<String, dynamic>? get _selectedDay {
     final days = _daysInSelectedWeek;
-    if (_selectedDayIndex >= days.length) return null;
+
+    if (_selectedDayIndex < 0 || _selectedDayIndex >= days.length) {
+      return null;
+    }
+
     return days[_selectedDayIndex];
   }
 
-  bool get _isRestDay => _selectedDay?['is_rest_day'] == true;
+  bool get _isRestDay {
+    return _selectedDay?['is_rest_day'] == true;
+  }
+
+  int? _parseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    return int.tryParse(value.toString());
+  }
 
   Future<void> _loadDays() async {
     setState(() {
@@ -70,12 +102,15 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     try {
       final response = await Supabase.instance.client
           .from('plan_days')
-          .select('plan_day_id, week_number, day_number, day_name, is_rest_day')
+          .select(
+            'plan_day_id, week_number, day_number, day_name, is_rest_day',
+          )
           .eq('free_plan_id', widget.planId)
           .order('week_number')
           .order('day_number');
 
       if (!mounted) return;
+
       setState(() {
         _days = List<Map<String, dynamic>>.from(response as List);
         _selectedWeekIndex = 0;
@@ -83,10 +118,11 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       });
 
       await _loadExercisesForSelectedDay();
-    } catch (e) {
+    } catch (error) {
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load plan days: $e')),
+        SnackBar(content: Text('Failed to load plan days: $error')),
       );
     } finally {
       if (mounted) {
@@ -115,18 +151,21 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       final response = await Supabase.instance.client
           .from('plan_exercises')
           .select(
-              'sets, rep_min, rep_max, rest_sec, order_index, exercise_library(name, muscle_group)')
+            'sets, rep_min, rep_max, rest_sec, order_index, exercise_library(name, muscle_group)',
+          )
           .eq('plan_day_id', day['plan_day_id'] as String)
           .order('order_index');
 
       if (!mounted) return;
+
       setState(() {
         _exercises = List<Map<String, dynamic>>.from(response as List);
       });
-    } catch (e) {
+    } catch (error) {
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load exercises: $e')),
+        SnackBar(content: Text('Failed to load exercises: $error')),
       );
     } finally {
       if (mounted) {
@@ -142,6 +181,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       _selectedWeekIndex = index;
       _selectedDayIndex = 0;
     });
+
     _loadExercisesForSelectedDay();
   }
 
@@ -149,7 +189,106 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     setState(() {
       _selectedDayIndex = index;
     });
+
     _loadExercisesForSelectedDay();
+  }
+
+  Future<void> _switchToPlan() async {
+    if (_isSwitching) return;
+
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You must be signed in.')),
+      );
+      return;
+    }
+
+    if (widget.planId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Missing plan id.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSwitching = true;
+    });
+
+    try {
+      final existingResponse = await client
+          .from('saved_plans')
+          .select('saved_plan_id, free_plan_id, saved_at')
+          .eq('profile_id', userId)
+          .order('saved_at', ascending: false);
+
+      final existingRows =
+          List<Map<String, dynamic>>.from(existingResponse as List);
+
+      if (existingRows.isEmpty) {
+        await client.from('saved_plans').insert({
+          'profile_id': userId,
+          'free_plan_id': widget.planId,
+          'personalized_plan_id': null,
+          'saved_at': DateTime.now().toIso8601String(),
+        });
+      } else {
+        final keepRow = existingRows.first;
+        final keepSavedPlanId = keepRow['saved_plan_id']?.toString();
+
+        if (keepSavedPlanId == null || keepSavedPlanId.isEmpty) {
+          throw Exception('Missing saved_plan_id.');
+        }
+
+        await client
+            .from('saved_plans')
+            .update({
+              'free_plan_id': widget.planId,
+              'personalized_plan_id': null,
+              'saved_at': DateTime.now().toIso8601String(),
+            })
+            .eq('saved_plan_id', keepSavedPlanId)
+            .eq('profile_id', userId);
+
+        if (existingRows.length > 1) {
+          final extraRows = existingRows.skip(1).toList();
+
+          for (final row in extraRows) {
+            final savedPlanId = row['saved_plan_id']?.toString();
+
+            if (savedPlanId != null && savedPlanId.isNotEmpty) {
+              await client
+                  .from('saved_plans')
+                  .delete()
+                  .eq('saved_plan_id', savedPlanId)
+                  .eq('profile_id', userId);
+            }
+          }
+        }
+      }
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Active plan updated.')),
+      );
+
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to switch plan: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSwitching = false;
+        });
+      }
+    }
   }
 
   @override
@@ -160,14 +299,16 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     return SubScreenScaffold(
       title: widget.title,
       bottomButton: PrimaryButton(
-        label: 'Switch to this plan',
-        onPressed: () => Navigator.of(context).pop(),
+        label: _isSwitching ? 'Switching...' : 'Switch to this plan',
+        onPressed: _switchToPlan,
       ),
       children: [
         if (_isLoadingDays)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 40),
-            child: Center(child: CircularProgressIndicator()),
+            child: Center(
+              child: CircularProgressIndicator(),
+            ),
           )
         else if (_days.isEmpty)
           const Padding(
@@ -175,46 +316,97 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
             child: Center(
               child: Text(
                 'No days in this plan yet.',
-                style: TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                ),
               ),
             ),
           )
         else ...[
           const Text(
             'Week',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
           ),
+
           const SizedBox(height: 10),
+
           _selectorRow(
             count: weeks.length,
             selected: _selectedWeekIndex,
-            labelBuilder: (i) => ('W', '${weeks[i]}'),
+            labelBuilder: (index) {
+              return ('W', '${weeks[index]}');
+            },
             onTap: _selectWeek,
           ),
+
           const SizedBox(height: 18),
+
           const Text(
             'Day',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
           ),
+
           const SizedBox(height: 10),
+
           _selectorRow(
             count: days.length,
             selected: _selectedDayIndex,
-            labelBuilder: (i) => ('DAY', '${days[i]['day_number']}'),
+            labelBuilder: (index) {
+              final dayNumber = days[index]['day_number'];
+              return ('DAY', '$dayNumber');
+            },
             onTap: _selectDay,
           ),
+
           const SizedBox(height: 20),
+
           _dayBanner(),
+
           const SizedBox(height: 16),
+
           if (_isLoadingExercises)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(
+                child: CircularProgressIndicator(),
+              ),
             )
           else if (_isRestDay)
-            const SizedBox.shrink()
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text(
+                  'Rest day',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            )
+          else if (_exercises.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text(
+                  'No exercises in this day.',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            )
           else
-            for (var i = 0; i < _exercises.length; i++) ...[
+            for (int i = 0; i < _exercises.length; i++) ...[
               _exerciseRow(_exercises[i], i),
               const SizedBox(height: 10),
             ],
@@ -226,7 +418,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
   Widget _selectorRow({
     required int count,
     required int selected,
-    required (String, String) Function(int) labelBuilder,
+    required (String, String) Function(int index) labelBuilder,
     required ValueChanged<int> onTap,
   }) {
     return SizedBox(
@@ -234,12 +426,17 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: count,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, i) {
-          final isSelected = i == selected;
-          final label = labelBuilder(i);
+        separatorBuilder: (_, __) {
+          return const SizedBox(width: 8);
+        },
+        itemBuilder: (context, index) {
+          final isSelected = index == selected;
+          final label = labelBuilder(index);
+
           return GestureDetector(
-            onTap: () => onTap(i),
+            onTap: () {
+              onTap(index);
+            },
             child: Container(
               width: 48,
               decoration: BoxDecoration(
@@ -257,14 +454,15 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                       color: isSelected ? Colors.white70 : AppColors.textMuted,
                     ),
                   ),
+
                   const SizedBox(height: 2),
+
                   Text(
                     label.$2,
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
-                      color:
-                          isSelected ? Colors.white : AppColors.textPrimary,
+                      color: isSelected ? Colors.white : AppColors.textPrimary,
                     ),
                   ),
                 ],
@@ -278,16 +476,24 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
 
   Widget _dayBanner() {
     final day = _selectedDay;
-    final title = day == null
-        ? widget.title
-        : 'Day ${day['day_number']}: ${day['day_name']}';
+
+    final dayNumber = day?['day_number']?.toString() ?? '-';
+    final dayName = day?['day_name']?.toString().trim();
+
+    final title = dayName == null || dayName.isEmpty
+        ? 'Day $dayNumber'
+        : 'Day $dayNumber: $dayName';
+
     final meta = _isRestDay ? 'Rest Day' : '${_exercises.length} exercises';
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [AppColors.primary, AppColors.accent],
+          colors: [
+            AppColors.primary,
+            AppColors.accent,
+          ],
         ),
         borderRadius: BorderRadius.circular(16),
       ),
@@ -297,13 +503,18 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
+              color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(12),
             ),
-            child:
-                const Icon(Icons.calendar_month, color: Colors.white, size: 20),
+            child: const Icon(
+              Icons.calendar_month,
+              color: Colors.white,
+              size: 20,
+            ),
           ),
+
           const SizedBox(width: 12),
+
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -318,10 +529,15 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                     color: Colors.white,
                   ),
                 ),
+
                 const SizedBox(height: 2),
+
                 Text(
                   meta,
-                  style: const TextStyle(fontSize: 12, color: Colors.white70),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.white70,
+                  ),
                 ),
               ],
             ),
@@ -333,13 +549,17 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
 
   Widget _exerciseRow(Map<String, dynamic> exercise, int index) {
     final library = exercise['exercise_library'] as Map<String, dynamic>?;
-    final name = library?['name'] as String? ?? 'Exercise';
-    final setCount = exercise['sets'] as int?;
-    final repMin = exercise['rep_min'] as int?;
-    final repMax = exercise['rep_max'] as int?;
-    final restSec = exercise['rest_sec'] as int?;
+
+    final name = library?['name']?.toString() ?? 'Exercise';
+    final setCount = _parseInt(exercise['sets']);
+    final repMin = _parseInt(exercise['rep_min']);
+    final repMax = _parseInt(exercise['rep_max']);
+    final restSec = _parseInt(exercise['rest_sec']);
+
+    final repsText = _buildRepsText(repMin, repMax);
+
     final meta =
-        '${setCount ?? '-'} sets • ${repMin ?? '-'}–${repMax ?? '-'} reps • ${restSec ?? '-'}s rest';
+        '${setCount ?? '-'} sets • $repsText • ${restSec ?? '-'}s rest';
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -366,7 +586,9 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
               ),
             ),
           ),
+
           const SizedBox(width: 12),
+
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -378,7 +600,9 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+
                 const SizedBox(height: 2),
+
                 Text(
                   meta,
                   style: const TextStyle(
@@ -392,5 +616,17 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
         ],
       ),
     );
+  }
+
+  String _buildRepsText(int? repMin, int? repMax) {
+    if (repMin == null && repMax == null) {
+      return '- reps';
+    }
+
+    if (repMin != null && (repMax == null || repMax == repMin)) {
+      return '$repMin reps';
+    }
+
+    return '${repMin ?? '-'}-${repMax ?? '-'} reps';
   }
 }
