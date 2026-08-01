@@ -1,11 +1,40 @@
 import 'package:flutter/material.dart';
 
-import '../../data/mock_data.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/client/sub_screen_scaffold.dart';
 
 class WorkoutCompleteScreen extends StatelessWidget {
-  const WorkoutCompleteScreen({super.key});
+  final String dayLabel;
+  final int durationSeconds;
+  final double totalVolumeKg;
+  final int totalSets;
+
+  const WorkoutCompleteScreen({
+    super.key,
+    required this.dayLabel,
+    required this.durationSeconds,
+    required this.totalVolumeKg,
+    required this.totalSets,
+  });
+
+  String get _durationText {
+    final minutes = durationSeconds ~/ 60;
+    final seconds = durationSeconds % 60;
+
+    if (minutes <= 0) {
+      return '${seconds}s';
+    }
+
+    return '${minutes}m ${seconds}s';
+  }
+
+  String get _volumeText {
+    if (totalVolumeKg % 1 == 0) {
+      return '${totalVolumeKg.toInt()} KG';
+    }
+
+    return '${totalVolumeKg.toStringAsFixed(1)} KG';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,9 +52,12 @@ class WorkoutCompleteScreen extends StatelessWidget {
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 4),
-              const Text(
-                MockData.currentDayLabel,
-                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+              Text(
+                dayLabel,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textSecondary,
+                ),
               ),
               const SizedBox(height: 24),
               Expanded(child: _summaryCard()),
@@ -39,8 +71,9 @@ class WorkoutCompleteScreen extends StatelessWidget {
               const SizedBox(height: 20),
               PrimaryButton(
                 label: 'Done',
-                onPressed: () =>
-                    Navigator.of(context).popUntil((route) => route.isFirst),
+                onPressed: () {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                },
               ),
             ],
           ),
@@ -78,26 +111,26 @@ class WorkoutCompleteScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          const Text(
-            MockData.currentDayLabel,
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          Text(
+            dayLabel,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _stat('12m 10s', 'DURATION'),
+              _stat(_durationText, 'DURATION'),
               _divider(),
-              _stat('120 KG', 'VOLUME'),
+              _stat(_volumeText, 'VOLUME'),
               _divider(),
-              _stat('15', 'SETS'),
+              _stat('$totalSets', 'SETS'),
             ],
           ),
           const Spacer(),
           Container(
             width: double.infinity,
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: const BoxDecoration(
               color: AppColors.navBar,
               borderRadius: BorderRadius.vertical(
@@ -116,7 +149,7 @@ class WorkoutCompleteScreen extends StatelessWidget {
                 ),
                 Spacer(),
                 Text(
-                  'Christopher Heron',
+                  'Workout Completed',
                   style: TextStyle(fontSize: 12, color: Colors.white70),
                 ),
               ],
@@ -161,6 +194,7 @@ class WorkoutCompleteScreen extends StatelessWidget {
       (Icons.facebook, 'Facebook'),
       (Icons.download_outlined, 'Download'),
     ];
+
     return Row(
       children: [
         for (final item in items)

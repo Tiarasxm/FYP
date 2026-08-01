@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../data/mock_data.dart';
 import '../../models/client/menu_item.dart';
@@ -13,53 +14,386 @@ import 'progress_screen.dart';
 import 'saved_plans_screen.dart';
 import 'workout_history_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  bool _isLoading = true;
+
+  String _userName = 'User';
+  String _avatarLetter = 'U';
+
+  String? _activePlanId;
+  String? _activePlanTitle;
+  String? _activePlanDayId;
+  String _todayPlanTitle = 'No active plan';
+  String _todayPlanMeta = 'Choose a plan from Workout tab';
+  bool _hasActiveWorkoutDay = false;
+  double _weeklyVolumeKg = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHomeData();
+  }
+
+  Future<void> _loadHomeData() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final client = Supabase.instance.client;
+      final userId = client.auth.currentUser?.id;
+
+      if (userId == null) {
+        throw Exception('User is not signed in.');
+      }
+
+      await _loadProfile(client, userId);
+      await _loadActivePlan(client, userId);
+      await _loadWeeklyVolume(client, userId);
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load home data: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadProfile(SupabaseClient client, String userId) async {
+    final profile = await client
+        .from('profiles')
+        .select('full_name, email')
+        .eq('id', userId)
+        .maybeSingle();
+
+    final fullName = profile?['full_name']?.toString().trim();
+    final email = profile?['email']?.toString().trim();
+
+    String name = 'User';
+
+    if (fullName != null && fullName.isNotEmpty) {
+      name = fullName;
+    } else if (email != null && email.isNotEmpty) {
+      name = email.split('@').first;
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _userName = name;
+      _avatarLetter = name.isEmpty ? 'U' : name[0].toUpperCase();
+    });
+  }
+
+  Future<void> _loadActivePlan(SupabaseClient client, String userId) async {
+    final savedResponse = await client
+        .from('saved_plans')
+        .select('saved_plan_id, free_plan_id, saved_at')
+        .eq('profile_id', userId)
+        .order('saved_at', ascending: false)
+        .limit(1);
+
+    final savedRows = List<Map<String, dynamic>>.from(savedResponse as List);
+
+    if (savedRows.isEmpty) {
+      _clearActivePlan();
+      return;
+    }
+
+    final freePlanId = savedRows.first['free_plan_id']?.toString();
+
+    if (freePlanId == null || freePlanId.isEmpty) {
+      _clearActivePlan();
+      return;
+    }
+
+    final plan = await client
+        .from('free_plans')
+        .select('free_plan_id, plan_name, duration_weeks')
+        .eq('free_plan_id', freePlanId)
+        .maybeSingle();
+
+    if (plan == null) {
+      _clearActivePlan();
+      return;
+    }
+
+    final daysResponse = await client
+        .from('plan_days')
+        .select('plan_day_id, week_number, day_number, day_name, is_rest_day')
+        .eq('free_plan_id', freePlanId)
+        .order('week_number')
+        .order('day_number');
+
+    final dayRows = List<Map<String, dynamic>>.from(daysResponse as List);
+
+    dayRows.sort((a, b) {
+      final aWeek = _parseInt(a['week_number']) ?? 0;
+      final bWeek = _parseInt(b['week_number']) ?? 0;
+
+      if (aWeek != bWeek) {
+        return aWeek.compareTo(bWeek);
+      }
+
+      final aDay = _parseInt(a['day_number']) ?? 0;
+      final bDay = _parseInt(b['day_number']) ?? 0;
+
+      return aDay.compareTo(bDay);
+    });
+
+    if (dayRows.isEmpty) {
+      if (!mounted) return;
+
+      setState(() {
+        _activePlanId = freePlanId;
+        _activePlanTitle = plan['plan_name']?.toString() ?? 'Active Plan';
+        _activePlanDayId = null;
+        _todayPlanTitle = _activePlanTitle!;
+        _todayPlanMeta = 'No days in this plan yet';
+        _hasActiveWorkoutDay = false;
+      });
+
+      return;
+    }
+
+    Map<String, dynamic> selectedDay = dayRows.firstWhere(
+      (day) => day['is_rest_day'] != true,
+      orElse: () => dayRows.first,
+    );
+
+    final planDayId = selectedDay['plan_day_id']?.toString();
+    final dayNumber = selectedDay['day_number']?.toString() ?? '1';
+    final dayName = selectedDay['day_name']?.toString().trim();
+    final isRestDay = selectedDay['is_rest_day'] == true;
+
+    int exerciseCount = 0;
+
+    if (planDayId != null && planDayId.isNotEmpty && !isRestDay) {
+      final exercisesResponse = await client
+          .from('plan_exercises')
+          .select('plan_exercise_id')
+          .eq('plan_day_id', planDayId);
+
+      exerciseCount = (exercisesResponse as List).length;
+    }
+
+    final title = dayName == null || dayName.isEmpty
+        ? 'Day $dayNumber'
+        : 'Day $dayNumber: $dayName';
+
+    final meta = isRestDay
+        ? 'Rest Day'
+        : '~45 min • $exerciseCount exercises';
+
+    if (!mounted) return;
+
+    setState(() {
+      _activePlanId = freePlanId;
+      _activePlanTitle = plan['plan_name']?.toString() ?? 'Active Plan';
+      _activePlanDayId = planDayId;
+      _todayPlanTitle = title;
+      _todayPlanMeta = meta;
+      _hasActiveWorkoutDay =
+          planDayId != null && planDayId.isNotEmpty && !isRestDay;
+    });
+  }
+
+  Future<void> _loadWeeklyVolume(SupabaseClient client, String userId) async {
+    final now = DateTime.now();
+
+    final startOfWeek = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(
+      Duration(days: now.weekday - 1),
+    );
+
+    final logsResponse = await client
+      .from('workout_logs')
+      .select('workout_log_id')
+      .eq('profile_id', userId)
+      .gte('performed_at', startOfWeek.toIso8601String());
+
+    final logs = List<Map<String, dynamic>>.from(logsResponse as List);
+
+    final workoutLogIds = logs
+      .map((log) => log['workout_log_id']?.toString())
+      .where((id) => id != null && id.isNotEmpty)
+      .cast<String>()
+      .toList();
+
+    if (workoutLogIds.isEmpty) {
+      if (!mounted) return;
+
+      setState(() {
+        _weeklyVolumeKg = 0;
+      });
+
+      return;
+    }
+
+    final exercisesResponse = await client
+      .from('workout_exercises')
+      .select('workout_log_id, reps, weight_kg')
+      .inFilter('workout_log_id', workoutLogIds);
+
+    final exerciseRows =
+      List<Map<String, dynamic>>.from(exercisesResponse as List);
+
+    double totalVolume = 0;
+
+    for (final row in exerciseRows) {
+      final reps = _parseInt(row['reps']) ?? 0;
+      final weight = _parseDouble(row['weight_kg']) ?? 0;
+
+      totalVolume += reps * weight;
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _weeklyVolumeKg = totalVolume;
+    });
+  }
+
+  void _clearActivePlan() {
+    if (!mounted) return;
+
+    setState(() {
+      _activePlanId = null;
+      _activePlanTitle = null;
+      _activePlanDayId = null;
+      _todayPlanTitle = 'No active plan';
+      _todayPlanMeta = 'Choose a plan from Workout tab';
+      _hasActiveWorkoutDay = false;
+    });
+  }
+
+  int? _parseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    return int.tryParse(value.toString());
+  }
+
+  double? _parseDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    return double.tryParse(value.toString());
+  }
+
+  String _todayDateText() {
+    final now = DateTime.now();
+
+    const weekdays = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+
+    return '${weekdays[now.weekday - 1]} ${now.day} ${months[now.month - 1]}';
+  }
+
+  void _openFitnessPlan() {
+    if (_activePlanId == null || _activePlanDayId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please choose an active plan from Workout tab first.'),
+        ),
+      );
+      return;
+    }
+
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute(
+            builder: (_) => const FitnessPlanScreen(),
+          ),
+        )
+        .then((_) => _loadHomeData());
+  }
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       bottom: false,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.screenPadding,
-          16,
-          AppSpacing.screenPadding,
-          24,
+      child: RefreshIndicator(
+        onRefresh: _loadHomeData,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.screenPadding,
+            16,
+            AppSpacing.screenPadding,
+            24,
+          ),
+          children: [
+            _header(),
+            const SizedBox(height: 20),
+            _dailyProgress(),
+            const SizedBox(height: 16),
+            _todaysPlan(context),
+            const SizedBox(height: 16),
+            _quickActions(context),
+            const SizedBox(height: 16),
+            _menuList(context),
+          ],
         ),
-        children: [
-          _header(),
-          const SizedBox(height: 20),
-          _dailyProgress(),
-          const SizedBox(height: 16),
-          _todaysPlan(context),
-          const SizedBox(height: 16),
-          _quickActions(context),
-          const SizedBox(height: 16),
-          _menuList(context),
-        ],
       ),
     );
   }
 
   Widget _header() {
-    return const Row(
+    return Row(
       children: [
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                MockData.dateLabel,
-                style: TextStyle(
+                _todayDateText(),
+                style: const TextStyle(
                   fontSize: 13,
                   color: AppColors.textSecondary,
                 ),
               ),
-              SizedBox(height: 2),
+              const SizedBox(height: 2),
               Text(
-                'Hello, ${MockData.userName}',
-                style: TextStyle(
+                'Hello, $_userName',
+                style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w800,
                   color: AppColors.textPrimary,
@@ -71,7 +405,14 @@ class HomeScreen extends StatelessWidget {
         CircleAvatar(
           radius: 24,
           backgroundColor: AppColors.primarySoft,
-          child: Icon(Icons.person, color: AppColors.primary),
+          child: Text(
+            _avatarLetter,
+            style: const TextStyle(
+              color: AppColors.primary,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
         ),
       ],
     );
@@ -116,7 +457,9 @@ class HomeScreen extends StatelessWidget {
                       iconColor: Colors.white,
                       iconBg: AppColors.dark,
                       label: 'Weekly Volume',
-                      value: '${MockData.weeklyVolume}',
+                      value: _weeklyVolumeKg % 1 == 0
+                          ? _weeklyVolumeKg.toInt().toString()
+                          : _weeklyVolumeKg.toStringAsFixed(1),
                       unit: 'kg',
                     ),
                   ],
@@ -212,48 +555,54 @@ class HomeScreen extends StatelessWidget {
             child: const Icon(Icons.calendar_month, color: AppColors.primary),
           ),
           const SizedBox(width: 14),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Today's Plan",
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
+          Expanded(
+            child: _isLoading
+                ? const Text(
+                    'Loading plan...',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textSecondary,
+                    ),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Today's Plan",
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _todayPlanTitle,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: _hasActiveWorkoutDay
+                              ? AppColors.primary
+                              : AppColors.textSecondary,
+                        ),
+                      ),
+                      Text(
+                        _todayPlanMeta,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  MockData.todaysPlanTitle,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
-                  ),
-                ),
-                Text(
-                  MockData.todaysPlanMeta,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
           ),
           ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const FitnessPlanScreen()),
-              );
-            },
+            onPressed: _isLoading ? null : _openFitnessPlan,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
+              disabledBackgroundColor: AppColors.textMuted,
               elevation: 0,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
@@ -261,9 +610,10 @@ class HomeScreen extends StatelessWidget {
             child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Start Now',
-                    style: TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w700)),
+                Text(
+                  'Start Now',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                ),
                 Icon(Icons.chevron_right, size: 18),
               ],
             ),
@@ -282,11 +632,7 @@ class HomeScreen extends StatelessWidget {
             iconBg: AppColors.primarySoft,
             iconColor: AppColors.primary,
             label: 'Log Workout',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const FitnessPlanScreen()),
-              );
-            },
+            onTap: _openFitnessPlan,
           ),
         ),
         const SizedBox(width: 14),
@@ -317,28 +663,28 @@ class HomeScreen extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: SectionCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: iconBg,
-              borderRadius: BorderRadius.circular(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: iconBg,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: iconColor),
             ),
-            child: Icon(icon, color: iconColor),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
+            const SizedBox(height: 12),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
@@ -370,7 +716,9 @@ class HomeScreen extends StatelessWidget {
       'Saved Workout Plans': () => const SavedPlansScreen(),
       'Workout History': () => const WorkoutHistoryScreen(),
     };
+
     final builder = screens[label];
+
     if (builder != null) {
       Navigator.of(context).push(MaterialPageRoute(builder: (_) => builder()));
     }
@@ -378,8 +726,7 @@ class HomeScreen extends StatelessWidget {
 
   Widget _menuRow(BuildContext context, MenuItem item) {
     return ListTile(
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       leading: Container(
         width: 38,
         height: 38,
@@ -397,8 +744,7 @@ class HomeScreen extends StatelessWidget {
           color: AppColors.textPrimary,
         ),
       ),
-      trailing:
-          const Icon(Icons.chevron_right, color: AppColors.textMuted),
+      trailing: const Icon(Icons.chevron_right, color: AppColors.textMuted),
       onTap: () => _openMenuItem(context, item.label),
     );
   }

@@ -1,43 +1,290 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../data/mock_data.dart';
 import '../../models/client/exercise.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/client/sub_screen_scaffold.dart';
 import 'workout_complete_screen.dart';
 
 class ActiveWorkoutScreen extends StatefulWidget {
-  const ActiveWorkoutScreen({super.key});
+  final String planId;
+  final String planTitle;
+  final String planDayId;
+  final String dayLabel;
+
+  const ActiveWorkoutScreen({
+    super.key,
+    required this.planId,
+    required this.planTitle,
+    required this.planDayId,
+    required this.dayLabel,
+  });
 
   @override
   State<ActiveWorkoutScreen> createState() => _ActiveWorkoutScreenState();
 }
 
 class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
-  late final Map<int, List<ExerciseSet>> _sets;
+  bool _isLoading = true;
+  bool _isFinishing = false;
+
+  final DateTime _startedAt = DateTime.now();
+
+  List<Map<String, dynamic>> _exercises = [];
+  late Map<int, List<ExerciseSet>> _sets;
 
   @override
   void initState() {
     super.initState();
-    _sets = {
-      for (var i = 0; i < MockData.dayExercises.length; i++)
-        i: List.generate(3, (_) => ExerciseSet()),
-    };
+    _sets = {};
+    _loadExercises();
+  }
+
+  int? _parseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    return int.tryParse(value.toString());
+  }
+
+  Future<void> _loadExercises() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final response = await Supabase.instance.client
+          .from('plan_exercises')
+          .select(
+            'plan_exercise_id, exercise_id, sets, rep_min, rep_max, rest_sec, order_index, exercise_library(name, muscle_group)',
+          )
+          .eq('plan_day_id', widget.planDayId)
+          .order('order_index');
+
+      final rows = List<Map<String, dynamic>>.from(response as List);
+
+      final newSets = <int, List<ExerciseSet>>{};
+
+      for (var i = 0; i < rows.length; i++) {
+        final setCount = _parseInt(rows[i]['sets']) ?? 3;
+        final defaultReps = _defaultReps(rows[i]);
+
+        newSets[i] = List.generate(
+          setCount,
+          (_) => ExerciseSet(reps: defaultReps),
+        );
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _exercises = rows;
+        _sets = newSets;
+      });
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load workout: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  String _defaultReps(Map<String, dynamic> exercise) {
+    final repMin = _parseInt(exercise['rep_min']);
+    final repMax = _parseInt(exercise['rep_max']);
+
+    if (repMax != null) return '$repMax';
+    if (repMin != null) return '$repMin';
+
+    return '12';
+  }
+
+  String _exerciseName(Map<String, dynamic> exercise) {
+    final library = exercise['exercise_library'] as Map<String, dynamic>?;
+    return library?['name']?.toString() ?? 'Exercise';
+  }
+
+  String _exerciseMeta(Map<String, dynamic> exercise) {
+    final sets = _parseInt(exercise['sets']) ?? 0;
+    final repMin = _parseInt(exercise['rep_min']);
+    final repMax = _parseInt(exercise['rep_max']);
+    final restSec = _parseInt(exercise['rest_sec']) ?? 60;
+
+    String repsText;
+
+    if (repMin == null && repMax == null) {
+      repsText = '- reps';
+    } else if (repMin != null && (repMax == null || repMin == repMax)) {
+      repsText = '$repMin reps';
+    } else {
+      repsText = '${repMin ?? '-'}-${repMax ?? '-'} reps';
+    }
+
+    return '$sets × $repsText • ${restSec}s rest';
+  }
+
+  String _elapsedText() {
+    final elapsed = DateTime.now().difference(_startedAt);
+    final minutes = elapsed.inMinutes;
+    final seconds = elapsed.inSeconds % 60;
+
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  int get _completedSetCount {
+    int count = 0;
+
+    for (final sets in _sets.values) {
+      count += sets.where((set) => set.done).length;
+    }
+
+    return count;
+  }
+
+  double get _totalVolume {
+    double total = 0;
+
+    for (final sets in _sets.values) {
+      for (final set in sets) {
+        if (!set.done) continue;
+
+        final kg = double.tryParse(set.kg.trim()) ?? 0;
+        final reps = int.tryParse(set.reps.trim()) ?? 0;
+
+        total += kg * reps;
+      }
+    }
+
+    return total;
+  }
+
+  Future<void> _finishWorkout() async {
+    if (_isFinishing) return;
+
+    if (_completedSetCount == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please complete at least one set.')),
+      );
+      return;
+    }
+
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You must be signed in.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isFinishing = true;
+    });
+
+    try {
+      final durationSeconds = DateTime.now().difference(_startedAt).inSeconds;
+      final durationMin = durationSeconds <= 0
+          ? 1
+          : (durationSeconds / 60).ceil();
+
+      final logRow = await Supabase.instance.client
+          .from('workout_logs')
+          .insert({
+            'profile_id': userId,
+            'free_plan_id': widget.planId,
+            'personalized_plan_id': null,
+            'performed_at': DateTime.now().toIso8601String(),
+            'duration_min': durationMin,
+            'source': 'active_plan',
+          })
+          .select('workout_log_id')
+          .single();
+
+      final workoutLogId = logRow['workout_log_id']?.toString();
+
+      if (workoutLogId == null || workoutLogId.isEmpty) {
+        throw Exception('Missing workout_log_id.');
+      }
+
+      final exerciseRows = <Map<String, dynamic>>[];
+
+      for (var exerciseIndex = 0; exerciseIndex < _exercises.length; exerciseIndex++) {
+        final exercise = _exercises[exerciseIndex];
+        final exerciseId = exercise['exercise_id']?.toString();
+        final sets = _sets[exerciseIndex] ?? [];
+
+        if (exerciseId == null || exerciseId.isEmpty) continue;
+
+        for (var setIndex = 0; setIndex < sets.length; setIndex++) {
+          final set = sets[setIndex];
+
+          if (!set.done) continue;
+
+          final reps = int.tryParse(set.reps.trim());
+          final weight = double.tryParse(set.kg.trim());
+
+          exerciseRows.add({
+            'workout_log_id': workoutLogId,
+            'exercise_id': exerciseId,
+            'sets': setIndex + 1,
+            'reps': reps ?? 0,
+            'weight_kg': weight ?? 0,
+          });
+        }
+      }
+
+      if (exerciseRows.isNotEmpty) {
+        await Supabase.instance.client
+            .from('workout_exercises')
+            .insert(exerciseRows);
+      }
+
+      if (!mounted) return;
+
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => WorkoutCompleteScreen(
+            dayLabel: widget.dayLabel,
+            durationSeconds: durationSeconds,
+            totalVolumeKg: _totalVolume,
+            totalSets: _completedSetCount,
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to finish workout: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isFinishing = false;
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return SubScreenScaffold(
-      title: MockData.currentDayLabel,
+      title: widget.dayLabel,
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
           color: AppColors.primarySoft,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: const Text(
-          '12:38',
-          style: TextStyle(
+        child: Text(
+          _elapsedText(),
+          style: const TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w700,
             color: AppColors.primary,
@@ -45,25 +292,38 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
         ),
       ),
       bottomButton: PrimaryButton(
-        label: 'Finish Workout',
-        onPressed: () {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const WorkoutCompleteScreen()),
-          );
-        },
+        label: _isFinishing ? 'Saving...' : 'Finish Workout',
+        onPressed: _isFinishing ? null : _finishWorkout,
       ),
       children: [
-        for (var i = 0; i < MockData.dayExercises.length; i++) ...[
-          _exerciseCard(i),
-          const SizedBox(height: 14),
-        ],
+        if (_isLoading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 40),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (_exercises.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 40),
+            child: Center(
+              child: Text(
+                'No exercises in this workout.',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+            ),
+          )
+        else
+          for (var i = 0; i < _exercises.length; i++) ...[
+            _exerciseCard(i),
+            const SizedBox(height: 14),
+          ],
       ],
     );
   }
 
   Widget _exerciseCard(int index) {
-    final exercise = MockData.dayExercises[index];
-    final sets = _sets[index]!;
+    final exercise = _exercises[index];
+    final sets = _sets[index] ?? [];
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -82,8 +342,11 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                   color: AppColors.card,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.fitness_center,
-                    size: 18, color: AppColors.textSecondary),
+                child: const Icon(
+                  Icons.fitness_center,
+                  size: 18,
+                  color: AppColors.textSecondary,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -91,14 +354,14 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      exercise.name,
+                      _exerciseName(exercise),
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     Text(
-                      exercise.meta,
+                      _exerciseMeta(exercise),
                       style: const TextStyle(
                         fontSize: 11,
                         color: AppColors.textSecondary,
@@ -107,8 +370,11 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                   ],
                 ),
               ),
-              const Icon(Icons.help_outline,
-                  size: 18, color: AppColors.textMuted),
+              const Icon(
+                Icons.help_outline,
+                size: 18,
+                color: AppColors.textMuted,
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -154,10 +420,19 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
               ),
             ),
           ),
-          Expanded(child: _setField(initial: set.kg, onChanged: (v) => set.kg = v)),
+          Expanded(
+            child: _setField(
+              initial: set.kg,
+              onChanged: (value) => set.kg = value,
+            ),
+          ),
           const SizedBox(width: 10),
           Expanded(
-              child: _setField(initial: set.reps, onChanged: (v) => set.reps = v)),
+            child: _setField(
+              initial: set.reps,
+              onChanged: (value) => set.reps = value,
+            ),
+          ),
           const SizedBox(width: 10),
           GestureDetector(
             onTap: () => setState(() => set.done = !set.done),
@@ -182,13 +457,16 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
     );
   }
 
-  Widget _setField({required String initial, required ValueChanged<String> onChanged}) {
+  Widget _setField({
+    required String initial,
+    required ValueChanged<String> onChanged,
+  }) {
     return SizedBox(
       height: 36,
       child: TextFormField(
         initialValue: initial,
         onChanged: onChanged,
-        keyboardType: TextInputType.number,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
         textAlign: TextAlign.center,
         style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
         decoration: InputDecoration(

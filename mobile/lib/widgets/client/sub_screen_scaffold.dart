@@ -35,6 +35,7 @@ class SubScreenScaffold extends StatelessWidget {
                       shape: const CircleBorder(),
                     ),
                   ),
+
                   Expanded(
                     child: Text(
                       title,
@@ -46,10 +47,15 @@ class SubScreenScaffold extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (trailing != null) trailing! else const SizedBox(width: 40),
+
+                  if (trailing != null)
+                    trailing!
+                  else
+                    const SizedBox(width: 40),
                 ],
               ),
             ),
+
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(
@@ -61,6 +67,7 @@ class SubScreenScaffold extends StatelessWidget {
                 children: children,
               ),
             ),
+
             if (bottomButton != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(
@@ -80,7 +87,11 @@ class SubScreenScaffold extends StatelessWidget {
 
 class PrimaryButton extends StatelessWidget {
   final String label;
-  final VoidCallback onPressed;
+
+  // 这里改成 VoidCallback?
+  // 这样 onPressed 可以传 null
+  final VoidCallback? onPressed;
+
   final IconData? icon;
 
   const PrimaryButton({
@@ -92,13 +103,18 @@ class PrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool disabled = onPressed == null;
+
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
+          backgroundColor:
+              disabled ? AppColors.textMuted : AppColors.primary,
           foregroundColor: Colors.white,
+          disabledBackgroundColor: AppColors.textMuted,
+          disabledForegroundColor: Colors.white,
           elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
@@ -115,6 +131,7 @@ class PrimaryButton extends StatelessWidget {
                 fontWeight: FontWeight.w700,
               ),
             ),
+
             if (icon != null) ...[
               const SizedBox(width: 4),
               Icon(icon, size: 18),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../data/mock_data.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/client/sub_screen_scaffold.dart';
 import 'active_workout_screen.dart';
@@ -13,17 +13,265 @@ class FitnessPlanScreen extends StatefulWidget {
 }
 
 class _FitnessPlanScreenState extends State<FitnessPlanScreen> {
-  int _selectedDay = 3;
+  bool _isLoading = true;
 
-  static const _days = [
-    ('WED', '30'),
-    ('THU', '30'),
-    ('FRI', '31'),
-    ('SAT', '1'),
-    ('SUN', '2'),
-    ('MON', '3'),
-    ('TUE', '4'),
-  ];
+  String? _planId;
+  String? _planTitle;
+
+  List<Map<String, dynamic>> _days = [];
+  List<Map<String, dynamic>> _exercises = [];
+
+  int _selectedDayIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadActivePlan();
+  }
+
+  Map<String, dynamic>? get _selectedDay {
+    if (_days.isEmpty) return null;
+    if (_selectedDayIndex < 0 || _selectedDayIndex >= _days.length) return null;
+    return _days[_selectedDayIndex];
+  }
+
+  bool get _isRestDay {
+    return _selectedDay?['is_rest_day'] == true;
+  }
+
+  int? _parseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    return int.tryParse(value.toString());
+  }
+
+  Future<void> _loadActivePlan() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final client = Supabase.instance.client;
+      final userId = client.auth.currentUser?.id;
+
+      if (userId == null) {
+        throw Exception('User is not signed in.');
+      }
+
+      final savedResponse = await client
+          .from('saved_plans')
+          .select('free_plan_id, saved_at')
+          .eq('profile_id', userId)
+          .order('saved_at', ascending: false)
+          .limit(1);
+
+      final savedRows = List<Map<String, dynamic>>.from(savedResponse as List);
+
+      if (savedRows.isEmpty) {
+        setState(() {
+          _planId = null;
+          _planTitle = null;
+          _days = [];
+          _exercises = [];
+        });
+        return;
+      }
+
+      final planId = savedRows.first['free_plan_id']?.toString();
+
+      if (planId == null || planId.isEmpty) {
+        throw Exception('Missing active plan id.');
+      }
+
+      final plan = await client
+          .from('free_plans')
+          .select('free_plan_id, plan_name')
+          .eq('free_plan_id', planId)
+          .maybeSingle();
+
+      final daysResponse = await client
+          .from('plan_days')
+          .select('plan_day_id, week_number, day_number, day_name, is_rest_day')
+          .eq('free_plan_id', planId)
+          .order('week_number', ascending: true)
+          .order('day_number', ascending: true);
+
+      final days = List<Map<String, dynamic>>.from(daysResponse as List);
+
+      days.sort((a, b) {
+        final aWeek = _parseInt(a['week_number']) ?? 0;
+        final bWeek = _parseInt(b['week_number']) ?? 0;
+
+        if (aWeek != bWeek) {
+          return aWeek.compareTo(bWeek);
+        }
+
+        final aDay = _parseInt(a['day_number']) ?? 0;
+        final bDay = _parseInt(b['day_number']) ?? 0;
+
+        return aDay.compareTo(bDay);
+      });
+
+      int initialIndex = 0;
+
+      if (days.isNotEmpty) {
+        final firstTrainingDay = days.indexWhere(
+          (day) => day['is_rest_day'] != true,
+        );
+
+        if (firstTrainingDay != -1) {
+          initialIndex = firstTrainingDay;
+        }
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _planId = planId;
+        _planTitle = plan?['plan_name']?.toString() ?? 'My Fitness Plan';
+        _days = days;
+        _selectedDayIndex = initialIndex;
+      });
+
+      await _loadExercisesForSelectedDay();
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load fitness plan: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadExercisesForSelectedDay() async {
+    final selectedDay = _selectedDay;
+
+    if (selectedDay == null || selectedDay['is_rest_day'] == true) {
+      setState(() {
+        _exercises = [];
+      });
+      return;
+    }
+
+    final planDayId = selectedDay['plan_day_id']?.toString();
+
+    if (planDayId == null || planDayId.isEmpty) {
+      setState(() {
+        _exercises = [];
+      });
+      return;
+    }
+
+    final response = await Supabase.instance.client
+        .from('plan_exercises')
+        .select(
+          'plan_exercise_id, exercise_id, sets, rep_min, rep_max, rest_sec, order_index, exercise_library(name, muscle_group)',
+        )
+        .eq('plan_day_id', planDayId)
+        .order('order_index');
+
+    if (!mounted) return;
+
+    setState(() {
+      _exercises = List<Map<String, dynamic>>.from(response as List);
+    });
+  }
+
+  void _selectDay(int index) {
+    setState(() {
+      _selectedDayIndex = index;
+    });
+
+    _loadExercisesForSelectedDay();
+  }
+
+  void _startWorkout() {
+    final planId = _planId;
+    final selectedDay = _selectedDay;
+    final planDayId = selectedDay?['plan_day_id']?.toString();
+
+    if (planId == null || planId.isEmpty || planDayId == null || planDayId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No workout day selected.')),
+      );
+      return;
+    }
+
+    if (_isRestDay) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This is a rest day.')),
+      );
+      return;
+    }
+
+    if (_exercises.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No exercises in this day.')),
+      );
+      return;
+    }
+
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute(
+            builder: (_) => ActiveWorkoutScreen(
+              planId: planId,
+              planTitle: _planTitle ?? 'My Fitness Plan',
+              planDayId: planDayId,
+              dayLabel: _dayTitle(),
+            ),
+          ),
+        )
+        .then((_) => _loadActivePlan());
+  }
+
+  String _dayTitle() {
+    final day = _selectedDay;
+
+    if (day == null) return 'Workout';
+
+    final dayNumber = day['day_number']?.toString() ?? '1';
+    final dayName = day['day_name']?.toString().trim();
+
+    if (dayName == null || dayName.isEmpty) {
+      return 'Day $dayNumber';
+    }
+
+    return 'Day $dayNumber: $dayName';
+  }
+
+  String _dayMeta() {
+    if (_isRestDay) {
+      return 'Rest Day';
+    }
+
+    return '~45 min • ${_exercises.length} exercises';
+  }
+
+  String _exerciseMeta(Map<String, dynamic> exercise) {
+    final sets = _parseInt(exercise['sets']) ?? 0;
+    final repMin = _parseInt(exercise['rep_min']);
+    final repMax = _parseInt(exercise['rep_max']);
+    final restSec = _parseInt(exercise['rest_sec']) ?? 60;
+
+    String repsText;
+
+    if (repMin == null && repMax == null) {
+      repsText = '- reps';
+    } else if (repMin != null && (repMax == null || repMin == repMax)) {
+      repsText = '$repMin reps';
+    } else {
+      repsText = '${repMin ?? '-'}-${repMax ?? '-'} reps';
+    }
+
+    return '$sets × $repsText • ${restSec}s rest';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,27 +280,70 @@ class _FitnessPlanScreenState extends State<FitnessPlanScreen> {
       bottomButton: PrimaryButton(
         label: 'Start Workout',
         icon: Icons.chevron_right,
-        onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const ActiveWorkoutScreen()),
-          );
-        },
+        onPressed: _isLoading ? null : _startWorkout,
       ),
       children: [
-        _dayStrip(),
-        const SizedBox(height: 18),
-        _dayBanner(),
-        const SizedBox(height: 16),
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 24),
-          child: Center(
-            child: Text(
-              'Select a plan from the Workout tab to start.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textSecondary),
+        if (_isLoading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 40),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (_planId == null)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 40),
+            child: Center(
+              child: Text(
+                'Select a plan from the Workout tab to start.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
             ),
-          ),
-        ),
+          )
+        else if (_days.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 40),
+            child: Center(
+              child: Text(
+                'No days in this plan yet.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+            ),
+          )
+        else ...[
+          _dayStrip(),
+          const SizedBox(height: 18),
+          _dayBanner(),
+          const SizedBox(height: 16),
+          if (_isRestDay)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text(
+                  'Rest Day',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            )
+          else if (_exercises.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text(
+                  'No exercises in this day.',
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+              ),
+            )
+          else
+            for (var i = 0; i < _exercises.length; i++) ...[
+              _exerciseRow(_exercises[i], i),
+              const SizedBox(height: 10),
+            ],
+        ],
       ],
     );
   }
@@ -64,10 +355,15 @@ class _FitnessPlanScreenState extends State<FitnessPlanScreen> {
         scrollDirection: Axis.horizontal,
         itemCount: _days.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, i) {
-          final selected = i == _selectedDay;
+        itemBuilder: (context, index) {
+          final day = _days[index];
+          final selected = index == _selectedDayIndex;
+
+          final dayNumber = day['day_number']?.toString() ?? '${index + 1}';
+          final weekNumber = day['week_number']?.toString() ?? '1';
+
           return GestureDetector(
-            onTap: () => setState(() => _selectedDay = i),
+            onTap: () => _selectDay(index),
             child: Container(
               width: 52,
               decoration: BoxDecoration(
@@ -81,7 +377,7 @@ class _FitnessPlanScreenState extends State<FitnessPlanScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    _days[i].$1,
+                    'W$weekNumber',
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
@@ -90,7 +386,7 @@ class _FitnessPlanScreenState extends State<FitnessPlanScreen> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    _days[i].$2,
+                    dayNumber,
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
@@ -121,33 +417,93 @@ class _FitnessPlanScreenState extends State<FitnessPlanScreen> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
+              color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(Icons.calendar_month, color: Colors.white, size: 20),
           ),
           const SizedBox(width: 12),
-          const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                MockData.currentDayLabel,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _dayTitle(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
                 ),
-              ),
-              SizedBox(height: 2),
-              Text(
-                MockData.currentDayMeta,
-                style: TextStyle(fontSize: 12, color: Colors.white70),
-              ),
-            ],
+                const SizedBox(height: 2),
+                Text(
+                  _dayMeta(),
+                  style: const TextStyle(fontSize: 12, color: Colors.white70),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
+  Widget _exerciseRow(Map<String, dynamic> exercise, int index) {
+    final library = exercise['exercise_library'] as Map<String, dynamic>?;
+
+    final name = library?['name']?.toString() ?? 'Exercise';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.cardMuted,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              color: AppColors.primarySoft,
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              '${index + 1}',
+              style: const TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _exerciseMeta(exercise),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
