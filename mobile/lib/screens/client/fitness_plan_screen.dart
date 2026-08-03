@@ -85,9 +85,20 @@ class _FitnessPlanScreenState extends State<FitnessPlanScreen> {
 
       final plan = await client
           .from('free_plans')
-          .select('free_plan_id, plan_name')
+          .select('free_plan_id, plan_name, status')
           .eq('free_plan_id', planId)
+          .or('status.is.null,status.neq.archived')
           .maybeSingle();
+
+      if (plan == null) {
+        setState(() {
+          _planId = null;
+          _planTitle = null;
+          _days = [];
+          _exercises = [];
+        });
+        return;
+      }
 
       final daysResponse = await client
           .from('plan_days')

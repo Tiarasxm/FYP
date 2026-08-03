@@ -259,7 +259,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
         return AlertDialog(
           title: const Text('Delete Plan?'),
           content: const Text(
-            'This will delete the whole plan, including all days and exercises. This action cannot be undone.',
+            'This plan will be archived and hidden from users. Workout history will not be deleted.',
           ),
           actions: [
             TextButton(
@@ -275,7 +275,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
               style: TextButton.styleFrom(
                 foregroundColor: Colors.red,
               ),
-              child: const Text('Delete'),
+              child: const Text('Archive'),
             ),
           ],
         );
@@ -283,7 +283,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     );
 
     if (confirmed == true) {
-      deletePlan();
+      await deletePlan();
     }
   }
 
@@ -292,7 +292,9 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
 
     if (planId == null || planId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('This plan cannot be deleted from Supabase.')),
+        const SnackBar(
+          content: Text('This plan cannot be deleted from Supabase.'),
+        ),
       );
       return;
     }
@@ -309,40 +311,21 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
         throw Exception('You must be signed in.');
       }
 
-      final dayRowsResponse = await client
-          .from('plan_days')
-          .select('plan_day_id')
-          .eq('free_plan_id', planId);
-
-      final dayRows = dayRowsResponse as List<dynamic>;
-
-      final planDayIds = dayRows
-          .map((row) => (row as Map<String, dynamic>)['plan_day_id']?.toString())
-          .whereType<String>()
-          .toList();
-
-      for (final dayId in planDayIds) {
-        await client
-            .from('plan_exercises')
-            .delete()
-            .eq('plan_day_id', dayId);
-      }
-
-      await client
-          .from('plan_days')
-          .delete()
-          .eq('free_plan_id', planId);
-
       await client
           .from('free_plans')
-          .delete()
+          .update({
+            'status': 'archived',
+            'visibility': 'Private',
+          })
           .eq('free_plan_id', planId)
           .eq('professional_id', userId);
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Plan deleted successfully.')),
+        const SnackBar(
+          content: Text('Plan archived successfully.'),
+        ),
       );
 
       Navigator.pop(context, true);
@@ -350,7 +333,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete plan: $error')),
+        SnackBar(content: Text('Failed to archive plan: $error')),
       );
     } finally {
       if (mounted) {

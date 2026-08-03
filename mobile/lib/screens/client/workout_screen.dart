@@ -118,6 +118,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           'free_plan_id, professional_id, plan_name, category, tag1, tag2, tag3, visibility, duration_weeks, status, created_at',
         )
         .eq('free_plan_id', activePlanId)
+        .or('status.is.null,status.neq.archived')
         .maybeSingle();
 
     if (!mounted) return;
@@ -135,6 +136,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           'free_plan_id, professional_id, plan_name, category, tag1, tag2, tag3, visibility, duration_weeks, status, created_at',
         )
         .ilike('visibility', 'public')
+        .or('status.is.null,status.neq.archived')
         .order('created_at', ascending: false);
 
     if (!mounted) return;

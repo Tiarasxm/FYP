@@ -77,6 +77,7 @@ class _SavedPlansScreenState extends State<SavedPlansScreen> {
             'free_plan_id, professional_id, plan_name, category, tag1, tag2, tag3, visibility, duration_weeks, status, created_at',
           )
           .eq('free_plan_id', freePlanId)
+          .or('status.is.null,status.neq.archived')
           .maybeSingle();
 
       if (plan == null) {

@@ -97,6 +97,7 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
             'free_plan_id, plan_name, tag1, tag2, tag3, visibility, duration_weeks, status, created_at',
           )
           .eq('professional_id', userId)
+          .or('status.is.null,status.neq.archived')
           .order('created_at', ascending: false);
 
       final allPlans = (response as List<dynamic>).map((row) {
