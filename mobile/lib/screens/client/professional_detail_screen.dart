@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../data/mock_data.dart';
 import '../../models/client/professional.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/client/pill_tag.dart';
@@ -63,9 +62,9 @@ class ProfessionalDetailScreen extends StatelessWidget {
           style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 8),
-        const Text(
-          MockData.professionalAbout,
-          style: TextStyle(
+        Text(
+          professional.bio ?? 'No bio available.',
+          style: const TextStyle(
             fontSize: 13,
             height: 1.5,
             color: AppColors.textSecondary,

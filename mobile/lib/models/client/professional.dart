@@ -1,17 +1,47 @@
 class Professional {
+  final String? profileId;
   final String name;
   final String specialties;
   final double rating;
   final int reviewCount;
   final int yearsExp;
+  final String? bio;
 
   const Professional({
+    this.profileId,
     required this.name,
     required this.specialties,
     required this.rating,
     required this.reviewCount,
     this.yearsExp = 10,
+    this.bio,
   });
+
+  factory Professional.fromSupabase(Map<String, dynamic> row) {
+    final fp = row;
+    final profile = row['profiles'] as Map<String, dynamic>?;
+    final specs = fp['specializations']?.toString() ?? '';
+    final experience = fp['experience']?.toString() ?? '';
+
+    int yearsExp = 0;
+    final expMatch = RegExp(r'(\d+)').firstMatch(experience);
+    if (expMatch != null) {
+      yearsExp = int.tryParse(expMatch.group(1)!) ?? 0;
+    }
+
+    final avgRating = (fp['avg_rating'] as num?)?.toDouble() ?? 0.0;
+    final reviewCount = (fp['review_count'] as num?)?.toInt() ?? 0;
+
+    return Professional(
+      profileId: fp['profile_id']?.toString(),
+      name: profile?['full_name']?.toString() ?? fp['display_name']?.toString() ?? 'Unknown',
+      specialties: specs,
+      rating: avgRating,
+      reviewCount: reviewCount,
+      yearsExp: yearsExp,
+      bio: fp['bio']?.toString(),
+    );
+  }
 }
 
 class Review {

@@ -211,6 +211,23 @@ create table if not exists public.free_plans (
 
 alter table public.free_plans enable row level security;
 
+drop policy if exists "Professionals can manage own free plans" on public.free_plans;
+drop policy if exists "Users can read public free plans" on public.free_plans;
+drop policy if exists "Admins can manage all free plans" on public.free_plans;
+
+create policy "Professionals can manage own free plans"
+on public.free_plans
+for all
+to authenticated
+using (professional_id = auth.uid() or public.is_admin())
+with check (professional_id = auth.uid() or public.is_admin());
+
+create policy "Users can read public free plans"
+on public.free_plans
+for select
+to authenticated
+using (visibility = 'public' or professional_id = auth.uid() or public.is_admin());
+
 -- =========================================================
 -- 6. PERSONALIZED PLANS TABLE
 -- =========================================================
@@ -457,8 +474,8 @@ create table if not exists public.chat_messages (
   is_read boolean default false,
   created_at timestamptz default now(),
   constraint chat_messages_room_id_fkey foreign key (room_id) references public.chat_rooms(id),
-  constraint chat_messages_sender_id_fkey foreign key (sender_id) references public.profiles(id),
-  constraint chat_messages_plan_id_fkey foreign key (plan_id) references public.personalized_plans(personalized_plan_id)
+  constraint chat_messages_sender_id_fkey foreign key (sender_id) references public.profiles(id)
+  -- NOTE: plan_id intentionally has no FK — it can reference free_plans or personalized_plans
 );
 
 alter table public.chat_messages enable row level security;
@@ -530,117 +547,6 @@ create policy "Participants can update chat rooms"
 on public.chat_rooms
 for update
 to authenticated
-<<<<<<< Updated upstream
-using (public.is_admin())
-with check (public.is_admin());
-
-create policy "Admins can insert website content"
-on public.website_content
-for insert
-to authenticated
-with check (public.is_admin());
-
-insert into public.website_content (section_key, content)
-values
-(
-  'hero',
-  '{
-    "titleLine1": "Train smarter.",
-    "titleLine2": "See real results.",
-    "subtitle": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do dolor sit tincidunt ut labore et dolore magna aliqua. Dolor sit amet, consectetur adipiscing elit."
-  }'
-),
-(
-  'features',
-  '{
-    "sectionLabel": "Features",
-    "title": "Everything to crush your goals",
-    "items": [
-      { "title": "Personalised Plans", "text": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do." },
-      { "title": "Workout Tracking", "text": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do." },
-      { "title": "Progress Analytics", "text": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do." },
-      { "title": "Nutrition Support", "text": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do." },
-      { "title": "Streaks & Rewards", "text": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do." },
-      { "title": "Community Support", "text": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do." }
-    ]
-  }'
-),
-(
-  'subscription',
-  '{
-    "sectionLabel": "Subscription Plans",
-    "title": "Unlock Your Best Self",
-    "plans": [
-      {
-        "title": "Free",
-        "price": "$0",
-        "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do.",
-        "features": ["Basic workouts", "Workout tracking", "Community Access", "Workout tracking", "", ""]
-      },
-      {
-        "title": "Premium",
-        "price": "$7.99",
-        "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do.",
-        "features": ["Workout tracking", "Basic workouts", "Workout tracking", "Basic workouts", "Workout tracking", "Basic workouts"]
-      }
-    ]
-  }'
-),
-(
-  'faq',
-  '{
-    "title": "FAQs",
-    "items": [
-      { "question": "Is ShapeRush free to use?", "answer": "Yes, ShapeRush provides a free plan for users." },
-      { "question": "Can I track weight, workout, or intermittent fasting?", "answer": "Yes, users can track their fitness progress inside the app." },
-      { "question": "What do I need to get started?", "answer": "Create an account and download the ShapeRush app." }
-    ]
-  }'
-)
-on conflict (section_key) do nothing;
-
--- =========================================================
--- 12. STORAGE BUCKETS AND POLICIES
--- =========================================================
-
-insert into storage.buckets (id, name, public)
-values
-  ('certifications', 'certifications', true),
-  ('review-media', 'review-media', true),
-  ('report-media', 'report-media', true)
-on conflict (id) do update
-set public = excluded.public;
-
-drop policy if exists "Allow authenticated upload certifications" on storage.objects;
-drop policy if exists "Allow public read certifications" on storage.objects;
-drop policy if exists "Allow public read review media" on storage.objects;
-drop policy if exists "Allow public read report media" on storage.objects;
-
-create policy "Allow authenticated upload certifications"
-on storage.objects
-for insert
-to authenticated
-with check (bucket_id = 'certifications');
-
-create policy "Allow public read certifications"
-on storage.objects
-for select
-to anon, authenticated
-using (bucket_id = 'certifications');
-
-create policy "Allow public read review media"
-on storage.objects
-for select
-to anon, authenticated
-using (bucket_id = 'review-media');
-
-create policy "Allow public read report media"
-on storage.objects
-for select
-to anon, authenticated
-using (bucket_id = 'report-media');
-
-=======
 using (
   auth.uid() = client_id or auth.uid() = professional_id or public.is_admin()
 )
@@ -893,4 +799,3 @@ begin
   end if;
 end;
 $$;
->>>>>>> Stashed changes

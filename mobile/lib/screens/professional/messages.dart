@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../data/professional/mock_chats.dart';
-import '../../models/professional/chat_models.dart';
+import '../../services/chat_service.dart';
 import '../../widgets/professional/mobile_page_wrapper.dart';
 import 'chat.dart';
 
@@ -13,27 +14,91 @@ class ProfessionalMessages extends StatefulWidget {
 }
 
 class _ProfessionalMessagesState extends State<ProfessionalMessages> {
+  final ChatService _chatService = ChatService();
   String searchText = '';
-  String selectedFilter = 'All';
+  String _selectedFilter = 'All';
+  List<ChatRoomModel> _rooms = [];
+  Map<String, List<String>> _roomTags = {}; // roomId -> list of tags
+  bool _loading = true;
 
-  final List<String> filters = [
-    'All',
-    'New',
-    'Consult',
-    'Follow-up',
-    'Urgent',
-  ];
+  final List<String> _filterOptions = ['All', 'New', 'Consult', 'Follow-up', 'Urgent', 'Weight Loss'];
 
-  List<ChatUser> get filteredUsers {
-    return chatUsers.where((user) {
-      final matchesSearch =
-          user.name.toLowerCase().contains(searchText.toLowerCase());
+  @override
+  void initState() {
+    super.initState();
+    _loadRooms();
+  }
 
-      final matchesFilter =
-          selectedFilter == 'All' || user.tags.contains(selectedFilter);
+  Future<void> _loadRooms() async {
+    try {
+      final rooms = await _chatService.getChatRooms();
+      await _loadTags();
+      if (!mounted) return;
+      setState(() {
+        _rooms = rooms;
+        _loading = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading chat rooms: $e');
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
-      return matchesSearch && matchesFilter;
-    }).toList();
+  Future<void> _loadTags() async {
+    final myId = _chatService.currentUserId;
+    if (myId == null) return;
+
+    try {
+      final data = await Supabase.instance.client
+          .from('chat_tags')
+          .select('room_id, tag')
+          .eq('professional_id', myId);
+
+      final map = <String, List<String>>{};
+      for (final row in (data as List)) {
+        final roomId = row['room_id'] as String;
+        final tag = row['tag'] as String;
+        map.putIfAbsent(roomId, () => []).add(tag);
+      }
+
+      if (mounted) {
+        setState(() {
+          _roomTags = map;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading tags: $e');
+    }
+  }
+
+  List<ChatRoomModel> get filteredRooms {
+    var list = _rooms;
+
+    if (searchText.isNotEmpty) {
+      list = list.where((room) {
+        return room.otherUserName.toLowerCase().contains(searchText.toLowerCase());
+      }).toList();
+    }
+
+    if (_selectedFilter != 'All') {
+      // Map filter label to tag name stored in DB
+      final tagName = _selectedFilter == 'New' ? 'New Client' : _selectedFilter;
+      list = list.where((room) {
+        final tags = _roomTags[room.id] ?? [];
+        return tags.contains(tagName);
+      }).toList();
+    }
+
+    return list;
+  }
+
+  String _formatTime(DateTime? dt) {
+    if (dt == null) return '';
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+    if (diff.inDays == 0) return DateFormat('HH:mm').format(dt.toLocal());
+    if (diff.inDays == 1) return 'Yesterday';
+    return DateFormat('MMM d').format(dt.toLocal());
   }
 
   @override
@@ -64,7 +129,7 @@ class _ProfessionalMessagesState extends State<ProfessionalMessages> {
                   });
                 },
                 decoration: InputDecoration(
-                  hintText: 'Search fitness professionals',
+                  hintText: 'Search clients',
                   hintStyle: TextStyle(
                     color: Colors.grey.shade500,
                     fontSize: 14,
@@ -88,74 +153,86 @@ class _ProfessionalMessagesState extends State<ProfessionalMessages> {
 
               const SizedBox(height: 16),
 
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: filters.map((filter) {
-                    final isSelected = selectedFilter == filter;
-
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            selectedFilter = filter;
-                          });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 7,
+              SizedBox(
+                height: 32,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _filterOptions.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    final filter = _filterOptions[index];
+                    final isSelected = _selectedFilter == filter;
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _selectedFilter = filter;
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isSelected ? const Color(0xFF6C63FF) : Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isSelected ? const Color(0xFF6C63FF) : Colors.grey.shade300,
                           ),
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? const Color(0xFF6C63FF)
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
-                              color: isSelected
-                                  ? const Color(0xFF6C63FF)
-                                  : Colors.grey.shade300,
-                            ),
-                          ),
-                          child: Text(
-                            filter,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: isSelected
-                                  ? Colors.white
-                                  : Colors.grey.shade600,
-                            ),
+                        ),
+                        child: Text(
+                          filter,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: isSelected ? Colors.white : Colors.grey.shade700,
                           ),
                         ),
                       ),
                     );
-                  }).toList(),
+                  },
                 ),
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
 
               Expanded(
-                child: ListView.builder(
-                  itemCount: filteredUsers.length,
-                  itemBuilder: (context, index) {
-                    final user = filteredUsers[index];
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : filteredRooms.isEmpty
+                        ? Center(
+                            child: Text(
+                              'No conversations yet',
+                              style: TextStyle(
+                                color: Colors.grey.shade500,
+                                fontSize: 14,
+                              ),
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: filteredRooms.length,
+                            itemBuilder: (context, index) {
+                              final room = filteredRooms[index];
 
-                    return _ConversationItem(
-                      user: user,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => Chat(user: user),
+                              return _ConversationItem(
+                                room: room,
+                                tags: _roomTags[room.id] ?? [],
+                                formattedTime: _formatTime(room.lastMessageAt),
+                                onTap: () async {
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => Chat(
+                                        roomId: room.id,
+                                        otherUserName: room.otherUserName,
+                                        otherUserType: room.otherUserType,
+                                        clientId: room.clientId,
+                                      ),
+                                    ),
+                                  );
+                                  // Reload rooms and tags when returning
+                                  _loadRooms();
+                                },
+                              );
+                            },
                           ),
-                        );
-                      },
-                    );
-                  },
-                ),
               ),
             ],
           ),
@@ -166,16 +243,24 @@ class _ProfessionalMessagesState extends State<ProfessionalMessages> {
 }
 
 class _ConversationItem extends StatelessWidget {
-  final ChatUser user;
+  final ChatRoomModel room;
+  final List<String> tags;
+  final String formattedTime;
   final VoidCallback onTap;
 
   const _ConversationItem({
-    required this.user,
+    required this.room,
+    required this.tags,
+    required this.formattedTime,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final initials = room.otherUserName.isNotEmpty
+        ? room.otherUserName[0].toUpperCase()
+        : '?';
+
     return Material(
       color: Colors.white,
       child: InkWell(
@@ -188,7 +273,7 @@ class _ConversationItem extends StatelessWidget {
                 radius: 22,
                 backgroundColor: Colors.black,
                 child: Text(
-                  user.avatarText,
+                  initials,
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
@@ -206,7 +291,7 @@ class _ConversationItem extends StatelessWidget {
                       children: [
                         Flexible(
                           child: Text(
-                            user.name,
+                            room.otherUserName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -217,7 +302,7 @@ class _ConversationItem extends StatelessWidget {
                           ),
                         ),
 
-                        if (user.tags.isNotEmpty) ...[
+                        for (final tag in tags) ...[
                           const SizedBox(width: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -227,14 +312,14 @@ class _ConversationItem extends StatelessWidget {
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
-                                color: Colors.grey.shade300,
+                                color: Colors.grey.shade400,
                               ),
                             ),
                             child: Text(
-                              user.tags.first,
+                              tag,
                               style: TextStyle(
                                 fontSize: 9,
-                                color: Colors.grey.shade600,
+                                color: Colors.grey.shade700,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -246,7 +331,7 @@ class _ConversationItem extends StatelessWidget {
                     const SizedBox(height: 6),
 
                     Text(
-                      user.lastMessage,
+                      room.lastMessageContent ?? 'No messages yet',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -265,7 +350,7 @@ class _ConversationItem extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    user.time,
+                    formattedTime,
                     style: TextStyle(
                       fontSize: 10,
                       color: Colors.grey.shade500,
@@ -274,12 +359,12 @@ class _ConversationItem extends StatelessWidget {
 
                   const SizedBox(height: 10),
 
-                  if (user.unreadCount > 0)
+                  if (room.unreadCount > 0)
                     CircleAvatar(
                       radius: 9,
                       backgroundColor: const Color(0xFF6C63FF),
                       child: Text(
-                        '${user.unreadCount}',
+                        '${room.unreadCount}',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 10,

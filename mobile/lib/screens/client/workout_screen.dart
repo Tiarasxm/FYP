@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../data/mock_data.dart';
 import '../../models/client/professional.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/client/filter_chips.dart';
@@ -28,10 +27,14 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   bool _fpUnlocked = false;
   bool _isLoadingPlans = true;
+  bool _isLoadingPros = true;
 
   List<Map<String, dynamic>> _publicPlans = [];
   Map<String, dynamic>? _activePlan;
   String? _activePlanId;
+
+  List<Professional> _professionals = [];
+  String _proSearchText = '';
 
   @override
   void initState() {
@@ -54,8 +57,11 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
       await _loadActivePlan(client, userId);
       await _loadPublicPlans(client);
+      await _loadProfessionals(client);
 
       if (!mounted) return;
+
+      setState(() => _isLoadingPros = false);
 
       final filters = _workoutFilters;
       if (!filters.contains(_filter)) {
@@ -208,6 +214,65 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     }
 
     return tags;
+  }
+
+  Future<void> _loadProfessionals(SupabaseClient client) async {
+    final data = await client
+        .from('fitness_professional')
+        .select('profile_id, display_name, bio, experience, specializations, approved, profiles!inner(full_name)')
+        .eq('approved', true);
+
+    final rows = List<Map<String, dynamic>>.from(data as List);
+
+    // For each professional, fetch avg rating and review count
+    final pros = <Professional>[];
+    for (final row in rows) {
+      final profileId = row['profile_id'];
+      final reviewData = await client
+          .from('reviews')
+          .select('rating')
+          .eq('reviewer_id', profileId);
+      final reviewRows = List<Map<String, dynamic>>.from(reviewData as List);
+      final reviewCount = reviewRows.length;
+      double avgRating = 0;
+      if (reviewCount > 0) {
+        final total = reviewRows.fold<double>(0, (sum, r) => sum + ((r['rating'] as num?)?.toDouble() ?? 0));
+        avgRating = total / reviewCount;
+      }
+
+      row['avg_rating'] = avgRating;
+      row['review_count'] = reviewCount;
+      pros.add(Professional.fromSupabase(row));
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _professionals = pros;
+    });
+  }
+
+  List<String> get _professionalFilters {
+    final specSet = <String>{};
+    for (final pro in _professionals) {
+      final specs = pro.specialties.split(RegExp(r'[•,]'));
+      for (final s in specs) {
+        final clean = s.trim();
+        if (clean.isNotEmpty) specSet.add(clean);
+      }
+    }
+    final result = specSet.toList()..sort();
+    return ['All', ...result];
+  }
+
+  List<Professional> get _filteredProfessionals {
+    var list = _professionals;
+    if (_proSearchText.isNotEmpty) {
+      list = list.where((p) => p.name.toLowerCase().contains(_proSearchText.toLowerCase())).toList();
+    }
+    if (_proFilter != 'All') {
+      list = list.where((p) => p.specialties.toLowerCase().contains(_proFilter.toLowerCase())).toList();
+    }
+    return list;
   }
 
   String _planTitle(Map<String, dynamic> plan) {
@@ -539,6 +604,11 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     return [
       TextField(
         style: const TextStyle(fontSize: 14),
+        onChanged: (value) {
+          setState(() {
+            _proSearchText = value;
+          });
+        },
         decoration: InputDecoration(
           hintText: 'Search fitness professionals',
           hintStyle: const TextStyle(
@@ -570,7 +640,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       const SizedBox(height: 12),
 
       FilterChips(
-        options: MockData.professionalFilters,
+        options: _professionalFilters,
         selected: _proFilter,
         onSelected: (value) {
           setState(() {
@@ -581,7 +651,18 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
       const SizedBox(height: 16),
 
-      for (final professional in MockData.professionals) ...[
+      if (_isLoadingPros)
+        const Center(child: Padding(
+          padding: EdgeInsets.all(20),
+          child: CircularProgressIndicator(),
+        ))
+      else if (_filteredProfessionals.isEmpty)
+        const Padding(
+          padding: EdgeInsets.all(20),
+          child: Center(child: Text('No professionals found', style: TextStyle(color: AppColors.textMuted))),
+        )
+      else
+      for (final professional in _filteredProfessionals) ...[
         _professionalCard(professional),
         const SizedBox(height: 12),
       ],

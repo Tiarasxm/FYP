@@ -1,24 +1,62 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
-import '../../data/mock_data.dart';
 import '../../models/client/professional.dart';
+import '../../services/chat_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/client/sub_screen_scaffold.dart';
 import 'chat_screen.dart';
 
-class ChatListScreen extends StatelessWidget {
+class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
 
   @override
+  State<ChatListScreen> createState() => _ChatListScreenState();
+}
+
+class _ChatListScreenState extends State<ChatListScreen> {
+  final ChatService _chatService = ChatService();
+  List<ChatRoomModel> _rooms = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRooms();
+  }
+
+  Future<void> _loadRooms() async {
+    try {
+      final rooms = await _chatService.getChatRooms();
+      if (!mounted) return;
+      setState(() {
+        _rooms = rooms;
+        _loading = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading chat rooms: $e');
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  String _formatTime(DateTime? dt) {
+    if (dt == null) return '';
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+    if (diff.inDays == 0) return DateFormat('h:mm a').format(dt.toLocal());
+    if (diff.inDays == 1) return 'Yesterday';
+    return DateFormat('MMM d').format(dt.toLocal());
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final chats = MockData.professionals.take(2).toList();
     return SubScreenScaffold(
       title: 'Chat',
       children: [
         TextField(
           style: const TextStyle(fontSize: 14),
           decoration: InputDecoration(
-            hintText: 'Search fitness professionals',
+            hintText: 'Search chats',
             hintStyle:
                 const TextStyle(fontSize: 13, color: AppColors.textMuted),
             suffixIcon:
@@ -34,29 +72,36 @@ class ChatListScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 20),
-        for (var i = 0; i < chats.length; i++) ...[
-          _chatRow(
-            context,
-            name: chats[i].name,
-            message: 'Sure, let me know if you need...',
-            time: i == 0 ? '12:48 PM' : '11:45 PM',
-            unread: i == 0,
-            professional: chats[i],
-          ),
-          const SizedBox(height: 8),
-        ],
+        if (_loading)
+          const Center(child: Padding(
+            padding: EdgeInsets.all(40),
+            child: CircularProgressIndicator(),
+          ))
+        else if (_rooms.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(40),
+            child: Center(
+              child: Text(
+                'No chats yet',
+                style: TextStyle(color: AppColors.textMuted),
+              ),
+            ),
+          )
+        else
+          for (final room in _rooms) ...[
+            _chatRow(
+              context,
+              room: room,
+            ),
+            const SizedBox(height: 8),
+          ],
       ],
     );
   }
 
-  Widget _chatRow(
-    BuildContext context, {
-    required String name,
-    required String message,
-    required String time,
-    required bool unread,
-    required Professional professional,
-  }) {
+  Widget _chatRow(BuildContext context, {required ChatRoomModel room}) {
+    final isClient = room.clientId == _chatService.currentUserId;
+
     return Material(
       color: Colors.transparent,
       child: ListTile(
@@ -67,11 +112,11 @@ class ChatListScreen extends StatelessWidget {
           child: Icon(Icons.person, color: AppColors.primary),
         ),
         title: Text(
-          name,
+          room.otherUserName,
           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         ),
         subtitle: Text(
-          message,
+          room.lastMessageContent ?? 'No messages yet',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
@@ -84,13 +129,13 @@ class ChatListScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              time,
+              _formatTime(room.lastMessageAt),
               style: const TextStyle(
                 fontSize: 11,
                 color: AppColors.textMuted,
               ),
             ),
-            if (unread) ...[
+            if (room.unreadCount > 0) ...[
               const SizedBox(height: 4),
               Container(
                 width: 18,
@@ -100,15 +145,23 @@ class ChatListScreen extends StatelessWidget {
                   color: AppColors.primary,
                   shape: BoxShape.circle,
                 ),
-                child: const Text(
-                  '1',
-                  style: TextStyle(fontSize: 10, color: Colors.white),
+                child: Text(
+                  '${room.unreadCount}',
+                  style: const TextStyle(fontSize: 10, color: Colors.white),
                 ),
               ),
             ],
           ],
         ),
         onTap: () {
+          final professional = Professional(
+            profileId: isClient ? room.professionalId : room.clientId,
+            name: room.otherUserName,
+            specialties: '',
+            rating: 0,
+            reviewCount: 0,
+          );
+
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => ChatScreen(professional: professional),

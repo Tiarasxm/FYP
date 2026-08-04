@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../data/professional/mock_plans.dart';
 import '../../models/professional/workout_plan.dart';
 import '../../widgets/professional/mobile_page_wrapper.dart';
 
@@ -14,26 +14,73 @@ class SendPlan extends StatefulWidget {
 class _SendPlanState extends State<SendPlan> {
   String searchText = '';
   WorkoutPlan? selectedPlan;
+  List<WorkoutPlan> _plans = [];
+  bool _loading = true;
 
-  List<WorkoutPlan> get allPlans {
-    return [
-      ...publicPlans,
-      ...privatePlans,
-    ];
+  @override
+  void initState() {
+    super.initState();
+    _loadPlans();
+  }
+
+  Future<void> _loadPlans() async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) return;
+
+      final data = await Supabase.instance.client
+          .from('free_plans')
+          .select()
+          .eq('professional_id', userId)
+          .order('created_at', ascending: false);
+
+      final plans = (data as List).map((row) {
+        final tags = <String>[];
+        if (row['tag1'] != null && (row['tag1'] as String).isNotEmpty) tags.add(row['tag1']);
+        if (row['tag2'] != null && (row['tag2'] as String).isNotEmpty) tags.add(row['tag2']);
+        if (row['tag3'] != null && (row['tag3'] as String).isNotEmpty) tags.add(row['tag3']);
+
+        final durationWeeks = row['duration_weeks'] as int? ?? 1;
+
+        return WorkoutPlan(
+          freePlanId: row['free_plan_id'],
+          title: row['plan_name'] ?? 'Untitled',
+          days: durationWeeks * 7,
+          duration: '~45 min',
+          durationWeeks: durationWeeks,
+          visibility: row['visibility'] ?? 'public',
+          tags: tags,
+          workoutDays: [],
+        );
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _plans = plans;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading plans: $e');
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
   }
 
   List<WorkoutPlan> get filteredPlans {
-    return allPlans.where((plan) {
+    return _plans.where((plan) {
       return plan.title.toLowerCase().contains(searchText.toLowerCase());
     }).toList();
   }
 
   void sendPlan() {
-    if (selectedPlan == null) {
-      return;
+    if (selectedPlan == null) return;
+    final nav = Navigator.of(context);
+    debugPrint('SendPlan: canPop=${nav.canPop()}, popping with plan: ${selectedPlan!.title}');
+    if (nav.canPop()) {
+      nav.pop(selectedPlan);
     }
-
-    Navigator.pop(context, selectedPlan);
   }
 
   @override
@@ -46,18 +93,19 @@ class _SendPlanState extends State<SendPlan> {
             children: [
               Row(
                 children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFF3F2FA),
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
-                      icon: const Icon(
+                  GestureDetector(
+                    onTap: () {
+                      debugPrint('SendPlan: close button tapped, canPop=${Navigator.of(context).canPop()}');
+                      Navigator.of(context).pop();
+                    },
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF3F2FA),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
                         Icons.close,
                         size: 18,
                         color: Colors.black54,
@@ -115,23 +163,35 @@ class _SendPlanState extends State<SendPlan> {
               const SizedBox(height: 18),
 
               Expanded(
-                child: ListView.builder(
-                  itemCount: filteredPlans.length,
-                  itemBuilder: (context, index) {
-                    final plan = filteredPlans[index];
-                    final selected = selectedPlan == plan;
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : filteredPlans.isEmpty
+                        ? Center(
+                            child: Text(
+                              'No plans found',
+                              style: TextStyle(
+                                color: Colors.grey.shade500,
+                                fontSize: 14,
+                              ),
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: filteredPlans.length,
+                            itemBuilder: (context, index) {
+                              final plan = filteredPlans[index];
+                              final selected = selectedPlan == plan;
 
-                    return _SelectablePlanCard(
-                      plan: plan,
-                      selected: selected,
-                      onTap: () {
-                        setState(() {
-                          selectedPlan = plan;
-                        });
-                      },
-                    );
-                  },
-                ),
+                              return _SelectablePlanCard(
+                                plan: plan,
+                                selected: selected,
+                                onTap: () {
+                                  setState(() {
+                                    selectedPlan = plan;
+                                  });
+                                },
+                              );
+                            },
+                          ),
               ),
 
               SizedBox(

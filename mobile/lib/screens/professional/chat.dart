@@ -1,18 +1,26 @@
-import 'package:flutter/material.dart';
+import 'dart:convert';
 
-import '../../data/professional/mock_chats.dart';
-import '../../models/professional/chat_models.dart';
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../models/professional/workout_plan.dart';
+import '../../services/chat_service.dart';
 import '../../widgets/professional/mobile_page_wrapper.dart';
 import 'plan_detail.dart';
 import 'send_plan.dart';
 
 class Chat extends StatefulWidget {
-  final ChatUser user;
+  final String roomId;
+  final String otherUserName;
+  final String otherUserType;
+  final String? clientId;
 
   const Chat({
     super.key,
-    required this.user,
+    required this.roomId,
+    required this.otherUserName,
+    this.otherUserType = 'Free',
+    this.clientId,
   });
 
   @override
@@ -20,38 +28,81 @@ class Chat extends StatefulWidget {
 }
 
 class _ChatState extends State<Chat> {
-  late List<ChatMessage> messages;
+  final ChatService _chatService = ChatService();
   final TextEditingController messageController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+
+  List<ChatMessageModel> _messages = [];
+  bool _loading = true;
+  RealtimeChannel? _channel;
 
   @override
   void initState() {
     super.initState();
-    messages = buildInitialMessages(widget.user);
+    _loadMessages();
+  }
+
+  Future<void> _loadMessages() async {
+    try {
+      final messages = await _chatService.getMessages(widget.roomId);
+      await _chatService.markAsRead(widget.roomId);
+
+      if (!mounted) return;
+      setState(() {
+        _messages = messages;
+        _loading = false;
+      });
+
+      _scrollToBottom();
+
+      _channel = _chatService.subscribeToRoom(widget.roomId, (msg) {
+        if (!mounted) return;
+        setState(() {
+          if (!_messages.any((m) => m.id == msg.id)) {
+            _messages.add(msg);
+          }
+        });
+        _scrollToBottom();
+        if (msg.senderId != _chatService.currentUserId) {
+          _chatService.markAsRead(widget.roomId);
+        }
+      });
+    } catch (e) {
+      debugPrint('Error loading messages: $e');
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   @override
   void dispose() {
+    if (_channel != null) _chatService.unsubscribe(_channel!);
     messageController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
-  void sendTextMessage() {
+  Future<void> sendTextMessage() async {
     final text = messageController.text.trim();
+    if (text.isEmpty) return;
 
-    if (text.isEmpty) {
-      return;
+    messageController.clear();
+    try {
+      await _chatService.sendMessage(widget.roomId, text);
+    } catch (e) {
+      debugPrint('Error sending message: $e');
     }
-
-    setState(() {
-      messages.add(
-        ChatMessage(
-          isMe: true,
-          text: text,
-          time: '17:48 PM',
-        ),
-      );
-      messageController.clear();
-    });
   }
 
   Future<void> openSendPlan() async {
@@ -63,204 +114,165 @@ class _ChatState extends State<Chat> {
     );
 
     if (selectedPlan != null) {
-      setState(() {
-        messages.add(
-          ChatMessage(
-            isMe: true,
-            plan: selectedPlan,
-            time: '17:48 PM',
-          ),
+      try {
+        await _chatService.sendPlanMessage(
+          widget.roomId,
+          planId: selectedPlan.freePlanId ?? '',
+          title: selectedPlan.title,
+          days: selectedPlan.days,
+          duration: selectedPlan.duration,
+          tags: selectedPlan.tags,
         );
-      });
+      } catch (e) {
+        debugPrint('Error sending plan: $e');
+      }
     }
   }
 
-  void showCustomerProfile() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) {
-        return Center(
-          child: Container(
-            width: 300,
-            margin: const EdgeInsets.symmetric(horizontal: 18),
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: SafeArea(
-              top: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 28,
-                        backgroundColor: Colors.black,
-                        child: Text(
-                          widget.user.avatarText,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
+  void _showCustomerProfile() async {
+    if (widget.clientId == null) return;
+
+    final client = Supabase.instance.client;
+    try {
+      final profile = await client
+          .from('profiles')
+          .select('full_name, gender, user_type')
+          .eq('id', widget.clientId!)
+          .maybeSingle();
+
+      if (profile == null || !mounted) return;
+
+      final isPriority = (profile['user_type'] ?? '').toString().toLowerCase() == 'priority';
+      final fullName = profile['full_name'] ?? 'Unknown';
+      final gender = profile['gender'] ?? 'Not specified';
+
+      showDialog(
+        context: context,
+        builder: (ctx) {
+          return Center(
+            child: Container(
+              width: 300,
+              margin: const EdgeInsets.symmetric(horizontal: 18),
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 28,
+                          backgroundColor: Colors.black,
+                          child: Text(
+                            fullName.isNotEmpty ? fullName[0].toUpperCase() : '?',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 18,
+                            ),
                           ),
                         ),
-                      ),
-
-                      const SizedBox(width: 12),
-
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (widget.user.priority)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 9,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFECE9FF),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Text(
-                                  'PRIORITY',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: Color(0xFF6C63FF),
-                                    fontWeight: FontWeight.w800,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (isPriority)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                                  margin: const EdgeInsets.only(bottom: 6),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFECE9FF),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Text(
+                                    'PRIORITY',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Color(0xFF6C63FF),
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   ),
                                 ),
+                              Text(
+                                fullName,
+                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
                               ),
-
-                            const SizedBox(height: 6),
-
-                            Text(
-                              widget.user.name,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
+                              const SizedBox(height: 3),
+                              Text(
+                                'Gender: $gender',
+                                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
                               ),
-                            ),
-
-                            const SizedBox(height: 3),
-
-                            Text(
-                              'Age: ${widget.user.age} • Gender: ${widget.user.gender}',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.pop(context);
-                        },
-                        child: const Icon(
-                          Icons.close,
-                          size: 18,
-                          color: Colors.black54,
+                        GestureDetector(
+                          onTap: () => Navigator.pop(ctx),
+                          child: const Icon(Icons.close, size: 18, color: Colors.black54),
                         ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 18),
-
-                  _InfoBox(
-                    title: 'Fitness Information',
-                    children: [
-                      'Weight: ${widget.user.weight}',
-                      'Height: ${widget.user.height}',
-                      'Activity Level: ${widget.user.activityLevel}',
-                      'Fitness Goal: ${widget.user.fitnessGoal}',
-                    ],
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  if (widget.user.activePlan != null)
-                    _InfoBox(
-                      title: 'Active Plan',
-                      children: [
-                        widget.user.activePlan!.title,
-                        'By ShapeRush',
-                        'Progress: 90%',
                       ],
                     ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void showMoreMenu() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Center(
-          child: Container(
-            width: 220,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: SafeArea(
-              top: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ListTile(
-                    dense: true,
-                    title: const Text(
-                      'Assign Tag',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                    const SizedBox(height: 18),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF7F7F8),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Account Info',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 10),
+                          Text('Name: $fullName', style: TextStyle(fontSize: 12, color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 6),
+                          Text('Gender: $gender', style: TextStyle(fontSize: 12, color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 6),
+                          Text('Type: ${profile['user_type'] ?? 'Free'}', style: TextStyle(fontSize: 12, color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
+                        ],
                       ),
                     ),
-                    onTap: () {
-                      Navigator.pop(context);
-                      showAssignTagPopup();
-                    },
-                  ),
-                  ListTile(
-                    dense: true,
-                    title: const Text(
-                      'Report Customer',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    onTap: () {
-                      Navigator.pop(context);
-                      print('Report Customer clicked');
-                    },
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-        );
-      },
-    );
+          );
+        },
+      );
+    } catch (e) {
+      debugPrint('Error loading customer profile: $e');
+    }
   }
 
-  void showAssignTagPopup() {
-    final List<String> tags = [
+  void _showAssignTagPopup() async {
+    final client = Supabase.instance.client;
+    final myId = _chatService.currentUserId;
+    if (myId == null) return;
+
+    // Fetch existing tags for this room
+    List<String> existingTags = [];
+    try {
+      final data = await client
+          .from('chat_tags')
+          .select('tag')
+          .eq('room_id', widget.roomId)
+          .eq('professional_id', myId);
+      existingTags = (data as List).map((r) => r['tag'].toString()).toList();
+    } catch (e) {
+      debugPrint('Error loading tags: $e');
+    }
+
+    final List<String> availableTags = [
       'New Client',
       'Urgent',
       'Weight Loss',
@@ -268,46 +280,48 @@ class _ChatState extends State<Chat> {
       'Follow-up',
     ];
 
-    final Set<String> selectedTags = widget.user.tags.toSet();
+    final selectedTags = existingTags.toSet();
 
-    showModalBottomSheet(
+    if (!mounted) return;
+
+    showDialog(
       context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
+      builder: (ctx) {
         return StatefulBuilder(
-          builder: (context, setSheetState) {
+          builder: (ctx, setDialogState) {
             return Center(
               child: Container(
-                width: 220,
-                padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+                width: 240,
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: SafeArea(
-                  top: false,
+                child: Material(
+                  color: Colors.transparent,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      ...tags.map((tag) {
+                      const Text(
+                        'Assign Tags',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 12),
+                      ...availableTags.map((tag) {
                         final checked = selectedTags.contains(tag);
-
                         return Row(
                           children: [
                             Expanded(
                               child: Text(
                                 tag,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                               ),
                             ),
                             Checkbox(
                               value: checked,
                               activeColor: const Color(0xFF6C63FF),
                               onChanged: (value) {
-                                setSheetState(() {
+                                setDialogState(() {
                                   if (value == true) {
                                     selectedTags.add(tag);
                                   } else {
@@ -319,32 +333,26 @@ class _ChatState extends State<Chat> {
                           ],
                         );
                       }),
-
-                      const SizedBox(height: 6),
-
+                      const SizedBox(height: 10),
                       SizedBox(
                         width: double.infinity,
-                        height: 32,
-                        child: OutlinedButton(
-                          onPressed: () {
-                            Navigator.pop(context);
-                            print('Selected tags: $selectedTags');
+                        height: 36,
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            Navigator.pop(ctx);
+                            await _saveTags(selectedTags.toList());
                           },
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF6C63FF),
-                            side: const BorderSide(
-                              color: Color(0xFF6C63FF),
-                            ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF6C63FF),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(18),
                             ),
                           ),
                           child: const Text(
-                            'Edit',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
+                            'Save',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                           ),
                         ),
                       ),
@@ -359,8 +367,40 @@ class _ChatState extends State<Chat> {
     );
   }
 
+  Future<void> _saveTags(List<String> newTags) async {
+    final client = Supabase.instance.client;
+    final myId = _chatService.currentUserId;
+    if (myId == null) return;
+
+    try {
+      // Delete all existing tags for this room by this professional
+      await client
+          .from('chat_tags')
+          .delete()
+          .eq('room_id', widget.roomId)
+          .eq('professional_id', myId);
+
+      // Insert new tags
+      if (newTags.isNotEmpty) {
+        final rows = newTags.map((tag) => {
+          'room_id': widget.roomId,
+          'professional_id': myId,
+          'tag': tag,
+        }).toList();
+        await client.from('chat_tags').insert(rows);
+      }
+    } catch (e) {
+      debugPrint('Error saving tags: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final myId = _chatService.currentUserId;
+    final initials = widget.otherUserName.isNotEmpty
+        ? widget.otherUserName[0].toUpperCase()
+        : '?';
+
     return MobilePageWrapper(
       child: SafeArea(
         child: Column(
@@ -377,9 +417,7 @@ class _ChatState extends State<Chat> {
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
+                      onPressed: () => Navigator.pop(context),
                       icon: const Icon(
                         Icons.arrow_back_ios_new,
                         size: 18,
@@ -390,10 +428,10 @@ class _ChatState extends State<Chat> {
 
                   Expanded(
                     child: GestureDetector(
-                      onTap: showCustomerProfile,
+                      onTap: _showCustomerProfile,
                       child: Center(
                         child: Text(
-                          widget.user.name,
+                          widget.otherUserName,
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w800,
@@ -404,56 +442,71 @@ class _ChatState extends State<Chat> {
                     ),
                   ),
 
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFF3F2FA),
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      onPressed: showMoreMenu,
-                      icon: const Icon(
+                  PopupMenuButton<String>(
+                    icon: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF3F2FA),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
                         Icons.more_horiz,
                         color: Colors.black,
                       ),
                     ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    offset: const Offset(0, 44),
+                    onSelected: (value) {
+                      if (value == 'assign_tag') {
+                        _showAssignTagPopup();
+                      } else if (value == 'report') {
+                        // TODO: implement report
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'assign_tag',
+                        child: Text('Assign Tag', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      ),
+                      const PopupMenuItem(
+                        value: 'report',
+                        child: Text('Report Customer', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
 
-            Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: Text(
-                'Today, 14:38 PM',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey.shade500,
-                ),
-              ),
-            ),
-
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-                itemCount: messages.length,
-                itemBuilder: (context, index) {
-                  final message = messages[index];
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+                      itemCount: _messages.length,
+                      itemBuilder: (context, index) {
+                        final message = _messages[index];
+                        final isMe = message.senderId == myId;
 
-                  if (message.plan != null) {
-                    return _PlanMessageBubble(
-                      plan: message.plan!,
-                      time: message.time,
-                    );
-                  }
+                        if (message.messageType == 'plan') {
+                          return _PlanMessageBubble(
+                            isMe: isMe,
+                            content: message.content,
+                          );
+                        }
 
-                  return _TextMessageBubble(
-                    message: message,
-                    avatarText: widget.user.avatarText,
-                  );
-                },
-              ),
+                        return _TextMessageBubble(
+                          text: message.content ?? '',
+                          isMe: isMe,
+                          avatarText: initials,
+                          onAvatarTap: isMe ? null : _showCustomerProfile,
+                        );
+                      },
+                    ),
             ),
 
             Padding(
@@ -463,8 +516,9 @@ class _ChatState extends State<Chat> {
                   Expanded(
                     child: TextField(
                       controller: messageController,
+                      onSubmitted: (_) => sendTextMessage(),
                       decoration: InputDecoration(
-                        hintText: 'Ask a question...',
+                        hintText: 'Type a message...',
                         hintStyle: TextStyle(
                           color: Colors.grey.shade500,
                           fontSize: 13,
@@ -505,17 +559,21 @@ class _ChatState extends State<Chat> {
 }
 
 class _TextMessageBubble extends StatelessWidget {
-  final ChatMessage message;
+  final String text;
+  final bool isMe;
   final String avatarText;
+  final VoidCallback? onAvatarTap;
 
   const _TextMessageBubble({
-    required this.message,
+    required this.text,
+    required this.isMe,
     required this.avatarText,
+    this.onAvatarTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (message.isMe) {
+    if (isMe) {
       return Align(
         alignment: Alignment.centerRight,
         child: Container(
@@ -527,7 +585,7 @@ class _TextMessageBubble extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
           ),
           child: Text(
-            message.text ?? '',
+            text,
             style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -540,34 +598,39 @@ class _TextMessageBubble extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        CircleAvatar(
-          radius: 15,
-          backgroundColor: Colors.black,
-          child: Text(
-            avatarText,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
+        GestureDetector(
+          onTap: onAvatarTap,
+          child: CircleAvatar(
+            radius: 15,
+            backgroundColor: Colors.black,
+            child: Text(
+              avatarText,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ),
 
         const SizedBox(width: 8),
 
-        Container(
-          margin: const EdgeInsets.only(bottom: 14),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          constraints: const BoxConstraints(maxWidth: 245),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF4F4F5),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Text(
-            message.text ?? '',
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
+        Flexible(
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            constraints: const BoxConstraints(maxWidth: 245),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF4F4F5),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ),
@@ -577,20 +640,71 @@ class _TextMessageBubble extends StatelessWidget {
 }
 
 class _PlanMessageBubble extends StatelessWidget {
-  final WorkoutPlan plan;
-  final String time;
+  final bool isMe;
+  final String? content;
 
-  const _PlanMessageBubble({
-    required this.plan,
-    required this.time,
-  });
+  const _PlanMessageBubble({required this.isMe, this.content});
+
+  void _viewPlan(BuildContext context) {
+    // Parse plan details from JSON content
+    String? planId;
+    String title = 'Workout Plan';
+    int days = 0;
+    String duration = '~45 min';
+    List<String> tags = [];
+
+    if (content != null && content!.isNotEmpty) {
+      try {
+        final data = jsonDecode(content!) as Map<String, dynamic>;
+        planId = data['plan_id'];
+        title = data['title'] ?? 'Workout Plan';
+        days = data['days'] ?? 0;
+        duration = data['duration'] ?? '~45 min';
+        tags = (data['tags'] as List?)?.map((t) => t.toString()).toList() ?? [];
+      } catch (_) {}
+    }
+
+    final plan = WorkoutPlan(
+      freePlanId: planId,
+      title: title,
+      days: days,
+      duration: duration,
+      tags: tags,
+      workoutDays: [],
+    );
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PlanDetailScreen(plan: plan),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Parse plan details from JSON content
+    String title = 'Workout Plan';
+    int days = 0;
+    String duration = '~45 min';
+    List<String> tags = [];
+
+    if (content != null && content!.isNotEmpty) {
+      try {
+        final data = jsonDecode(content!) as Map<String, dynamic>;
+        title = data['title'] ?? 'Workout Plan';
+        days = data['days'] ?? 0;
+        duration = data['duration'] ?? '~45 min';
+        tags = (data['tags'] as List?)?.map((t) => t.toString()).toList() ?? [];
+      } catch (_) {
+        title = content!;
+      }
+    }
+
     return Align(
-      alignment: Alignment.centerRight,
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        width: 250,
+        width: 260,
         margin: const EdgeInsets.only(bottom: 14),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
@@ -601,50 +715,52 @@ class _PlanMessageBubble extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              plan.title,
+              title,
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w800,
               ),
             ),
 
-            const SizedBox(height: 8),
-
-            Text(
-              '${plan.days} Days • ${plan.duration}',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade600,
-                fontWeight: FontWeight.w600,
+            if (days > 0) ...[
+              const SizedBox(height: 8),
+              Text(
+                '$days Days • $duration',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
+            ],
 
-            const SizedBox(height: 8),
-
-            Wrap(
-              spacing: 6,
-              children: plan.tags.map((tag) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: Colors.grey.shade300,
+            if (tags.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: tags.map((tag) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
                     ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    tag,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.grey.shade600,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  ),
-                );
-              }).toList(),
-            ),
+                    child: Text(
+                      tag,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
 
             const SizedBox(height: 14),
 
@@ -652,14 +768,7 @@ class _PlanMessageBubble extends StatelessWidget {
               width: double.infinity,
               height: 38,
               child: ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => PlanDetailScreen(plan: plan),
-                    ),
-                  );
-                },
+                onPressed: () => _viewPlan(context),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF6C63FF),
                   foregroundColor: Colors.white,
@@ -678,56 +787,6 @@ class _PlanMessageBubble extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _InfoBox extends StatelessWidget {
-  final String title;
-  final List<String> children;
-
-  const _InfoBox({
-    required this.title,
-    required this.children,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7F7F8),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-
-          const SizedBox(height: 10),
-
-          ...children.map((item) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Text(
-                item,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade800,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            );
-          }),
-        ],
       ),
     );
   }
