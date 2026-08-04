@@ -1,8 +1,7 @@
 -- =========================================================
--- ShapeRush Updated Supabase Schema
--- Includes:
--- profiles, admin role, plans, reviews, reports,
--- audit logs, website content, storage policies
+-- ShapeRush Supabase Schema
+-- Matches the actual deployed database.
+-- Safe to re-run (uses IF NOT EXISTS / DROP IF EXISTS).
 -- =========================================================
 
 create extension if not exists pgcrypto;
@@ -16,56 +15,50 @@ create table if not exists public.profiles (
   full_name text,
   email text,
   gender text,
-  user_type text,
+  user_type text default 'Free',
   status text default 'active',
-  approved boolean default true,
-  role text default 'user',
-  created_at timestamptz default now(),
-  display_name text,
-  bio text,
-  experience int,
-  specializations text,
-  certificate_name text,
-  certificate_path text,
-  submitted_at timestamptz default now()
+  created_at timestamptz default now()
 );
-
-alter table public.profiles
-add column if not exists full_name text,
-add column if not exists email text,
-add column if not exists gender text,
-add column if not exists user_type text,
-add column if not exists status text default 'active',
-add column if not exists approved boolean default true,
-add column if not exists role text default 'user',
-add column if not exists created_at timestamptz default now(),
-add column if not exists display_name text,
-add column if not exists bio text,
-add column if not exists experience int,
-add column if not exists specializations text,
-add column if not exists certificate_name text,
-add column if not exists certificate_path text,
-add column if not exists submitted_at timestamptz default now();
 
 alter table public.profiles enable row level security;
 
--- Normalize old wrong user_type values
-update public.profiles
-set user_type = 'Free'
-where user_type is null
-   or trim(user_type) = ''
-   or lower(user_type) = 'client';
+-- =========================================================
+-- 1b. PRIORITY USER TABLE
+-- =========================================================
 
--- Fill created_at from auth.users where possible
-update public.profiles p
-set created_at = u.created_at
-from auth.users u
-where p.id = u.id
-  and p.created_at is null;
+create table if not exists public.priority_user (
+  profile_id uuid primary key,
+  subscribed_at timestamptz,
+  expires_at timestamptz,
+  constraint priority_user_profile_id_fkey foreign key (profile_id) references public.profiles(id)
+);
 
-update public.profiles
-set created_at = now()
-where created_at is null;
+-- =========================================================
+-- 1c. FITNESS PROFESSIONAL TABLE
+-- =========================================================
+
+create table if not exists public.fitness_professional (
+  profile_id uuid primary key,
+  display_name text,
+  bio text,
+  experience text,
+  specializations text,
+  certificate_name text,
+  certificate_path text,
+  approved boolean default false,
+  submitted_at timestamptz,
+  constraint fitness_professional_profile_id_fkey foreign key (profile_id) references public.profiles(id)
+);
+
+-- =========================================================
+-- 1d. ADMIN TABLE
+-- =========================================================
+
+create table if not exists public.admin (
+  profile_id uuid primary key,
+  role text default 'admin',
+  constraint admin_profile_id_fkey foreign key (profile_id) references public.profiles(id)
+);
 
 -- =========================================================
 -- 2. ADMIN ROLE FUNCTION
@@ -80,10 +73,8 @@ stable
 as $$
   select exists (
     select 1
-    from public.profiles
-    where id = auth.uid()
-      and role = 'admin'
-      and status = 'active'
+    from public.admin
+    where profile_id = auth.uid()
   );
 $$;
 
@@ -106,6 +97,8 @@ drop policy if exists "Allow admin update profiles" on public.profiles;
 drop policy if exists "Admins can read all profiles" on public.profiles;
 drop policy if exists "Admins can update all profiles" on public.profiles;
 drop policy if exists "Authenticated users can read public profiles" on public.profiles;
+drop policy if exists "Users can read own profile" on public.profiles;
+drop policy if exists "Users can update own profile" on public.profiles;
 
 create policy "Allow insert on profiles for new users"
 on public.profiles
@@ -154,8 +147,6 @@ as $$
 declare
   metadata_role text;
   database_user_type text;
-  database_status text;
-  database_approved boolean;
 begin
   metadata_role := NEW.raw_user_meta_data->>'role';
 
@@ -163,20 +154,7 @@ begin
     case
       when metadata_role in ('Fitness professional', 'fitness_professional') then 'Fitness professional'
       when metadata_role = 'Priority' then 'Priority'
-      when metadata_role = 'Admin' then 'Admin'
       else 'Free'
-    end;
-
-  database_status :=
-    case
-      when database_user_type = 'Fitness professional' then 'pending'
-      else 'active'
-    end;
-
-  database_approved :=
-    case
-      when database_user_type = 'Fitness professional' then false
-      else true
     end;
 
   insert into public.profiles (
@@ -185,8 +163,6 @@ begin
     email,
     user_type,
     status,
-    approved,
-    role,
     created_at
   )
   values (
@@ -198,9 +174,7 @@ begin
     ),
     NEW.email,
     database_user_type,
-    database_status,
-    database_approved,
-    case when database_user_type = 'Admin' then 'admin' else 'user' end,
+    'active',
     NEW.created_at
   )
   on conflict (id) do nothing;
@@ -217,374 +191,94 @@ for each row
 execute function public.handle_new_user();
 
 -- =========================================================
--- 5. MARK ADMIN PROFILE
--- Run this after creating admin@shaperush.com in Authentication Users
--- =========================================================
-
-insert into public.profiles (
-  id,
-  full_name,
-  email,
-  user_type,
-  status,
-  approved,
-  role,
-  created_at
-)
-select
-  id,
-  'Admin',
-  email,
-  'Admin',
-  'active',
-  true,
-  'admin',
-  created_at
-from auth.users
-where email = 'admin@shaperush.com'
-on conflict (id) do update
-set
-  full_name = 'Admin',
-  user_type = 'Admin',
-  status = 'active',
-  approved = true,
-  role = 'admin';
-
--- =========================================================
--- 6. FREE PLANS TABLE
+-- 5. FREE PLANS TABLE
 -- =========================================================
 
 create table if not exists public.free_plans (
-  id uuid primary key default gen_random_uuid(),
-  plan_name text not null,
-  exercise_count int default 0,
+  free_plan_id uuid primary key default gen_random_uuid(),
+  professional_id uuid,
+  plan_name text,
   category text,
-  status text default 'live',
-  created_at timestamptz default now()
+  status text default 'draft',
+  created_at timestamptz default now(),
+  tag1 varchar,
+  tag2 varchar,
+  tag3 varchar,
+  visibility text not null default 'public',
+  duration_weeks integer,
+  constraint free_plans_professional_id_fkey foreign key (professional_id) references public.fitness_professional(profile_id)
 );
 
 alter table public.free_plans enable row level security;
 
-drop policy if exists "Allow read free plans" on public.free_plans;
-drop policy if exists "Allow update free plans" on public.free_plans;
-drop policy if exists "Admins can read free plans" on public.free_plans;
-drop policy if exists "Admins can update free plans" on public.free_plans;
-drop policy if exists "Users can read live free plans" on public.free_plans;
-
-create policy "Users can read live free plans"
-on public.free_plans
-for select
-to anon, authenticated
-using (status = 'live' or public.is_admin());
-
-create policy "Admins can update free plans"
-on public.free_plans
-for update
-to authenticated
-using (public.is_admin())
-with check (public.is_admin());
-
-insert into public.free_plans (plan_name, exercise_count, category, status)
-select 'Morning Yoga', 5, 'Yoga', 'live'
-where not exists (
-  select 1 from public.free_plans where plan_name = 'Morning Yoga'
-);
-
-insert into public.free_plans (plan_name, exercise_count, category, status)
-select '5K Run Prep', 6, 'Warm-up', 'hidden'
-where not exists (
-  select 1 from public.free_plans where plan_name = '5K Run Prep'
-);
-
-insert into public.free_plans (plan_name, exercise_count, category, status)
-select 'Full Body', 10, 'Full Body', 'live'
-where not exists (
-  select 1 from public.free_plans where plan_name = 'Full Body'
-);
-
 -- =========================================================
--- 7. PERSONALIZED PLANS TABLE
+-- 6. PERSONALIZED PLANS TABLE
 -- =========================================================
 
 create table if not exists public.personalized_plans (
-  id uuid primary key default gen_random_uuid(),
-  plan_name text not null,
-  client_name text,
-  professional_name text,
-  created_at timestamptz default now()
+  personalized_plan_id uuid primary key default gen_random_uuid(),
+  professional_id uuid,
+  client_id uuid,
+  plan_name text,
+  created_at timestamptz default now(),
+  duration_weeks integer,
+  status text not null default 'draft',
+  constraint personalized_plans_professional_id_fkey foreign key (professional_id) references public.fitness_professional(profile_id),
+  constraint personalized_plans_client_id_fkey foreign key (client_id) references public.profiles(id)
 );
 
 alter table public.personalized_plans enable row level security;
 
-drop policy if exists "Allow read personalized plans" on public.personalized_plans;
-drop policy if exists "Admins can read personalized plans" on public.personalized_plans;
-
-create policy "Admins can read personalized plans"
-on public.personalized_plans
-for select
-to authenticated
-using (public.is_admin());
-
-insert into public.personalized_plans (plan_name, client_name, professional_name)
-select 'Jane''s Fat Loss', 'Jane Smith', 'Alissa Chen'
-where not exists (
-  select 1 from public.personalized_plans where plan_name = 'Jane''s Fat Loss'
-);
-
-insert into public.personalized_plans (plan_name, client_name, professional_name)
-select 'Mike''s Strength', 'Mark Heron', 'Tira Mcgee'
-where not exists (
-  select 1 from public.personalized_plans where plan_name = 'Mike''s Strength'
-);
-
-insert into public.personalized_plans (plan_name, client_name, professional_name)
-select '30-Day Weight Loss', 'Elizabeth Tan', 'Wade Warren'
-where not exists (
-  select 1 from public.personalized_plans where plan_name = '30-Day Weight Loss'
-);
-
 -- =========================================================
--- 8. REVIEWS TABLE
+-- 7. REVIEWS TABLE
 -- =========================================================
 
 create table if not exists public.reviews (
-  id uuid primary key default gen_random_uuid(),
-  reviewer_id uuid references public.profiles(id) on delete set null,
-  reviewer_name text,
-  reviewer_email text,
-  tier text,
-  rating int,
+  review_id uuid primary key default gen_random_uuid(),
+  reviewer_id uuid,
+  rating integer,
   feedback text,
-  media_name text,
   media_path text,
   ai_analysis text,
   featured_on_website boolean default false,
-  submitted_at timestamptz default now()
+  submitted_at timestamptz default now(),
+  constraint reviews_reviewer_id_fkey foreign key (reviewer_id) references public.profiles(id)
 );
-
-alter table public.reviews
-add column if not exists reviewer_id uuid references public.profiles(id) on delete set null,
-add column if not exists reviewer_name text,
-add column if not exists reviewer_email text,
-add column if not exists tier text,
-add column if not exists rating int,
-add column if not exists feedback text,
-add column if not exists media_name text,
-add column if not exists media_path text,
-add column if not exists ai_analysis text,
-add column if not exists featured_on_website boolean default false,
-add column if not exists submitted_at timestamptz default now();
 
 alter table public.reviews enable row level security;
 
-drop policy if exists "Allow read reviews" on public.reviews;
-drop policy if exists "Admins can read reviews" on public.reviews;
-drop policy if exists "Admins can read all reviews" on public.reviews;
-drop policy if exists "Allow update reviews featured status" on public.reviews;
-drop policy if exists "Allow admin update reviews featured status" on public.reviews;
-drop policy if exists "Admins can update reviews" on public.reviews;
-drop policy if exists "Public can read featured reviews" on public.reviews;
-
-create policy "Public can read featured reviews"
-on public.reviews
-for select
-to anon, authenticated
-using (
-  featured_on_website = true
-  or public.is_admin()
-);
-
-create policy "Admins can update reviews"
-on public.reviews
-for update
-to authenticated
-using (public.is_admin())
-with check (public.is_admin());
-
-create policy "Authenticated users can insert reviews"
-on public.reviews
-for insert
-to authenticated
-with check (true);
-
--- Optional fake review data
-insert into public.reviews (
-  reviewer_name,
-  reviewer_email,
-  tier,
-  rating,
-  feedback,
-  media_name,
-  media_path,
-  ai_analysis,
-  submitted_at
-)
-select
-  'Wade Warren',
-  'wade.warren@gmail.com',
-  'Free',
-  4,
-  'The workout plan is easy to follow and helpful for beginners.',
-  null,
-  null,
-  'positive',
-  now() - interval '1 hour'
-where not exists (
-  select 1 from public.reviews where reviewer_email = 'wade.warren@gmail.com'
-);
-
-insert into public.reviews (
-  reviewer_name,
-  reviewer_email,
-  tier,
-  rating,
-  feedback,
-  media_name,
-  media_path,
-  ai_analysis,
-  submitted_at
-)
-select
-  'Anna Tan',
-  'anna.tan@gmail.com',
-  'Free',
-  5,
-  'The app helped me stay consistent with my weekly fitness routine.',
-  null,
-  null,
-  'positive',
-  now() - interval '3 hours'
-where not exists (
-  select 1 from public.reviews where reviewer_email = 'anna.tan@gmail.com'
-);
-
-insert into public.reviews (
-  reviewer_name,
-  reviewer_email,
-  tier,
-  rating,
-  feedback,
-  media_name,
-  media_path,
-  ai_analysis,
-  submitted_at
-)
-select
-  'Alissa Mackie',
-  'alissa.mackie@gmail.com',
-  'Priority',
-  5,
-  'The personalized plan is very useful and clear.',
-  null,
-  null,
-  'positive',
-  now() - interval '8 hours'
-where not exists (
-  select 1 from public.reviews where reviewer_email = 'alissa.mackie@gmail.com'
-);
-
-insert into public.reviews (
-  reviewer_name,
-  reviewer_email,
-  tier,
-  rating,
-  feedback,
-  media_name,
-  media_path,
-  ai_analysis,
-  submitted_at
-)
-select
-  'Becky Winsons',
-  'becky.winsons@gmail.com',
-  'Free',
-  1,
-  'The workout plan was not suitable for my goal.',
-  null,
-  null,
-  'negative',
-  now() - interval '1 day'
-where not exists (
-  select 1 from public.reviews where reviewer_email = 'becky.winsons@gmail.com'
-);
-
 -- =========================================================
--- 9. REPORTS TABLE
+-- 8. REPORTS TABLE
 -- =========================================================
 
 create table if not exists public.reports (
-  id uuid primary key default gen_random_uuid(),
-  target_id text not null,
-  report_type text not null,
-  content_owner text,
-  reporter text,
-  comment_text text,
-  post_caption text,
-  media_name text,
-  media_path text,
+  report_id uuid primary key default gen_random_uuid(),
+  reporter_id uuid,
+  content_type text,
+  report_type text,
   status text default 'pending',
-  submitted_at timestamptz default now()
+  submitted_at timestamptz default now(),
+  constraint reports_reporter_id_fkey foreign key (reporter_id) references public.profiles(id)
 );
 
 alter table public.reports enable row level security;
 
-drop policy if exists "Allow read reports" on public.reports;
-drop policy if exists "Allow update reports" on public.reports;
-drop policy if exists "Admins can read reports" on public.reports;
-drop policy if exists "Admins can update reports" on public.reports;
-drop policy if exists "Authenticated users can insert reports" on public.reports;
-
-create policy "Admins can read reports"
-on public.reports
-for select
-to authenticated
-using (public.is_admin());
-
-create policy "Admins can update reports"
-on public.reports
-for update
-to authenticated
-using (public.is_admin())
-with check (public.is_admin());
-
-create policy "Authenticated users can insert reports"
-on public.reports
-for insert
-to authenticated
-with check (true);
-
 -- =========================================================
--- 10. AUDIT LOGS TABLE
+-- 9. AUDIT LOGS TABLE
 -- =========================================================
 
 create table if not exists public.audit_logs (
-  id uuid primary key default gen_random_uuid(),
+  audit_log_id uuid primary key default gen_random_uuid(),
   admin_id uuid,
-  admin_email text,
-  action text not null,
-  target text not null,
+  action text,
+  target text,
   target_type text,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  admin_email text,
+  constraint audit_logs_admin_id_fkey foreign key (admin_id) references public.admin(profile_id)
 );
 
 alter table public.audit_logs enable row level security;
-
-drop policy if exists "Allow read audit logs" on public.audit_logs;
-drop policy if exists "Allow insert audit logs" on public.audit_logs;
-drop policy if exists "Admins can read audit logs" on public.audit_logs;
-drop policy if exists "Admins can insert audit logs" on public.audit_logs;
-
-create policy "Admins can read audit logs"
-on public.audit_logs
-for select
-to authenticated
-using (public.is_admin());
-
-create policy "Admins can insert audit logs"
-on public.audit_logs
-for insert
-to authenticated
-with check (public.is_admin());
 
 -- =========================================================
 -- 11. WEBSITE CONTENT TABLE
@@ -592,28 +286,251 @@ with check (public.is_admin());
 
 create table if not exists public.website_content (
   section_key text primary key,
-  content jsonb not null,
-  updated_at timestamptz default now()
+  content jsonb,
+  updated_by uuid,
+  updated_at timestamptz default now(),
+  constraint website_content_updated_by_fkey foreign key (updated_by) references public.profiles(id)
 );
 
 alter table public.website_content enable row level security;
 
-drop policy if exists "Allow read website content" on public.website_content;
-drop policy if exists "Allow update website content" on public.website_content;
-drop policy if exists "Allow insert website content" on public.website_content;
-drop policy if exists "Admins can update website content" on public.website_content;
-drop policy if exists "Admins can insert website content" on public.website_content;
+-- =========================================================
+-- 11. EXERCISE LIBRARY TABLE
+-- =========================================================
 
-create policy "Allow read website content"
-on public.website_content
+create table if not exists public.exercise_library (
+  exercise_id uuid primary key default gen_random_uuid(),
+  professional_id uuid not null,
+  name varchar not null,
+  muscle_group varchar,
+  equipment varchar,
+  category varchar,
+  default_rep_min integer,
+  default_rep_max integer,
+  default_rest_sec integer,
+  instructions text,
+  media_path varchar,
+  status text not null default 'active',
+  created_at timestamptz default now(),
+  constraint exercise_library_professional_id_fkey foreign key (professional_id) references public.fitness_professional(profile_id)
+);
+
+-- =========================================================
+-- 12. PLAN DAYS TABLE
+-- =========================================================
+
+create table if not exists public.plan_days (
+  plan_day_id uuid primary key default gen_random_uuid(),
+  free_plan_id uuid not null,
+  week_number integer not null default 1,
+  day_number integer not null,
+  day_name varchar,
+  is_rest_day boolean not null default false,
+  constraint plan_days_free_plan_id_fkey foreign key (free_plan_id) references public.free_plans(free_plan_id)
+);
+
+-- =========================================================
+-- 13. PLAN EXERCISES TABLE
+-- =========================================================
+
+create table if not exists public.plan_exercises (
+  plan_exercise_id uuid primary key default gen_random_uuid(),
+  plan_day_id uuid not null,
+  exercise_id uuid not null,
+  order_index integer not null default 0,
+  sets integer,
+  rep_min integer,
+  rep_max integer,
+  rest_sec integer,
+  constraint plan_exercises_plan_day_id_fkey foreign key (plan_day_id) references public.plan_days(plan_day_id),
+  constraint plan_exercises_exercise_id_fkey foreign key (exercise_id) references public.exercise_library(exercise_id)
+);
+
+-- =========================================================
+-- 14. PERSONALIZED PLAN DAYS TABLE
+-- =========================================================
+
+create table if not exists public.personalized_plan_days (
+  personalized_plan_day_id uuid primary key default gen_random_uuid(),
+  personalized_plan_id uuid not null,
+  week_number integer not null default 1,
+  day_number integer not null,
+  day_name varchar,
+  is_rest_day boolean not null default false,
+  constraint personalized_plan_days_personalized_plan_id_fkey foreign key (personalized_plan_id) references public.personalized_plans(personalized_plan_id)
+);
+
+-- =========================================================
+-- 15. PERSONALIZED PLAN EXERCISES TABLE
+-- =========================================================
+
+create table if not exists public.personalized_plan_exercises (
+  personalized_plan_exercise_id uuid primary key default gen_random_uuid(),
+  personalized_plan_day_id uuid not null,
+  exercise_id uuid not null,
+  order_index integer not null default 0,
+  sets integer,
+  rep_min integer,
+  rep_max integer,
+  rest_sec integer,
+  constraint personalized_plan_exercises_personalized_plan_day_id_fkey foreign key (personalized_plan_day_id) references public.personalized_plan_days(personalized_plan_day_id),
+  constraint personalized_plan_exercises_exercise_id_fkey foreign key (exercise_id) references public.exercise_library(exercise_id)
+);
+
+-- =========================================================
+-- 16. SAVED PLANS TABLE
+-- =========================================================
+
+create table if not exists public.saved_plans (
+  saved_plan_id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null,
+  free_plan_id uuid,
+  personalized_plan_id uuid,
+  saved_at timestamptz default now(),
+  constraint saved_plans_profile_id_fkey foreign key (profile_id) references public.profiles(id),
+  constraint saved_plans_free_plan_id_fkey foreign key (free_plan_id) references public.free_plans(free_plan_id),
+  constraint saved_plans_personalized_plan_id_fkey foreign key (personalized_plan_id) references public.personalized_plans(personalized_plan_id)
+);
+
+-- =========================================================
+-- 17. WORKOUT LOGS TABLE
+-- =========================================================
+
+create table if not exists public.workout_logs (
+  workout_log_id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null,
+  free_plan_id uuid,
+  personalized_plan_id uuid,
+  performed_at timestamptz default now(),
+  duration_min integer,
+  source text,
+  constraint workout_logs_profile_id_fkey foreign key (profile_id) references public.profiles(id),
+  constraint workout_logs_free_plan_id_fkey foreign key (free_plan_id) references public.free_plans(free_plan_id),
+  constraint workout_logs_personalized_plan_id_fkey foreign key (personalized_plan_id) references public.personalized_plans(personalized_plan_id)
+);
+
+-- =========================================================
+-- 18. WORKOUT EXERCISES TABLE
+-- =========================================================
+
+create table if not exists public.workout_exercises (
+  workout_exercise_id uuid primary key default gen_random_uuid(),
+  workout_log_id uuid not null,
+  exercise_id uuid not null,
+  sets integer,
+  reps integer,
+  weight_kg numeric,
+  constraint workout_exercises_workout_log_id_fkey foreign key (workout_log_id) references public.workout_logs(workout_log_id),
+  constraint workout_exercises_exercise_id_fkey foreign key (exercise_id) references public.exercise_library(exercise_id)
+);
+
+-- =========================================================
+-- 19. CHAT ROOMS TABLE
+-- =========================================================
+
+create table if not exists public.chat_rooms (
+  id uuid primary key default gen_random_uuid(),
+  client_id uuid not null,
+  professional_id uuid not null,
+  status text default 'active',
+  last_message_id uuid,
+  last_message_at timestamptz,
+  created_at timestamptz default now(),
+  constraint chat_rooms_client_id_fkey foreign key (client_id) references public.profiles(id),
+  constraint chat_rooms_professional_id_fkey foreign key (professional_id) references public.fitness_professional(profile_id),
+  constraint chat_rooms_client_professional_unique unique (client_id, professional_id)
+);
+
+alter table public.chat_rooms enable row level security;
+
+-- =========================================================
+-- 20. CHAT MESSAGES TABLE
+-- =========================================================
+
+create table if not exists public.chat_messages (
+  id uuid primary key default gen_random_uuid(),
+  room_id uuid not null,
+  sender_id uuid not null,
+  content text,
+  message_type text default 'text',
+  plan_id uuid,
+  is_read boolean default false,
+  created_at timestamptz default now(),
+  constraint chat_messages_room_id_fkey foreign key (room_id) references public.chat_rooms(id),
+  constraint chat_messages_sender_id_fkey foreign key (sender_id) references public.profiles(id),
+  constraint chat_messages_plan_id_fkey foreign key (plan_id) references public.personalized_plans(personalized_plan_id)
+);
+
+alter table public.chat_messages enable row level security;
+
+-- Add FK from chat_rooms.last_message_id -> chat_messages.id (deferred because of circular ref)
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'chat_rooms_last_message_id_fkey'
+  ) then
+    alter table public.chat_rooms
+    add constraint chat_rooms_last_message_id_fkey
+    foreign key (last_message_id) references public.chat_messages(id) on delete set null;
+  end if;
+end;
+$$;
+
+-- =========================================================
+-- 21. CHAT TAGS TABLE
+-- =========================================================
+
+create table if not exists public.chat_tags (
+  id uuid primary key default gen_random_uuid(),
+  room_id uuid not null,
+  professional_id uuid not null,
+  tag text not null,
+  created_at timestamptz default now(),
+  constraint chat_tags_room_id_fkey foreign key (room_id) references public.chat_rooms(id) on delete cascade,
+  constraint chat_tags_professional_id_fkey foreign key (professional_id) references public.fitness_professional(profile_id),
+  constraint chat_tags_room_professional_tag_unique unique (room_id, professional_id, tag)
+);
+
+alter table public.chat_tags enable row level security;
+
+-- =========================================================
+-- 22. RLS POLICIES - chat_rooms
+-- =========================================================
+
+drop policy if exists "Chat rooms select participants" on public.chat_rooms;
+drop policy if exists "Priority users can create chat rooms" on public.chat_rooms;
+drop policy if exists "Participants can update chat rooms" on public.chat_rooms;
+
+create policy "Chat rooms select participants"
+on public.chat_rooms
 for select
-to anon, authenticated
-using (true);
+to authenticated
+using (
+  auth.uid() = client_id
+  or auth.uid() = professional_id
+  or public.is_admin()
+);
 
-create policy "Admins can update website content"
-on public.website_content
+create policy "Priority users can create chat rooms"
+on public.chat_rooms
+for insert
+to authenticated
+with check (
+  auth.uid() = client_id
+  and exists (
+    select 1 from public.priority_user where profile_id = auth.uid()
+  )
+  and exists (
+    select 1 from public.fitness_professional
+    where profile_id = chat_rooms.professional_id and approved = true
+  )
+);
+
+create policy "Participants can update chat rooms"
+on public.chat_rooms
 for update
 to authenticated
+<<<<<<< Updated upstream
 using (public.is_admin())
 with check (public.is_admin());
 
@@ -723,3 +640,257 @@ for select
 to anon, authenticated
 using (bucket_id = 'report-media');
 
+=======
+using (
+  auth.uid() = client_id or auth.uid() = professional_id or public.is_admin()
+)
+with check (
+  auth.uid() = client_id or auth.uid() = professional_id or public.is_admin()
+);
+
+-- =========================================================
+-- 23. RLS POLICIES - chat_messages
+-- =========================================================
+
+drop policy if exists "Chat messages select room participants" on public.chat_messages;
+drop policy if exists "Room participants can send messages" on public.chat_messages;
+drop policy if exists "Chat participants can insert messages" on public.chat_messages;
+drop policy if exists "Recipients can mark messages read" on public.chat_messages;
+drop policy if exists "Admins can delete chat messages" on public.chat_messages;
+
+create policy "Chat messages select room participants"
+on public.chat_messages
+for select
+to authenticated
+using (
+  exists (
+    select 1 from public.chat_rooms
+    where id = chat_messages.room_id
+      and (client_id = auth.uid() or professional_id = auth.uid())
+  )
+  or public.is_admin()
+);
+
+create policy "Room participants can send messages"
+on public.chat_messages
+for insert
+to authenticated
+with check (
+  sender_id = auth.uid()
+  and exists (
+    select 1 from public.chat_rooms
+    where id = chat_messages.room_id
+      and (client_id = auth.uid() or professional_id = auth.uid())
+      and status = 'active'
+  )
+);
+
+create policy "Recipients can mark messages read"
+on public.chat_messages
+for update
+to authenticated
+using (
+  sender_id <> auth.uid()
+  and exists (
+    select 1 from public.chat_rooms
+    where id = chat_messages.room_id
+      and (client_id = auth.uid() or professional_id = auth.uid())
+  )
+)
+with check (
+  is_read = true
+  and sender_id <> auth.uid()
+);
+
+create policy "Admins can delete chat messages"
+on public.chat_messages
+for delete
+to authenticated
+using (public.is_admin());
+
+-- =========================================================
+-- 24. RLS POLICIES - chat_tags
+-- =========================================================
+
+drop policy if exists "Chat tags select by professional" on public.chat_tags;
+drop policy if exists "Professionals can manage chat tags" on public.chat_tags;
+
+create policy "Chat tags select by professional"
+on public.chat_tags
+for select
+to authenticated
+using (professional_id = auth.uid() or public.is_admin());
+
+create policy "Professionals can manage chat tags"
+on public.chat_tags
+for all
+to authenticated
+using (professional_id = auth.uid() or public.is_admin())
+with check (professional_id = auth.uid());
+
+-- =========================================================
+-- 25. HELPER FUNCTIONS
+-- =========================================================
+
+-- Create or reuse a chat room (Priority user only)
+create or replace function public.create_chat_room(
+  p_client_id uuid,
+  p_professional_id uuid
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_room_id uuid;
+begin
+  -- Verify caller is a Priority user
+  if not exists (select 1 from public.priority_user where profile_id = auth.uid()) then
+    raise exception 'Only Priority users can start a chat.';
+  end if;
+
+  -- Verify caller matches client_id
+  if auth.uid() <> p_client_id then
+    raise exception 'You can only create a chat room for yourself.';
+  end if;
+
+  -- Verify professional is approved
+  if not exists (
+    select 1 from public.fitness_professional
+    where profile_id = p_professional_id and approved = true
+  ) then
+    raise exception 'Professional is not available for chat.';
+  end if;
+
+  -- Return existing room or create new one
+  select id into v_room_id
+  from public.chat_rooms
+  where client_id = p_client_id and professional_id = p_professional_id;
+
+  if v_room_id is null then
+    insert into public.chat_rooms (client_id, professional_id)
+    values (p_client_id, p_professional_id)
+    returning id into v_room_id;
+  end if;
+
+  return v_room_id;
+end;
+$$;
+
+grant execute on function public.create_chat_room(uuid, uuid) to authenticated;
+
+-- Mark all messages in a room as read by the current user
+create or replace function public.mark_room_messages_read(p_room_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.chat_messages
+  set is_read = true
+  where room_id = p_room_id
+    and sender_id <> auth.uid()
+    and is_read = false
+    and exists (
+      select 1 from public.chat_rooms
+      where id = p_room_id
+        and (client_id = auth.uid() or professional_id = auth.uid())
+    );
+end;
+$$;
+
+grant execute on function public.mark_room_messages_read(uuid) to authenticated;
+
+-- Get a public-safe profile for chat
+create or replace function public.get_public_profile(p_user_id uuid)
+returns table (
+  id uuid,
+  full_name text,
+  user_type text,
+  display_name text,
+  bio text,
+  specializations text,
+  experience text
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select
+    p.id,
+    p.full_name,
+    p.user_type,
+    fp.display_name,
+    fp.bio,
+    fp.specializations,
+    fp.experience
+  from public.profiles p
+  left join public.fitness_professional fp on fp.profile_id = p.id
+  where p.id = p_user_id;
+$$;
+
+grant execute on function public.get_public_profile(uuid) to authenticated;
+
+-- =========================================================
+-- 26. TRIGGER: update last_message on chat_rooms
+-- =========================================================
+
+create or replace function public.handle_chat_message_insert()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.chat_rooms
+  set last_message_id = NEW.id, last_message_at = NEW.created_at
+  where id = NEW.room_id;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists on_chat_message_inserted on public.chat_messages;
+
+create trigger on_chat_message_inserted
+after insert on public.chat_messages
+for each row
+execute function public.handle_chat_message_insert();
+
+-- =========================================================
+-- 27. INDEXES
+-- =========================================================
+
+create index if not exists idx_chat_rooms_client_id on public.chat_rooms(client_id);
+create index if not exists idx_chat_rooms_professional_id on public.chat_rooms(professional_id);
+create index if not exists idx_chat_rooms_last_message_at on public.chat_rooms(last_message_at);
+create index if not exists idx_chat_messages_room_id on public.chat_messages(room_id);
+create index if not exists idx_chat_messages_created_at on public.chat_messages(created_at);
+create index if not exists idx_chat_messages_is_read on public.chat_messages(room_id, is_read) where is_read = false;
+create index if not exists idx_chat_tags_room_id on public.chat_tags(room_id);
+create index if not exists idx_chat_tags_professional_id on public.chat_tags(professional_id);
+
+-- =========================================================
+-- 28. ENABLE REALTIME for chat tables
+-- =========================================================
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'chat_messages'
+  ) then
+    alter publication supabase_realtime add table public.chat_messages;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'chat_rooms'
+  ) then
+    alter publication supabase_realtime add table public.chat_rooms;
+  end if;
+end;
+$$;
+>>>>>>> Stashed changes
