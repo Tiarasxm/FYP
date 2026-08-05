@@ -441,8 +441,79 @@ create table if not exists public.workout_exercises (
   constraint workout_exercises_exercise_id_fkey foreign key (exercise_id) references public.exercise_library(exercise_id)
 );
 
+
 -- =========================================================
--- 19. CHAT ROOMS TABLE
+-- 19. MEAL LOGS TABLE
+-- =========================================================
+
+create table if not exists public.meal_logs (
+  meal_log_id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null,
+  meal_type text not null,
+  food_name text not null,
+  ingredients text,
+  calories integer not null default 0,
+  protein_g numeric not null default 0,
+  carbs_g numeric not null default 0,
+  fat_g numeric not null default 0,
+  image_url text,
+  logged_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  constraint meal_logs_profile_id_fkey foreign key (profile_id) references public.profiles(id) on delete cascade,
+  constraint meal_logs_meal_type_check check (meal_type in ('Breakfast', 'Lunch', 'Dinner', 'Snack')),
+  constraint meal_logs_calories_check check (calories >= 0),
+  constraint meal_logs_protein_g_check check (protein_g >= 0),
+  constraint meal_logs_carbs_g_check check (carbs_g >= 0),
+  constraint meal_logs_fat_g_check check (fat_g >= 0)
+);
+
+alter table public.meal_logs enable row level security;
+
+drop policy if exists "Users can read own meal logs" on public.meal_logs;
+drop policy if exists "Users can insert own meal logs" on public.meal_logs;
+drop policy if exists "Users can update own meal logs" on public.meal_logs;
+drop policy if exists "Users can delete own meal logs" on public.meal_logs;
+drop policy if exists "Admins can manage all meal logs" on public.meal_logs;
+
+create policy "Users can read own meal logs"
+on public.meal_logs
+for select
+to authenticated
+using (profile_id = auth.uid() or public.is_admin());
+
+create policy "Users can insert own meal logs"
+on public.meal_logs
+for insert
+to authenticated
+with check (profile_id = auth.uid() or public.is_admin());
+
+create policy "Users can update own meal logs"
+on public.meal_logs
+for update
+to authenticated
+using (profile_id = auth.uid() or public.is_admin())
+with check (profile_id = auth.uid() or public.is_admin());
+
+create policy "Users can delete own meal logs"
+on public.meal_logs
+for delete
+to authenticated
+using (profile_id = auth.uid() or public.is_admin());
+
+create policy "Admins can manage all meal logs"
+on public.meal_logs
+for all
+to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
+create index if not exists idx_meal_logs_profile_id on public.meal_logs(profile_id);
+create index if not exists idx_meal_logs_logged_at on public.meal_logs(logged_at desc);
+create index if not exists idx_meal_logs_profile_logged_at on public.meal_logs(profile_id, logged_at desc);
+create index if not exists idx_meal_logs_profile_meal_type on public.meal_logs(profile_id, meal_type);
+
+-- =========================================================
+-- 20. CHAT ROOMS TABLE
 -- =========================================================
 
 create table if not exists public.chat_rooms (
@@ -461,7 +532,7 @@ create table if not exists public.chat_rooms (
 alter table public.chat_rooms enable row level security;
 
 -- =========================================================
--- 20. CHAT MESSAGES TABLE
+-- 21. CHAT MESSAGES TABLE
 -- =========================================================
 
 create table if not exists public.chat_messages (
@@ -494,7 +565,7 @@ end;
 $$;
 
 -- =========================================================
--- 21. CHAT TAGS TABLE
+-- 22. CHAT TAGS TABLE
 -- =========================================================
 
 create table if not exists public.chat_tags (
@@ -511,7 +582,7 @@ create table if not exists public.chat_tags (
 alter table public.chat_tags enable row level security;
 
 -- =========================================================
--- 22. RLS POLICIES - chat_rooms
+-- 23. RLS POLICIES - chat_rooms
 -- =========================================================
 
 drop policy if exists "Chat rooms select participants" on public.chat_rooms;
@@ -555,7 +626,7 @@ with check (
 );
 
 -- =========================================================
--- 23. RLS POLICIES - chat_messages
+-- 24. RLS POLICIES - chat_messages
 -- =========================================================
 
 drop policy if exists "Chat messages select room participants" on public.chat_messages;
@@ -615,7 +686,7 @@ to authenticated
 using (public.is_admin());
 
 -- =========================================================
--- 24. RLS POLICIES - chat_tags
+-- 25. RLS POLICIES - chat_tags
 -- =========================================================
 
 drop policy if exists "Chat tags select by professional" on public.chat_tags;
@@ -635,7 +706,7 @@ using (professional_id = auth.uid() or public.is_admin())
 with check (professional_id = auth.uid());
 
 -- =========================================================
--- 25. HELPER FUNCTIONS
+-- 26. HELPER FUNCTIONS
 -- =========================================================
 
 -- Create or reuse a chat room (Priority user only)
@@ -741,7 +812,7 @@ $$;
 grant execute on function public.get_public_profile(uuid) to authenticated;
 
 -- =========================================================
--- 26. TRIGGER: update last_message on chat_rooms
+-- 27. TRIGGER: update last_message on chat_rooms
 -- =========================================================
 
 create or replace function public.handle_chat_message_insert()
@@ -766,7 +837,7 @@ for each row
 execute function public.handle_chat_message_insert();
 
 -- =========================================================
--- 27. INDEXES
+-- 28. INDEXES
 -- =========================================================
 
 create index if not exists idx_chat_rooms_client_id on public.chat_rooms(client_id);
@@ -779,7 +850,7 @@ create index if not exists idx_chat_tags_room_id on public.chat_tags(room_id);
 create index if not exists idx_chat_tags_professional_id on public.chat_tags(professional_id);
 
 -- =========================================================
--- 28. ENABLE REALTIME for chat tables
+-- 29. ENABLE REALTIME for chat tables
 -- =========================================================
 
 do $$
