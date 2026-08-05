@@ -24,15 +24,38 @@ class _NutritionScreenState extends State<NutritionScreen> {
 
   int _water = 0;
   int _waterGoal = 2000;
+
   bool _scanUnlocked = false;
   bool _isLoadingMeals = true;
+  bool _isLoadingWater = true;
+  bool _isAddingWater = false;
 
   List<Map<String, dynamic>> _mealLogs = [];
 
   @override
   void initState() {
     super.initState();
-    _loadMeals();
+    _loadNutritionData();
+  }
+
+  Future<void> _loadNutritionData() async {
+    await Future.wait([
+      _loadMeals(),
+      _loadWaterGoal(),
+      _loadWater(),
+    ]);
+  }
+
+  DateTime get _startOfTodayUtc {
+    final now = DateTime.now();
+    final startLocal = DateTime(now.year, now.month, now.day);
+    return startLocal.toUtc();
+  }
+
+  DateTime get _endOfTodayUtc {
+    final now = DateTime.now();
+    final endLocal = DateTime(now.year, now.month, now.day + 1);
+    return endLocal.toUtc();
   }
 
   int get _caloriesConsumed {
@@ -163,6 +186,14 @@ class _NutritionScreenState extends State<NutritionScreen> {
     }).toList();
   }
 
+  void _showMessage(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
   Future<void> _loadMeals() async {
     setState(() {
       _isLoadingMeals = true;
@@ -176,18 +207,14 @@ class _NutritionScreenState extends State<NutritionScreen> {
         throw Exception('User is not signed in.');
       }
 
-      final now = DateTime.now();
-      final startOfDay = DateTime(now.year, now.month, now.day);
-      final endOfDay = startOfDay.add(const Duration(days: 1));
-
       final response = await client
           .from('meal_logs')
           .select(
             'meal_log_id, meal_type, food_name, ingredients, calories, protein_g, carbs_g, fat_g, image_url, logged_at',
           )
           .eq('profile_id', userId)
-          .gte('logged_at', startOfDay.toUtc().toIso8601String())
-          .lt('logged_at', endOfDay.toUtc().toIso8601String())
+          .gte('logged_at', _startOfTodayUtc.toIso8601String())
+          .lt('logged_at', _endOfTodayUtc.toIso8601String())
           .order('logged_at', ascending: false);
 
       if (!mounted) return;
@@ -196,15 +223,92 @@ class _NutritionScreenState extends State<NutritionScreen> {
         _mealLogs = List<Map<String, dynamic>>.from(response as List);
       });
     } catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load meals: $error')),
-      );
+      _showMessage('Failed to load meals: $error');
     } finally {
       if (mounted) {
         setState(() {
           _isLoadingMeals = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadWaterGoal() async {
+    try {
+      final client = Supabase.instance.client;
+      final userId = client.auth.currentUser?.id;
+
+      if (userId == null) {
+        throw Exception('User is not signed in.');
+      }
+
+      final response = await client
+          .from('water_settings')
+          .select('water_goal_ml')
+          .eq('profile_id', userId)
+          .maybeSingle();
+
+      if (!mounted) return;
+
+      if (response != null) {
+        final goal = _parseInt(response['water_goal_ml']);
+
+        if (goal != null && goal > 0) {
+          setState(() {
+            _waterGoal = goal;
+          });
+        }
+      }
+    } catch (error) {
+      _showMessage('Failed to load water goal: $error');
+    }
+  }
+
+  Future<int> _getTodayWaterTotalFromSupabase() async {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+
+    if (userId == null) {
+      throw Exception('User is not signed in.');
+    }
+
+    final response = await client
+        .from('water_logs')
+        .select('amount_ml')
+        .eq('profile_id', userId)
+        .gte('logged_at', _startOfTodayUtc.toIso8601String())
+        .lt('logged_at', _endOfTodayUtc.toIso8601String());
+
+    final rows = List<Map<String, dynamic>>.from(response as List);
+
+    int total = 0;
+
+    for (final row in rows) {
+      total += _parseInt(row['amount_ml']) ?? 0;
+    }
+
+    return total;
+  }
+
+  Future<void> _loadWater() async {
+    setState(() {
+      _isLoadingWater = true;
+    });
+
+    try {
+      final total = await _getTodayWaterTotalFromSupabase();
+
+      if (!mounted) return;
+
+      setState(() {
+        _water = total;
+      });
+    } catch (error) {
+      _showMessage('Failed to load water logs: $error');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingWater = false;
         });
       }
     }
@@ -238,113 +342,140 @@ class _NutritionScreenState extends State<NutritionScreen> {
     }
   }
 
-  void _addWater() {
+  Future<void> _addWater() async {
+  if (_isAddingWater) return;
+
+  final amount = await showModalBottomSheet<int>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) {
+      return const _AddWaterSheet();
+    },
+  );
+
+  if (amount == null) return;
+
+  setState(() {
+    _isAddingWater = true;
+  });
+
+  try {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+
+    if (userId == null) {
+      throw Exception('User is not signed in.');
+    }
+
+    final latestWaterTotal = await _getTodayWaterTotalFromSupabase();
+
+    if (!mounted) return;
+
     setState(() {
-      _water = (_water + 250).clamp(0, _waterGoal);
+      _water = latestWaterTotal;
     });
+
+    if (latestWaterTotal >= _waterGoal) {
+      _showMessage('You have reached your daily water goal.');
+      return;
+    }
+
+    final remaining = _waterGoal - latestWaterTotal;
+
+    if (amount > remaining) {
+      _showMessage(
+        'You can only add $remaining ml more today.',
+      );
+      return;
+    }
+
+    await client.from('water_logs').insert({
+      'profile_id': userId,
+      'amount_ml': amount,
+      'logged_at': DateTime.now().toUtc().toIso8601String(),
+    });
+
+    final newTotal = latestWaterTotal + amount;
+
+    if (!mounted) return;
+
+    setState(() {
+      _water = newTotal;
+    });
+
+    if (newTotal >= _waterGoal) {
+      _showMessage('$amount ml water added. Daily goal reached.');
+    } else {
+      _showMessage('$amount ml water added.');
+    }
+  } catch (error) {
+    _showMessage('Failed to add water: $error');
+  } finally {
+    if (mounted) {
+      setState(() {
+        _isAddingWater = false;
+      });
+    }
+  }
+}
+
+  Future<void> _saveWaterGoal(int goal) async {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+
+    if (userId == null) {
+      throw Exception('User is not signed in.');
+    }
+
+    await client.from('water_settings').upsert(
+      {
+        'profile_id': userId,
+        'water_goal_ml': goal,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      onConflict: 'profile_id',
+    );
   }
 
-  void _showWaterSettings() {
-    final controller = TextEditingController(text: '$_waterGoal');
-
-    showModalBottomSheet(
+  Future<void> _showWaterSettings() async {
+    final newGoal = await showModalBottomSheet<int>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppColors.card,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Center(
-                  child: Text(
-                    'Water Settings',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Daily water goal (ml)',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: controller,
-                  keyboardType: TextInputType.number,
-                  autofocus: true,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  decoration: InputDecoration(
-                    suffixText: 'ml',
-                    filled: true,
-                    fillColor: AppColors.cardMuted,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      final goal = int.tryParse(controller.text.trim());
-                      if (goal != null && goal > 0) {
-                        setState(() {
-                          _waterGoal = goal;
-                          _water = _water.clamp(0, _waterGoal);
-                        });
-                      }
-                      Navigator.of(context).pop();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    child: const Text(
-                      'Save',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+      builder: (_) {
+        return _WaterSettingsSheet(
+          currentGoal: _waterGoal,
         );
       },
-    ).whenComplete(controller.dispose);
+    );
+
+    if (newGoal == null) return;
+
+    try {
+      await _saveWaterGoal(newGoal);
+
+      if (!mounted) return;
+
+      final latestWaterTotal = await _getTodayWaterTotalFromSupabase();
+
+      if (!mounted) return;
+
+      setState(() {
+        _waterGoal = newGoal;
+        _water = latestWaterTotal;
+      });
+
+      if (latestWaterTotal >= newGoal) {
+        _showMessage(
+          'Water goal saved. You have already reached today\'s goal.',
+        );
+      } else {
+        _showMessage('Water goal saved.');
+      }
+    } catch (error) {
+      _showMessage('Failed to save water goal: $error');
+    }
   }
 
   @override
@@ -352,7 +483,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
     return SafeArea(
       bottom: false,
       child: RefreshIndicator(
-        onRefresh: _loadMeals,
+        onRefresh: _loadNutritionData,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.screenPadding,
@@ -624,7 +755,9 @@ class _NutritionScreenState extends State<NutritionScreen> {
   }
 
   Widget _waterCard() {
-    final progress = _waterGoal == 0 ? 0.0 : _water / _waterGoal;
+    final double progress = _waterGoal <= 0
+        ? 0.0
+        : (_water / _waterGoal).clamp(0.0, 1.0).toDouble();
 
     return SectionCard(
       color: AppColors.cardMuted,
@@ -642,35 +775,48 @@ class _NutritionScreenState extends State<NutritionScreen> {
                 ),
               ),
               const Spacer(),
-              Text(
-                '$_water ml / $_waterGoal ml',
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
+              if (_isLoadingWater)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Text(
+                  '$_water ml / $_waterGoal ml',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: 12),
-          ProgressBar(progress: progress, color: AppColors.cyan, height: 8),
+          ProgressBar(
+            progress: progress,
+            color: AppColors.cyan,
+            height: 8,
+          ),
           const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
                 child: ElevatedButton(
-                  onPressed: _addWater,
+                  onPressed:
+                      (_isLoadingWater || _isAddingWater) ? null : _addWater,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
+                    disabledBackgroundColor: AppColors.textMuted,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'Add Water',
-                    style: TextStyle(
+                  child: Text(
+                    _isAddingWater ? 'Adding...' : 'Add Water',
+                    style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
@@ -680,7 +826,9 @@ class _NutritionScreenState extends State<NutritionScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: OutlinedButton(
-                  onPressed: _showWaterSettings,
+                  onPressed: () {
+                    _showWaterSettings();
+                  },
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.primary,
                     side: const BorderSide(color: AppColors.primary),
@@ -853,6 +1001,337 @@ class _NutritionScreenState extends State<NutritionScreen> {
         fontSize: 12,
         fontWeight: FontWeight.w700,
         color: color,
+      ),
+    );
+  }
+}
+
+class _AddWaterSheet extends StatefulWidget {
+  const _AddWaterSheet();
+
+  @override
+  State<_AddWaterSheet> createState() => _AddWaterSheetState();
+}
+
+class _AddWaterSheetState extends State<_AddWaterSheet> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: '250');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final amount = int.tryParse(_controller.text.trim());
+
+    if (amount == null || amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid water amount.'),
+        ),
+      );
+      return;
+    }
+
+    Navigator.of(context).pop(amount);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Center(
+                child: Text(
+                  'Add Water',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              const Text(
+                'Water amount',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              TextField(
+                controller: _controller,
+                keyboardType: TextInputType.number,
+                autofocus: true,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+                decoration: InputDecoration(
+                  suffixText: 'ml',
+                  filled: true,
+                  fillColor: AppColors.cardMuted,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                onSubmitted: (_) {
+                  _submit();
+                },
+              ),
+
+              const SizedBox(height: 16),
+
+              Row(
+                children: [
+                  _QuickWaterButton(
+                    label: '100 ml',
+                    onTap: () {
+                      _controller.text = '100';
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  _QuickWaterButton(
+                    label: '250 ml',
+                    onTap: () {
+                      _controller.text = '250';
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  _QuickWaterButton(
+                    label: '500 ml',
+                    onTap: () {
+                      _controller.text = '500';
+                    },
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 18),
+
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: const Text(
+                    'Add',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickWaterButton extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _QuickWaterButton({
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: OutlinedButton(
+        onPressed: onTap,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.primary,
+          side: const BorderSide(color: AppColors.primary),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WaterSettingsSheet extends StatefulWidget {
+  final int currentGoal;
+
+  const _WaterSettingsSheet({
+    required this.currentGoal,
+  });
+
+  @override
+  State<_WaterSettingsSheet> createState() => _WaterSettingsSheetState();
+}
+
+class _WaterSettingsSheetState extends State<_WaterSettingsSheet> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: '${widget.currentGoal}');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final goal = int.tryParse(_controller.text.trim());
+
+    if (goal == null || goal <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid water goal.'),
+        ),
+      );
+      return;
+    }
+
+    Navigator.of(context).pop(goal);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Center(
+                child: Text(
+                  'Water Settings',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Daily water goal (ml)',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _controller,
+                keyboardType: TextInputType.number,
+                autofocus: true,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+                decoration: InputDecoration(
+                  suffixText: 'ml',
+                  filled: true,
+                  fillColor: AppColors.cardMuted,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                onSubmitted: (_) {
+                  _submit();
+                },
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: const Text(
+                    'Save',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

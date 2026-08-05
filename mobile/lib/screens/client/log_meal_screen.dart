@@ -195,7 +195,7 @@ class _LogMealScreenState extends State<LogMealScreen> {
         'carbs_g': carbs,
         'fat_g': fat,
         'image_url': imageUrl,
-        'logged_at': DateTime.now().toIso8601String(),
+        'logged_at': DateTime.now().toUtc().toIso8601String(),
       });
 
       if (!mounted) return;

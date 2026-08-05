@@ -942,3 +942,93 @@ begin
   end if;
 end;
 $$;
+
+-- =========================================================
+-- 31. WATER LOGS TABLE
+-- =========================================================
+create table if not exists public.water_logs (
+  water_log_id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles(id) on delete cascade,
+  amount_ml int not null check (amount_ml > 0),
+  logged_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists water_logs_profile_id_idx
+on public.water_logs(profile_id);
+
+create index if not exists water_logs_logged_at_idx
+on public.water_logs(logged_at);
+
+alter table public.water_logs enable row level security;
+
+drop policy if exists "Users can view own water logs" on public.water_logs;
+drop policy if exists "Users can insert own water logs" on public.water_logs;
+drop policy if exists "Users can update own water logs" on public.water_logs;
+drop policy if exists "Users can delete own water logs" on public.water_logs;
+
+create policy "Users can view own water logs"
+on public.water_logs
+for select
+to authenticated
+using (profile_id = auth.uid());
+
+create policy "Users can insert own water logs"
+on public.water_logs
+for insert
+to authenticated
+with check (profile_id = auth.uid());
+
+create policy "Users can update own water logs"
+on public.water_logs
+for update
+to authenticated
+using (profile_id = auth.uid())
+with check (profile_id = auth.uid());
+
+create policy "Users can delete own water logs"
+on public.water_logs
+for delete
+to authenticated
+using (profile_id = auth.uid());
+
+-- =========================================================
+-- 31b. WATER SETTING TABLE
+-- =========================================================
+create table if not exists public.water_settings (
+  profile_id uuid primary key references public.profiles(id) on delete cascade,
+  water_goal_ml int not null default 2000 check (water_goal_ml > 0),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.water_settings enable row level security;
+
+drop policy if exists "Users can view own water settings" on public.water_settings;
+drop policy if exists "Users can insert own water settings" on public.water_settings;
+drop policy if exists "Users can update own water settings" on public.water_settings;
+drop policy if exists "Users can delete own water settings" on public.water_settings;
+
+create policy "Users can view own water settings"
+on public.water_settings
+for select
+to authenticated
+using (profile_id = auth.uid());
+
+create policy "Users can insert own water settings"
+on public.water_settings
+for insert
+to authenticated
+with check (profile_id = auth.uid());
+
+create policy "Users can update own water settings"
+on public.water_settings
+for update
+to authenticated
+using (profile_id = auth.uid())
+with check (profile_id = auth.uid());
+
+create policy "Users can delete own water settings"
+on public.water_settings
+for delete
+to authenticated
+using (profile_id = auth.uid());
