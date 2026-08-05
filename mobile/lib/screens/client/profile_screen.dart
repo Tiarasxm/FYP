@@ -21,9 +21,16 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool isLoading = true;
+
   String fullName = '';
   String email = '';
   String userType = 'free';
+  String avatarUrl = '';
+
+  int completedExercises = 0;
+  int dayStreak = 0;
+  int followers = 0;
+  int following = 0;
 
   @override
   void initState() {
@@ -32,29 +39,202 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadProfile() async {
+    setState(() {
+      isLoading = true;
+    });
+
     try {
-      final data = await Supabase.instance.client
+      final client = Supabase.instance.client;
+      final user = client.auth.currentUser;
+
+      if (user == null) {
+        throw Exception('User is not signed in.');
+      }
+
+      final profileResponse = await client
           .from('profiles')
-          .select('full_name, email, user_type')
-          .eq('id', Supabase.instance.client.auth.currentUser!.id)
-          .single();
+          .select('full_name, email, user_type, avatar_url')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      final profile = profileResponse ?? <String, dynamic>{};
+
+      final stats = await _loadProfileStats(user.id);
 
       if (!mounted) return;
+
       setState(() {
-        fullName = data['full_name'] as String? ?? '';
-        email = data['email'] as String? ?? '';
-        userType = data['user_type'] as String? ?? 'free';
-        isLoading = false;
+        fullName = profile['full_name']?.toString().trim() ?? '';
+        email = profile['email']?.toString().trim() ?? user.email ?? '';
+        userType = profile['user_type']?.toString().trim() ?? 'free';
+        avatarUrl = profile['avatar_url']?.toString().trim() ?? '';
+
+        if (fullName.isEmpty) {
+          fullName = email.isNotEmpty ? email.split('@').first : 'User';
+        }
+
+        completedExercises = stats.completedExercises;
+        dayStreak = stats.dayStreak;
+        followers = stats.followers;
+        following = stats.following;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        isLoading = false;
-      });
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to load profile: $e')),
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
     }
+  }
+
+  Future<_ProfileStatsData> _loadProfileStats(String userId) async {
+    final client = Supabase.instance.client;
+
+    int completed = 0;
+    int streak = 0;
+    int followerCount = 0;
+    int followingCount = 0;
+
+    try {
+      final workoutLogsResponse = await client
+          .from('workout_logs')
+          .select('workout_log_id, performed_at')
+          .eq('profile_id', userId)
+          .order('performed_at', ascending: false);
+
+      final workoutLogs =
+          List<Map<String, dynamic>>.from(workoutLogsResponse as List);
+
+      final workoutLogIds = workoutLogs
+          .map((row) => row['workout_log_id']?.toString())
+          .where((id) => id != null && id.isNotEmpty)
+          .cast<String>()
+          .toList();
+
+      if (workoutLogIds.isNotEmpty) {
+        final workoutExercisesResponse = await client
+            .from('workout_exercises')
+            .select('workout_log_id, exercise_id')
+            .inFilter('workout_log_id', workoutLogIds);
+
+        final workoutExercises =
+            List<Map<String, dynamic>>.from(workoutExercisesResponse as List);
+
+        final completedExerciseKeys = <String>{};
+        final validWorkoutLogIds = <String>{};
+
+        for (final row in workoutExercises) {
+          final workoutLogId = row['workout_log_id']?.toString();
+          final exerciseId = row['exercise_id']?.toString();
+
+          if (workoutLogId == null ||
+              workoutLogId.isEmpty ||
+              exerciseId == null ||
+              exerciseId.isEmpty) {
+            continue;
+          }
+
+          completedExerciseKeys.add('$workoutLogId-$exerciseId');
+          validWorkoutLogIds.add(workoutLogId);
+        }
+
+        completed = completedExerciseKeys.length;
+
+        final completedDateKeys = <String>{};
+
+        for (final log in workoutLogs) {
+          final workoutLogId = log['workout_log_id']?.toString();
+
+          if (workoutLogId == null || !validWorkoutLogIds.contains(workoutLogId)) {
+            continue;
+          }
+
+          final performedAt = DateTime.tryParse(
+            log['performed_at']?.toString() ?? '',
+          );
+
+          if (performedAt == null) continue;
+
+          final local = performedAt.toLocal();
+          completedDateKeys.add(_dateKey(local));
+        }
+
+        streak = _calculateStreak(completedDateKeys);
+      }
+    } catch (_) {
+      completed = 0;
+      streak = 0;
+    }
+
+    try {
+      final followersResponse = await client
+          .from('follows')
+          .select('follower_id')
+          .eq('following_id', userId);
+
+      followerCount = (followersResponse as List).length;
+    } catch (_) {
+      followerCount = 0;
+    }
+
+    try {
+      final followingResponse = await client
+          .from('follows')
+          .select('following_id')
+          .eq('follower_id', userId);
+
+      followingCount = (followingResponse as List).length;
+    } catch (_) {
+      followingCount = 0;
+    }
+
+    return _ProfileStatsData(
+      completedExercises: completed,
+      dayStreak: streak,
+      followers: followerCount,
+      following: followingCount,
+    );
+  }
+
+  int _calculateStreak(Set<String> completedDateKeys) {
+    if (completedDateKeys.isEmpty) return 0;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+
+    DateTime? cursor;
+
+    if (completedDateKeys.contains(_dateKey(today))) {
+      cursor = today;
+    } else if (completedDateKeys.contains(_dateKey(yesterday))) {
+      cursor = yesterday;
+    } else {
+      return 0;
+    }
+
+    int count = 0;
+
+    while (completedDateKeys.contains(_dateKey(cursor!))) {
+      count++;
+      cursor = cursor.subtract(const Duration(days: 1));
+    }
+
+    return count;
+  }
+
+  static String _dateKey(DateTime date) {
+    final year = date.year.toString().padLeft(4, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+
+    return '$year-$month-$day';
   }
 
   void _openPage(BuildContext context, Widget page) {
@@ -64,6 +244,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         builder: (_) => page,
       ),
     );
+  }
+
+  Future<void> _openMyProfilePage() async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const MyProfilePage(),
+      ),
+    );
+
+    if (changed == true && mounted) {
+      await _loadProfile();
+    }
   }
 
   Future<void> _logout(BuildContext context) async {
@@ -109,6 +302,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  String get _membershipText {
+    return userType.toLowerCase() == 'priority' ? 'PRIORITY' : 'FREE';
+  }
+
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -123,294 +320,279 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "Profile",
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
+        child: RefreshIndicator(
+          onRefresh: _loadProfile,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Profile",
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
 
-              const SizedBox(height: 18),
+                const SizedBox(height: 18),
 
-              // ====================================
-              // User information
-              // ====================================
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        const CircleAvatar(
-                          radius: 40,
-                          backgroundColor: Colors.grey,
-
-                          // 以后连接数据库图片：
-                          // backgroundImage:
-                          //     NetworkImage(user.profileImageUrl),
-                        ),
-                        const SizedBox(width: 18),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.deepPurpleAccent.withValues(
-                                    alpha: 0.15,
-                                  ),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Text(
-                                  userType == 'priority' ? "PRIORITY" : "FREE",
-                                  style: const TextStyle(
-                                    color: Colors.deepPurpleAccent,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                fullName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                email,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Colors.grey.shade600,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    const Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        ProfileStat(
-                          number: "120",
-                          label: "WORKOUTS",
-                        ),
-                        ProfileStat(
-                          number: "30",
-                          label: "DAY STREAK",
-                        ),
-                        ProfileStat(
-                          number: "528",
-                          label: "FOLLOWERS",
-                        ),
-                        ProfileStat(
-                          number: "31",
-                          label: "FOLLOWING",
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // ====================================
-              // Priority plan
-              // ====================================
-              if (userType == 'priority') ...[
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE9E5FF),
-                    borderRadius: BorderRadius.circular(20),
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(24),
                   ),
-                  child: Row(
+                  child: Column(
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              "Priority Plan",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              "Cancel Priority and return\nto the free plan.",
-                              style: TextStyle(
-                                color: Colors.grey.shade700,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      ElevatedButton(
-                        onPressed: () {
-                          _openPage(
-                            context,
-                            const MembershipPage(),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.deepPurpleAccent,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 40,
+                            backgroundColor: Colors.grey,
+                            backgroundImage: avatarUrl.isNotEmpty
+                                ? NetworkImage(avatarUrl)
+                                : null,
                           ),
-                        ),
-                        child: const Text("Cancel"),
+                          const SizedBox(width: 18),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.deepPurpleAccent.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    _membershipText,
+                                    style: const TextStyle(
+                                      color: Colors.deepPurpleAccent,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  fullName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  email,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 18),
+
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          ProfileStat(
+                            number: "$completedExercises",
+                            label: "EXERCISES",
+                          ),
+                          ProfileStat(
+                            number: "$dayStreak",
+                            label: "DAY STREAK",
+                          ),
+                          ProfileStat(
+                            number: "$followers",
+                            label: "FOLLOWERS",
+                          ),
+                          ProfileStat(
+                            number: "$following",
+                            label: "FOLLOWING",
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
 
                 const SizedBox(height: 16),
-              ],
 
-              // ====================================
-              // General
-              // ====================================
-              ProfileMenuSection(
-                title: "GENERAL",
-                items: [
-                  ProfileMenuItem(
-                    title: "My Profile",
-                    onTap: () {
-                      _openPage(
-                        context,
-                        const MyProfilePage(),
-                      );
-                    },
-                  ),
-                  ProfileMenuItem(
-                    title: "Manage Account",
-                    onTap: () {
-                      _openPage(
-                        context,
-                        const ManageAccountPage(),
-                      );
-                    },
-                  ),
-                  ProfileMenuItem(
-                    title: "Membership",
-                    onTap: () {
-                      _openPage(
-                        context,
-                        const MembershipPage(),
-                      );
-                    },
-                  ),
-                  ProfileMenuItem(
-                    title: "Wearable Devices",
-                    onTap: () {
-                      _openPage(
-                        context,
-                        const WearableDevicesPage(),
-                      );
-                    },
-                  ),
-                  ProfileMenuItem(
-                    title: "Notifications",
-                    onTap: () {
-                      _openPage(
-                        context,
-                        const NotificationsPage(),
-                      );
-                    },
-                  ),
-                  ProfileMenuItem(
-                    title: "Feedback",
-                    onTap: () {
-                      _openPage(
-                        context,
-                        const FeedbackPage(),
-                      );
-                    },
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              // ====================================
-              // Others
-              // ====================================
-              ProfileMenuSection(
-                title: "OTHERS",
-                items: [
-                  ProfileMenuItem(
-                    title: "FAQs",
-                    onTap: () {
-                      _openPage(
-                        context,
-                        const FaqPage(),
-                      );
-                    },
-                  ),
-                  ProfileMenuItem(
-                    title: "Privacy Policy",
-                    onTap: () {
-                      _openPage(
-                        context,
-                        const PrivacyPolicyPage(),
-                      );
-                    },
-                  ),
-                  ProfileMenuItem(
-                    title: "Terms & Conditions",
-                    onTap: () {
-                      _openPage(
-                        context,
-                        const TermsConditionsPage(),
-                      );
-                    },
-                  ),
-                  ProfileMenuItem(
-                    title: "Logout",
-                    showArrow: false,
-                    titleColor: Colors.red,
-                    trailing: const Icon(
-                      Icons.logout,
-                      size: 18,
-                      color: Colors.red,
+                if (userType.toLowerCase() == 'priority') ...[
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE9E5FF),
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                    onTap: () {
-                      _showLogoutDialog(context);
-                    },
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "Priority Plan",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                "Cancel Priority and return\nto the free plan.",
+                                style: TextStyle(
+                                  color: Colors.grey.shade700,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ElevatedButton(
+                          onPressed: () {
+                            _openPage(
+                              context,
+                              const MembershipPage(),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.deepPurpleAccent,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: const Text("Cancel"),
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(height: 16),
                 ],
-              ),
 
-              const SizedBox(height: 16),
-            ],
+                ProfileMenuSection(
+                  title: "GENERAL",
+                  items: [
+                    ProfileMenuItem(
+                      title: "My Profile",
+                      onTap: _openMyProfilePage,
+                    ),
+                    ProfileMenuItem(
+                      title: "Manage Account",
+                      onTap: () {
+                        _openPage(
+                          context,
+                          const ManageAccountPage(),
+                        );
+                      },
+                    ),
+                    ProfileMenuItem(
+                      title: "Membership",
+                      onTap: () {
+                        _openPage(
+                          context,
+                          const MembershipPage(),
+                        );
+                      },
+                    ),
+                    ProfileMenuItem(
+                      title: "Wearable Devices",
+                      onTap: () {
+                        _openPage(
+                          context,
+                          const WearableDevicesPage(),
+                        );
+                      },
+                    ),
+                    ProfileMenuItem(
+                      title: "Notifications",
+                      onTap: () {
+                        _openPage(
+                          context,
+                          const NotificationsPage(),
+                        );
+                      },
+                    ),
+                    ProfileMenuItem(
+                      title: "Feedback",
+                      onTap: () {
+                        _openPage(
+                          context,
+                          const FeedbackPage(),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+
+                ProfileMenuSection(
+                  title: "OTHERS",
+                  items: [
+                    ProfileMenuItem(
+                      title: "FAQs",
+                      onTap: () {
+                        _openPage(
+                          context,
+                          const FaqPage(),
+                        );
+                      },
+                    ),
+                    ProfileMenuItem(
+                      title: "Privacy Policy",
+                      onTap: () {
+                        _openPage(
+                          context,
+                          const PrivacyPolicyPage(),
+                        );
+                      },
+                    ),
+                    ProfileMenuItem(
+                      title: "Terms & Conditions",
+                      onTap: () {
+                        _openPage(
+                          context,
+                          const TermsConditionsPage(),
+                        );
+                      },
+                    ),
+                    ProfileMenuItem(
+                      title: "Logout",
+                      showArrow: false,
+                      titleColor: Colors.red,
+                      trailing: const Icon(
+                        Icons.logout,
+                        size: 18,
+                        color: Colors.red,
+                      ),
+                      onTap: () {
+                        _showLogoutDialog(context);
+                      },
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+              ],
+            ),
           ),
         ),
       ),
@@ -418,9 +600,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-// ==================================================
-// Profile statistics
-// ==================================================
+class _ProfileStatsData {
+  final int completedExercises;
+  final int dayStreak;
+  final int followers;
+  final int following;
+
+  const _ProfileStatsData({
+    required this.completedExercises,
+    required this.dayStreak,
+    required this.followers,
+    required this.following,
+  });
+}
+
 class ProfileStat extends StatelessWidget {
   final String number;
   final String label;
@@ -455,9 +648,6 @@ class ProfileStat extends StatelessWidget {
   }
 }
 
-// ==================================================
-// Menu section
-// ==================================================
 class ProfileMenuSection extends StatelessWidget {
   final String title;
   final List<ProfileMenuItem> items;
@@ -498,9 +688,6 @@ class ProfileMenuSection extends StatelessWidget {
   }
 }
 
-// ==================================================
-// Menu item
-// ==================================================
 class ProfileMenuItem extends StatelessWidget {
   final String title;
   final VoidCallback onTap;

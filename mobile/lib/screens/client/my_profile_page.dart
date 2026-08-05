@@ -1,4 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class MyProfilePage extends StatefulWidget {
   const MyProfilePage({super.key});
@@ -8,23 +12,30 @@ class MyProfilePage extends StatefulWidget {
 }
 
 class _MyProfilePageState extends State<MyProfilePage> {
-  final TextEditingController nameController =
-      TextEditingController(text: "Christopher Heron");
+  bool isLoading = true;
+  bool isSaving = false;
+  bool isUploadingAvatar = false;
+  bool hasSavedChanges = false;
 
-  final TextEditingController emailController =
-      TextEditingController(text: "example123@gmail.com");
+  String avatarUrl = '';
 
-  final TextEditingController genderController =
-      TextEditingController(text: "Male");
+  Uint8List? selectedAvatarBytes;
+  XFile? selectedAvatarFile;
 
-  final TextEditingController dateOfBirthController =
-      TextEditingController(text: "25/09/2003");
+  final ImagePicker picker = ImagePicker();
 
-  final TextEditingController weightController =
-      TextEditingController(text: "72");
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController genderController = TextEditingController();
+  final TextEditingController dateOfBirthController = TextEditingController();
+  final TextEditingController weightController = TextEditingController();
+  final TextEditingController heightController = TextEditingController();
 
-  final TextEditingController heightController =
-      TextEditingController(text: "175");
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
 
   @override
   void dispose() {
@@ -37,19 +48,352 @@ class _MyProfilePageState extends State<MyProfilePage> {
     super.dispose();
   }
 
-  void updateProfile() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Profile updated successfully."),
-      ),
-    );
+  void _showMessage(String message) {
+    if (!mounted) return;
 
-    // 以后连接数据库时，在这里执行：
-    // await databaseService.updateProfile(...)
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  Future<void> _loadProfile() async {
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      final client = Supabase.instance.client;
+      final user = client.auth.currentUser;
+
+      if (user == null) {
+        throw Exception('User is not signed in.');
+      }
+
+      final response = await client
+          .from('profiles')
+          .select(
+            'full_name, email, gender, date_of_birth, weight_kg, height_cm, avatar_url',
+          )
+          .eq('id', user.id)
+          .maybeSingle();
+
+      final data = response ?? <String, dynamic>{};
+
+      if (!mounted) return;
+
+      setState(() {
+        nameController.text = data['full_name']?.toString() ?? '';
+        emailController.text = data['email']?.toString() ?? user.email ?? '';
+        genderController.text = data['gender']?.toString() ?? '';
+        dateOfBirthController.text = _formatDateForDisplay(
+          data['date_of_birth'],
+        );
+        weightController.text = _formatNumber(data['weight_kg']);
+        heightController.text = _formatNumber(data['height_cm']);
+        avatarUrl = data['avatar_url']?.toString() ?? '';
+      });
+    } catch (e) {
+      _showMessage('Failed to load profile: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
+  }
+
+  String _formatDateForDisplay(dynamic value) {
+    if (value == null) return '';
+
+    final parsed = DateTime.tryParse(value.toString());
+
+    if (parsed == null) return value.toString();
+
+    final day = parsed.day.toString().padLeft(2, '0');
+    final month = parsed.month.toString().padLeft(2, '0');
+    final year = parsed.year.toString().padLeft(4, '0');
+
+    return '$day/$month/$year';
+  }
+
+  String _formatNumber(dynamic value) {
+    if (value == null) return '';
+
+    final number = double.tryParse(value.toString());
+
+    if (number == null) return value.toString();
+
+    if (number == number.roundToDouble()) {
+      return number.round().toString();
+    }
+
+    return number.toString();
+  }
+
+  DateTime? _parseDateInput(String value) {
+    final text = value.trim();
+
+    if (text.isEmpty) return null;
+
+    if (text.contains('/')) {
+      final parts = text.split('/');
+
+      if (parts.length != 3) return null;
+
+      final day = int.tryParse(parts[0]);
+      final month = int.tryParse(parts[1]);
+      final year = int.tryParse(parts[2]);
+
+      if (day == null || month == null || year == null) return null;
+
+      final date = DateTime(year, month, day);
+
+      if (date.year != year || date.month != month || date.day != day) {
+        return null;
+      }
+
+      return date;
+    }
+
+    final parsed = DateTime.tryParse(text);
+
+    if (parsed == null) return null;
+
+    return DateTime(parsed.year, parsed.month, parsed.day);
+  }
+
+  String? _dateToDatabase(DateTime? date) {
+    if (date == null) return null;
+
+    final year = date.year.toString().padLeft(4, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+
+    return '$year-$month-$day';
+  }
+
+  double? _parseNumberInput(String value) {
+    final text = value.trim();
+
+    if (text.isEmpty) return null;
+
+    return double.tryParse(text);
+  }
+
+  String _safeImageExtension(XFile image) {
+    final name = image.name.toLowerCase();
+    final path = image.path.toLowerCase();
+
+    String extension = 'jpg';
+
+    if (name.contains('.')) {
+      extension = name.split('.').last;
+    } else if (path.contains('.')) {
+      extension = path.split('.').last;
+    }
+
+    if (extension == 'jpeg') return 'jpg';
+    if (extension == 'jpg') return 'jpg';
+    if (extension == 'png') return 'png';
+    if (extension == 'webp') return 'webp';
+    if (extension == 'gif') return 'gif';
+
+    return 'jpg';
+  }
+
+  String _contentTypeForExtension(String extension) {
+    if (extension == 'png') return 'image/png';
+    if (extension == 'webp') return 'image/webp';
+    if (extension == 'gif') return 'image/gif';
+
+    return 'image/jpeg';
+  }
+
+  Future<String> _uploadAvatar({
+    required String userId,
+    required XFile image,
+    required Uint8List bytes,
+  }) async {
+    final extension = _safeImageExtension(image);
+    final contentType = _contentTypeForExtension(extension);
+
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final filePath = '$userId/avatar_$timestamp.$extension';
+
+    await Supabase.instance.client.storage.from('profile-avatars').uploadBinary(
+          filePath,
+          bytes,
+          fileOptions: FileOptions(
+            contentType: contentType,
+            upsert: false,
+          ),
+        );
+
+    final imageUrl = Supabase.instance.client.storage
+        .from('profile-avatars')
+        .getPublicUrl(filePath);
+
+    return imageUrl;
+  }
+
+  Future<void> _pickAndUploadAvatar() async {
+    if (isUploadingAvatar) return;
+
+    try {
+      final image = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+        maxWidth: 1200,
+      );
+
+      if (image == null) return;
+
+      final bytes = await image.readAsBytes();
+
+      if (!mounted) return;
+
+      setState(() {
+        selectedAvatarFile = image;
+        selectedAvatarBytes = bytes;
+        isUploadingAvatar = true;
+      });
+
+      final client = Supabase.instance.client;
+      final user = client.auth.currentUser;
+
+      if (user == null) {
+        throw Exception('User is not signed in.');
+      }
+
+      final uploadedUrl = await _uploadAvatar(
+        userId: user.id,
+        image: image,
+        bytes: bytes,
+      );
+
+      await client.from('profiles').update({
+        'avatar_url': uploadedUrl,
+      }).eq('id', user.id);
+
+      if (!mounted) return;
+
+      setState(() {
+        avatarUrl = uploadedUrl;
+        hasSavedChanges = true;
+        selectedAvatarFile = null;
+        selectedAvatarBytes = null;
+      });
+
+      _showMessage('Avatar updated successfully.');
+    } catch (e) {
+      _showMessage('Failed to upload avatar: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          isUploadingAvatar = false;
+        });
+      }
+    }
+  }
+
+  void _goBack() {
+    Navigator.pop(context, hasSavedChanges);
+  }
+
+  Future<void> updateProfile() async {
+    final name = nameController.text.trim();
+    final gender = genderController.text.trim();
+    final dateText = dateOfBirthController.text.trim();
+    final weightText = weightController.text.trim();
+    final heightText = heightController.text.trim();
+
+    if (name.isEmpty) {
+      _showMessage('Please enter your name.');
+      return;
+    }
+
+    final dateOfBirth = _parseDateInput(dateText);
+
+    if (dateText.isNotEmpty && dateOfBirth == null) {
+      _showMessage('Please enter date of birth as DD/MM/YYYY.');
+      return;
+    }
+
+    final weight = _parseNumberInput(weightText);
+    final height = _parseNumberInput(heightText);
+
+    if (weightText.isNotEmpty && weight == null) {
+      _showMessage('Please enter a valid weight.');
+      return;
+    }
+
+    if (heightText.isNotEmpty && height == null) {
+      _showMessage('Please enter a valid height.');
+      return;
+    }
+
+    setState(() {
+      isSaving = true;
+    });
+
+    try {
+      final client = Supabase.instance.client;
+      final user = client.auth.currentUser;
+
+      if (user == null) {
+        throw Exception('User is not signed in.');
+      }
+
+      await client.from('profiles').update({
+        'full_name': name,
+        'gender': gender.isEmpty ? null : gender,
+        'date_of_birth': _dateToDatabase(dateOfBirth),
+        'weight_kg': weight,
+        'height_cm': height,
+      }).eq('id', user.id);
+
+      if (!mounted) return;
+
+      setState(() {
+        hasSavedChanges = true;
+      });
+
+      _showMessage('Profile updated successfully.');
+    } catch (e) {
+      _showMessage('Failed to update profile: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          isSaving = false;
+        });
+      }
+    }
+  }
+
+  ImageProvider? get _avatarImageProvider {
+    if (selectedAvatarBytes != null) {
+      return MemoryImage(selectedAvatarBytes!);
+    }
+
+    if (avatarUrl.isNotEmpty) {
+      return NetworkImage(avatarUrl);
+    }
+
+    return null;
   }
 
   @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -61,7 +405,7 @@ class _MyProfilePageState extends State<MyProfilePage> {
               Row(
                 children: [
                   _BackButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: _goBack,
                   ),
                   const Expanded(
                     child: Center(
@@ -77,44 +421,59 @@ class _MyProfilePageState extends State<MyProfilePage> {
                   const SizedBox(width: 38),
                 ],
               ),
+
               const SizedBox(height: 28),
+
               Center(
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    const CircleAvatar(
+                    CircleAvatar(
                       radius: 36,
                       backgroundColor: Colors.grey,
-
-                      // 以后连接数据库图片：
-                      // backgroundImage: NetworkImage(profileImageUrl),
+                      backgroundImage: _avatarImageProvider,
+                      child: _avatarImageProvider == null
+                          ? const Icon(
+                              Icons.person,
+                              color: Colors.white,
+                              size: 34,
+                            )
+                          : null,
                     ),
                     Positioned(
                       right: -2,
                       bottom: -2,
                       child: GestureDetector(
-                        onTap: () {
-                          // 以后打开相册或相机
-                        },
+                        onTap: isUploadingAvatar ? null : _pickAndUploadAvatar,
                         child: Container(
-                          width: 22,
-                          height: 22,
+                          width: 24,
+                          height: 24,
                           decoration: const BoxDecoration(
                             color: Colors.deepPurpleAccent,
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(
-                            Icons.camera_alt_outlined,
-                            size: 13,
-                            color: Colors.white,
-                          ),
+                          child: isUploadingAvatar
+                              ? const Padding(
+                                  padding: EdgeInsets.all(5),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.camera_alt_outlined,
+                                  size: 14,
+                                  color: Colors.white,
+                                ),
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
+
               const SizedBox(height: 24),
+
               ProfileInputField(
                 label: "Name",
                 controller: nameController,
@@ -133,6 +492,7 @@ class _MyProfilePageState extends State<MyProfilePage> {
                 label: "Date of Birth",
                 controller: dateOfBirthController,
                 keyboardType: TextInputType.datetime,
+                hintText: 'DD/MM/YYYY',
               ),
               ProfileInputField(
                 label: "Weight (kg)",
@@ -144,23 +504,26 @@ class _MyProfilePageState extends State<MyProfilePage> {
                 controller: heightController,
                 keyboardType: TextInputType.number,
               ),
+
               const SizedBox(height: 4),
+
               SizedBox(
                 width: double.infinity,
                 height: 48,
                 child: ElevatedButton(
-                  onPressed: updateProfile,
+                  onPressed: isSaving ? null : updateProfile,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.deepPurpleAccent,
                     foregroundColor: Colors.white,
+                    disabledBackgroundColor: Colors.grey.shade400,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  child: const Text(
-                    "Update Changes",
-                    style: TextStyle(
+                  child: Text(
+                    isSaving ? "Updating..." : "Update Changes",
+                    style: const TextStyle(
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -179,6 +542,7 @@ class ProfileInputField extends StatelessWidget {
   final TextEditingController controller;
   final bool enabled;
   final TextInputType? keyboardType;
+  final String? hintText;
 
   const ProfileInputField({
     super.key,
@@ -186,6 +550,7 @@ class ProfileInputField extends StatelessWidget {
     required this.controller,
     this.enabled = true,
     this.keyboardType,
+    this.hintText,
   });
 
   @override
@@ -208,6 +573,7 @@ class ProfileInputField extends StatelessWidget {
             enabled: enabled,
             keyboardType: keyboardType,
             decoration: InputDecoration(
+              hintText: hintText,
               filled: true,
               fillColor:
                   enabled ? const Color(0xFFF5F3FC) : Colors.grey.shade200,
