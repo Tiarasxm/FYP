@@ -441,7 +441,6 @@ create table if not exists public.workout_exercises (
   constraint workout_exercises_exercise_id_fkey foreign key (exercise_id) references public.exercise_library(exercise_id)
 );
 
-
 -- =========================================================
 -- 19. MEAL LOGS TABLE
 -- =========================================================
@@ -513,7 +512,80 @@ create index if not exists idx_meal_logs_profile_logged_at on public.meal_logs(p
 create index if not exists idx_meal_logs_profile_meal_type on public.meal_logs(profile_id, meal_type);
 
 -- =========================================================
--- 20. CHAT ROOMS TABLE
+-- 20. MEAL IMAGE STORAGE
+-- =========================================================
+
+insert into storage.buckets (
+  id,
+  name,
+  public,
+  file_size_limit,
+  allowed_mime_types
+)
+values (
+  'meal-images',
+  'meal-images',
+  true,
+  5242880,
+  array[
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/gif'
+  ]
+)
+on conflict (id) do update
+set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Anyone can read meal images" on storage.objects;
+drop policy if exists "Users can upload own meal images" on storage.objects;
+drop policy if exists "Users can update own meal images" on storage.objects;
+drop policy if exists "Users can delete own meal images" on storage.objects;
+
+create policy "Anyone can read meal images"
+on storage.objects
+for select
+to public
+using (
+  bucket_id = 'meal-images'
+);
+
+create policy "Users can upload own meal images"
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'meal-images'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+create policy "Users can update own meal images"
+on storage.objects
+for update
+to authenticated
+using (
+  bucket_id = 'meal-images'
+  and (storage.foldername(name))[1] = auth.uid()::text
+)
+with check (
+  bucket_id = 'meal-images'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+create policy "Users can delete own meal images"
+on storage.objects
+for delete
+to authenticated
+using (
+  bucket_id = 'meal-images'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+-- =========================================================
+-- 21. CHAT ROOMS TABLE
 -- =========================================================
 
 create table if not exists public.chat_rooms (
@@ -532,7 +604,7 @@ create table if not exists public.chat_rooms (
 alter table public.chat_rooms enable row level security;
 
 -- =========================================================
--- 21. CHAT MESSAGES TABLE
+-- 22. CHAT MESSAGES TABLE
 -- =========================================================
 
 create table if not exists public.chat_messages (
@@ -565,7 +637,7 @@ end;
 $$;
 
 -- =========================================================
--- 22. CHAT TAGS TABLE
+-- 23. CHAT TAGS TABLE
 -- =========================================================
 
 create table if not exists public.chat_tags (
@@ -582,7 +654,7 @@ create table if not exists public.chat_tags (
 alter table public.chat_tags enable row level security;
 
 -- =========================================================
--- 23. RLS POLICIES - chat_rooms
+-- 24. RLS POLICIES - chat_rooms
 -- =========================================================
 
 drop policy if exists "Chat rooms select participants" on public.chat_rooms;
@@ -626,7 +698,7 @@ with check (
 );
 
 -- =========================================================
--- 24. RLS POLICIES - chat_messages
+-- 25. RLS POLICIES - chat_messages
 -- =========================================================
 
 drop policy if exists "Chat messages select room participants" on public.chat_messages;
@@ -686,7 +758,7 @@ to authenticated
 using (public.is_admin());
 
 -- =========================================================
--- 25. RLS POLICIES - chat_tags
+-- 26. RLS POLICIES - chat_tags
 -- =========================================================
 
 drop policy if exists "Chat tags select by professional" on public.chat_tags;
@@ -706,7 +778,7 @@ using (professional_id = auth.uid() or public.is_admin())
 with check (professional_id = auth.uid());
 
 -- =========================================================
--- 26. HELPER FUNCTIONS
+-- 27. HELPER FUNCTIONS
 -- =========================================================
 
 -- Create or reuse a chat room (Priority user only)
@@ -812,7 +884,7 @@ $$;
 grant execute on function public.get_public_profile(uuid) to authenticated;
 
 -- =========================================================
--- 27. TRIGGER: update last_message on chat_rooms
+-- 28. TRIGGER: update last_message on chat_rooms
 -- =========================================================
 
 create or replace function public.handle_chat_message_insert()
@@ -837,7 +909,7 @@ for each row
 execute function public.handle_chat_message_insert();
 
 -- =========================================================
--- 28. INDEXES
+-- 29. INDEXES
 -- =========================================================
 
 create index if not exists idx_chat_rooms_client_id on public.chat_rooms(client_id);
@@ -850,7 +922,7 @@ create index if not exists idx_chat_tags_room_id on public.chat_tags(room_id);
 create index if not exists idx_chat_tags_professional_id on public.chat_tags(professional_id);
 
 -- =========================================================
--- 29. ENABLE REALTIME for chat tables
+-- 30. ENABLE REALTIME for chat tables
 -- =========================================================
 
 do $$
