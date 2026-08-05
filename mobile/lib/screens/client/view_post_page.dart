@@ -1,20 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../models/client/social_comment.dart';
+import '../../models/client/social_post.dart';
+import '../../models/client/user_profile.dart';
 import 'public_profile_page.dart';
 
 class ViewPostPage extends StatelessWidget {
-  const ViewPostPage({super.key});
+  final SocialPost? post;
+
+  const ViewPostPage({super.key, this.post});
 
   void openPublicProfile(BuildContext context) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => const PublicProfilePage(),
+        builder: (_) => PublicProfilePage(userId: post?.userId),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final authorName = post?.author?.fullName.trim();
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -30,29 +37,34 @@ class ViewPostPage extends StatelessWidget {
                   ),
                   GestureDetector(
                     onTap: () => openPublicProfile(context),
-                    child: const CircleAvatar(
-                      radius: 18,
-                      backgroundColor: Colors.grey,
+                  child: CircleAvatar(
+                    radius: 18,
+                    backgroundColor: const Color(0xFFE1D9FF),
+                    backgroundImage: post?.author?.avatarUrl?.isNotEmpty == true
+                        ? NetworkImage(post!.author!.avatarUrl!)
+                        : null,
+                    child: post?.author?.avatarUrl?.isNotEmpty == true
+                        ? null
+                        : Text(
+                            authorName?.isNotEmpty == true
+                                ? authorName![0].toUpperCase()
+                                : '?',
+                          ),
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: GestureDetector(
                       onTap: () => openPublicProfile(context),
-                      child: const Text(
-                        "Evans Mcgee",
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                      child: Text(
+                        authorName?.isNotEmpty == true
+                            ? authorName!
+                            : 'ShapeRush User',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
-                  ElevatedButton(
-                    onPressed: () {},
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.deepPurpleAccent,
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text("Follow"),
-                  ),
+                  if (post != null) _FollowButton(targetUserId: post!.userId),
                 ],
               ),
             ),
@@ -60,21 +72,35 @@ class ViewPostPage extends StatelessWidget {
               child: SingleChildScrollView(
                 child: Column(
                   children: [
-                    Container(
-                      height: 300,
-                      color: Colors.grey.shade300,
-                    ),
+                    if (post?.imageUrl?.isNotEmpty == true)
+                      Image.network(
+                        post!.imageUrl!,
+                        height: 300,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          height: 300,
+                          color: Colors.grey.shade300,
+                          child: const Icon(Icons.broken_image_outlined),
+                        ),
+                      )
+                    else
+                      Container(height: 300, color: Colors.grey.shade300),
                     Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna.",
+                          Text(
+                            post?.content.isNotEmpty == true
+                                ? post!.content
+                                : 'Fitness update',
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            "Posted on 5/6/2026",
+                            post?.createdAt == null
+                                ? 'Recently posted'
+                                : 'Posted on ${post!.createdAt!.day}/${post!.createdAt!.month}/${post!.createdAt!.year}',
                             style: TextStyle(
                               color: Colors.grey.shade600,
                               fontSize: 12,
@@ -86,8 +112,7 @@ class ViewPostPage extends StatelessWidget {
                             style: TextStyle(fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 16),
-                          buildComment(context),
-                          buildComment(context),
+                          if (post != null) _CommentsPanel(postId: post!.id),
                         ],
                       ),
                     ),
@@ -97,27 +122,11 @@ class ViewPostPage extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      decoration: InputDecoration(
-                        hintText: "Write a comment...",
-                        filled: true,
-                        fillColor: Colors.grey.shade100,
-                        suffixIcon: const Icon(Icons.send),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(30),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  const Icon(Icons.favorite, color: Colors.red),
-                  const SizedBox(width: 4),
-                  const Text("299"),
-                ],
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: post == null
+                    ? const SizedBox.shrink()
+                    : _PostLikeButton(post: post!),
               ),
             ),
           ],
@@ -126,17 +135,243 @@ class ViewPostPage extends StatelessWidget {
     );
   }
 
-  Widget buildComment(BuildContext context) {
+}
+
+class _CommentsPanel extends StatefulWidget {
+  final String postId;
+
+  const _CommentsPanel({required this.postId});
+
+  @override
+  State<_CommentsPanel> createState() => _CommentsPanelState();
+}
+
+class _CommentsPanelState extends State<_CommentsPanel> {
+  final _supabase = Supabase.instance.client;
+  final _controller = TextEditingController();
+  List<SocialComment> _comments = [];
+  bool _isLoading = true;
+  bool _isSending = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadComments();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadComments() async {
+    try {
+      final rows = await _supabase
+          .from('post_comments')
+          .select('id, post_id, user_id, content, created_at')
+          .eq('post_id', widget.postId)
+          .order('created_at');
+
+      final userIds = rows
+          .map<String>((row) => row['user_id'] as String)
+          .toSet()
+          .toList();
+      final profiles = userIds.isEmpty
+          ? <dynamic>[]
+          : await _supabase
+              .from('profiles')
+              .select('id, full_name, email, gender, user_type, status, avatar_url, created_at')
+              .inFilter('id', userIds);
+      final profileById = <String, UserProfile>{};
+      for (final profile in profiles) {
+        final id = profile['id'] as String;
+        profileById[id] = UserProfile(
+          id: id,
+          fullName: (profile['full_name'] as String?) ?? 'ShapeRush User',
+          email: (profile['email'] as String?) ?? '',
+          gender: (profile['gender'] as String?) ?? '',
+          userType: (profile['user_type'] as String?) ?? '',
+          status: (profile['status'] as String?) ?? '',
+          avatarUrl: profile['avatar_url'] as String?,
+          createdAt: DateTime.tryParse((profile['created_at'] as String?) ?? ''),
+        );
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _comments = rows.map<SocialComment>((row) {
+          final userId = row['user_id'] as String;
+          return SocialComment(
+            id: row['id'] as String,
+            postId: row['post_id'] as String,
+            userId: userId,
+            content: row['content'] as String,
+            createdAt: DateTime.tryParse((row['created_at'] as String?) ?? ''),
+            author: profileById[userId],
+          );
+        }).toList();
+        _isLoading = false;
+        _error = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _error = 'Unable to load comments.';
+      });
+    }
+  }
+
+  Future<void> _sendComment() async {
+    final userId = _supabase.auth.currentUser?.id;
+    final content = _controller.text.trim();
+    if (userId == null || content.isEmpty || _isSending) return;
+
+    setState(() => _isSending = true);
+    try {
+      await _supabase.from('post_comments').insert({
+        'post_id': widget.postId,
+        'user_id': userId,
+        'content': content,
+      });
+      _controller.clear();
+      await _loadComments();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to post comment: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
+  }
+
+  Future<void> _deleteComment(SocialComment comment) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete comment?'),
+        content: const Text('This comment will be permanently deleted.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await _supabase.from('post_comments').delete().eq('id', comment.id);
+      await _loadComments();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to delete comment: $error')),
+        );
+      }
+    }
+  }
+
+  void _openProfile(String userId) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => PublicProfilePage(userId: userId)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        if (_isLoading)
+          const Padding(
+            padding: EdgeInsets.all(20),
+            child: CircularProgressIndicator(),
+          )
+        else if (_error != null)
+          TextButton.icon(
+            onPressed: _loadComments,
+            icon: const Icon(Icons.refresh),
+            label: Text(_error!),
+          )
+        else if (_comments.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Text(
+              'No comments yet.',
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
+          )
+        else
+          ..._comments.map(_buildComment),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                minLines: 1,
+                maxLines: 3,
+                maxLength: 500,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => _sendComment(),
+                decoration: InputDecoration(
+                  hintText: 'Write a comment...',
+                  counterText: '',
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+            IconButton(
+              onPressed: _isSending ? null : _sendComment,
+              icon: _isSending
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.send, color: Colors.deepPurpleAccent),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildComment(SocialComment comment) {
+    final name = comment.author?.fullName.trim();
+    final isOwner = comment.userId == _supabase.auth.currentUser?.id;
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           GestureDetector(
-            onTap: () => openPublicProfile(context),
-            child: const CircleAvatar(
+            onTap: () => _openProfile(comment.userId),
+            child: CircleAvatar(
               radius: 15,
-              backgroundColor: Colors.grey,
+              backgroundColor: const Color(0xFFE1D9FF),
+              backgroundImage: comment.author?.avatarUrl?.isNotEmpty == true
+                  ? NetworkImage(comment.author!.avatarUrl!)
+                  : null,
+              child: comment.author?.avatarUrl?.isNotEmpty == true
+                  ? null
+                  : Text(
+                      name?.isNotEmpty == true ? name![0].toUpperCase() : '?',
+                      style: const TextStyle(fontSize: 12),
+                    ),
             ),
           ),
           const SizedBox(width: 10),
@@ -145,24 +380,223 @@ class ViewPostPage extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 GestureDetector(
-                  onTap: () => openPublicProfile(context),
-                  child: const Text(
-                    "Christopher",
-                    style: TextStyle(
+                  onTap: () => _openProfile(comment.userId),
+                  child: Text(
+                    name?.isNotEmpty == true ? name! : 'ShapeRush User',
+                    style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
                     ),
                   ),
                 ),
-                const Text(
-                  "Lorem ipsum dolor sit amet.",
-                  style: TextStyle(fontSize: 12),
-                ),
+                Text(comment.content, style: const TextStyle(fontSize: 12)),
               ],
             ),
           ),
+          if (isOwner)
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Delete comment',
+              onPressed: () => _deleteComment(comment),
+              icon: const Icon(Icons.delete_outline, size: 18),
+            ),
         ],
       ),
+    );
+  }
+}
+
+class _FollowButton extends StatefulWidget {
+  final String targetUserId;
+
+  const _FollowButton({required this.targetUserId});
+
+  @override
+  State<_FollowButton> createState() => _FollowButtonState();
+}
+
+class _FollowButtonState extends State<_FollowButton> {
+  final _supabase = Supabase.instance.client;
+  bool _isFollowing = false;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFollowState();
+  }
+
+  Future<void> _loadFollowState() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null || userId == widget.targetUserId) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+
+    try {
+      final row = await _supabase
+          .from('follows')
+          .select('following_id')
+          .eq('follower_id', userId)
+          .eq('following_id', widget.targetUserId)
+          .maybeSingle();
+      if (mounted) {
+        setState(() {
+          _isFollowing = row != null;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _toggleFollow() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null || _isLoading) return;
+
+    final previous = _isFollowing;
+    setState(() => _isFollowing = !previous);
+    try {
+      if (previous) {
+        await _supabase
+            .from('follows')
+            .delete()
+            .eq('follower_id', userId)
+            .eq('following_id', widget.targetUserId);
+      } else {
+        await _supabase.from('follows').insert({
+          'follower_id': userId,
+          'following_id': widget.targetUserId,
+        });
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isFollowing = previous);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to update follow: $error')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_supabase.auth.currentUser?.id == widget.targetUserId) {
+      return const SizedBox.shrink();
+    }
+    return ElevatedButton(
+      onPressed: _isLoading ? null : _toggleFollow,
+      style: ElevatedButton.styleFrom(
+        backgroundColor:
+            _isFollowing ? Colors.grey.shade200 : Colors.deepPurpleAccent,
+        foregroundColor: _isFollowing ? Colors.black87 : Colors.white,
+      ),
+      child: Text(_isFollowing ? 'Following' : 'Follow'),
+    );
+  }
+}
+
+class _PostLikeButton extends StatefulWidget {
+  final SocialPost post;
+
+  const _PostLikeButton({required this.post});
+
+  @override
+  State<_PostLikeButton> createState() => _PostLikeButtonState();
+}
+
+class _PostLikeButtonState extends State<_PostLikeButton> {
+  final _supabase = Supabase.instance.client;
+  late bool _isLiked = widget.post.isLiked;
+  late int _likeCount = widget.post.likeCount;
+  bool _isLoading = true;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLikeState();
+  }
+
+  Future<void> _loadLikeState() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+
+    try {
+      final rows = await _supabase
+          .from('post_likes')
+          .select('user_id')
+          .eq('post_id', widget.post.id);
+      if (!mounted) return;
+      setState(() {
+        _likeCount = rows.length;
+        _isLiked = rows.any((row) => row['user_id']?.toString() == userId);
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _toggleLike() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null || _isSaving) return;
+
+    final previous = _isLiked;
+    setState(() {
+      _isSaving = true;
+      _isLiked = !previous;
+      _likeCount = (_likeCount + (_isLiked ? 1 : -1)).clamp(0, 1 << 31);
+    });
+
+    try {
+      if (previous) {
+        await _supabase
+            .from('post_likes')
+            .delete()
+            .eq('post_id', widget.post.id)
+            .eq('user_id', userId);
+      } else {
+        await _supabase.from('post_likes').upsert(
+          {
+            'post_id': widget.post.id,
+            'user_id': userId,
+          },
+          onConflict: 'post_id,user_id',
+          ignoreDuplicates: true,
+        );
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isLiked = previous;
+        _likeCount = (_likeCount + (previous ? 1 : -1)).clamp(0, 1 << 31);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to update like: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          onPressed: _isSaving || _isLoading ? null : _toggleLike,
+          icon: Icon(
+            _isLiked ? Icons.favorite : Icons.favorite_border,
+            color: _isLiked ? Colors.red : Colors.grey,
+          ),
+        ),
+        Text('$_likeCount'),
+      ],
     );
   }
 }
