@@ -1120,3 +1120,243 @@ on public.water_settings
 for delete
 to authenticated
 using (profile_id = auth.uid());
+
+-- =========================================================
+-- 32. SOCIAL POSTS
+-- =========================================================
+
+create table if not exists public.posts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null,
+  content text not null default '',
+  image_url text,
+  visibility text not null default 'public',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint posts_user_id_fkey
+    foreign key (user_id) references public.profiles(id) on delete cascade
+);
+
+create index if not exists posts_user_id_idx
+on public.posts(user_id);
+
+create index if not exists posts_created_at_idx
+on public.posts(created_at desc);
+
+alter table public.posts enable row level security;
+
+drop policy if exists "Authenticated users can read posts" on public.posts;
+drop policy if exists "Users can create own posts" on public.posts;
+drop policy if exists "Users can update own posts" on public.posts;
+drop policy if exists "Users can delete own posts" on public.posts;
+
+create policy "Authenticated users can read posts"
+on public.posts
+for select
+to authenticated
+using (true);
+
+create policy "Users can create own posts"
+on public.posts
+for insert
+to authenticated
+with check (auth.uid() = user_id);
+
+create policy "Users can update own posts"
+on public.posts
+for update
+to authenticated
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+create policy "Users can delete own posts"
+on public.posts
+for delete
+to authenticated
+using (auth.uid() = user_id);
+
+-- =========================================================
+-- 33. SOCIAL POST LIKES
+-- =========================================================
+
+create table if not exists public.post_likes (
+  post_id uuid not null,
+  user_id uuid not null,
+  created_at timestamptz not null default now(),
+  constraint post_likes_pkey primary key (post_id, user_id),
+  constraint post_likes_post_id_fkey
+    foreign key (post_id) references public.posts(id) on delete cascade,
+  constraint post_likes_user_id_fkey
+    foreign key (user_id) references public.profiles(id) on delete cascade
+);
+
+create index if not exists post_likes_post_id_idx
+on public.post_likes(post_id);
+
+create index if not exists post_likes_user_id_idx
+on public.post_likes(user_id);
+
+alter table public.post_likes enable row level security;
+
+drop policy if exists "Authenticated users can read post likes" on public.post_likes;
+drop policy if exists "Users can like from own account" on public.post_likes;
+drop policy if exists "Users can remove own likes" on public.post_likes;
+
+create policy "Authenticated users can read post likes"
+on public.post_likes for select to authenticated
+using (true);
+
+create policy "Users can like from own account"
+on public.post_likes for insert to authenticated
+with check (auth.uid() = user_id);
+
+create policy "Users can remove own likes"
+on public.post_likes for delete to authenticated
+using (auth.uid() = user_id);
+
+-- =========================================================
+-- 34. SOCIAL POST COMMENTS
+-- =========================================================
+
+create table if not exists public.post_comments (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null,
+  user_id uuid not null,
+  content text not null check (length(trim(content)) between 1 and 500),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint post_comments_post_id_fkey
+    foreign key (post_id) references public.posts(id) on delete cascade,
+  constraint post_comments_user_id_fkey
+    foreign key (user_id) references public.profiles(id) on delete cascade
+);
+
+create index if not exists post_comments_post_id_idx
+on public.post_comments(post_id, created_at);
+
+create index if not exists post_comments_user_id_idx
+on public.post_comments(user_id);
+
+alter table public.post_comments enable row level security;
+
+drop policy if exists "Authenticated users can read post comments" on public.post_comments;
+drop policy if exists "Users can create own comments" on public.post_comments;
+drop policy if exists "Users can update own comments" on public.post_comments;
+drop policy if exists "Users can delete own comments" on public.post_comments;
+
+create policy "Authenticated users can read post comments"
+on public.post_comments for select to authenticated
+using (true);
+
+create policy "Users can create own comments"
+on public.post_comments for insert to authenticated
+with check (auth.uid() = user_id);
+
+create policy "Users can update own comments"
+on public.post_comments for update to authenticated
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+create policy "Users can delete own comments"
+on public.post_comments for delete to authenticated
+using (auth.uid() = user_id);
+
+-- =========================================================
+-- 35. SOCIAL FOLLOWS
+-- =========================================================
+
+create table if not exists public.follows (
+  follower_id uuid not null,
+  following_id uuid not null,
+  created_at timestamptz not null default now(),
+  constraint follows_pkey primary key (follower_id, following_id),
+  constraint follows_follower_id_fkey
+    foreign key (follower_id) references public.profiles(id) on delete cascade,
+  constraint follows_following_id_fkey
+    foreign key (following_id) references public.profiles(id) on delete cascade,
+  constraint follows_cannot_follow_self check (follower_id <> following_id)
+);
+
+create index if not exists follows_follower_id_idx
+on public.follows(follower_id);
+
+create index if not exists follows_following_id_idx
+on public.follows(following_id);
+
+alter table public.follows enable row level security;
+
+drop policy if exists "Authenticated users can read follows" on public.follows;
+drop policy if exists "Users can follow from own account" on public.follows;
+drop policy if exists "Users can unfollow from own account" on public.follows;
+
+create policy "Authenticated users can read follows"
+on public.follows
+for select
+to authenticated
+using (true);
+
+create policy "Users can follow from own account"
+on public.follows
+for insert
+to authenticated
+with check (
+  auth.uid() = follower_id
+  and follower_id <> following_id
+);
+
+create policy "Users can unfollow from own account"
+on public.follows
+for delete
+to authenticated
+using (auth.uid() = follower_id);
+
+-- =========================================================
+-- 36. SOCIAL POST IMAGE STORAGE
+-- =========================================================
+
+insert into storage.buckets (id, name, public)
+values ('post-images', 'post-images', true)
+on conflict (id) do update
+set public = excluded.public;
+
+drop policy if exists "Public can view post images" on storage.objects;
+drop policy if exists "Users can upload own post images" on storage.objects;
+drop policy if exists "Users can update own post images" on storage.objects;
+drop policy if exists "Users can delete own post images" on storage.objects;
+
+create policy "Public can view post images"
+on storage.objects
+for select
+to anon, authenticated
+using (bucket_id = 'post-images');
+
+create policy "Users can upload own post images"
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'post-images'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+create policy "Users can update own post images"
+on storage.objects
+for update
+to authenticated
+using (
+  bucket_id = 'post-images'
+  and (storage.foldername(name))[1] = auth.uid()::text
+)
+with check (
+  bucket_id = 'post-images'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+create policy "Users can delete own post images"
+on storage.objects
+for delete
+to authenticated
+using (
+  bucket_id = 'post-images'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
