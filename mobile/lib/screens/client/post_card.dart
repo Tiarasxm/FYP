@@ -71,6 +71,17 @@ class PostCard extends StatelessWidget {
                           style: const TextStyle(fontSize: 10),
                         ),
                       ),
+                      const Icon(
+                        Icons.chat_bubble_outline,
+                        size: 14,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(width: 2),
+                      Text(
+                        '${item?.commentCount ?? 0}',
+                        style: const TextStyle(fontSize: 10),
+                      ),
+                      const SizedBox(width: 4),
                       InkWell(
                         onTap: onLike,
                         borderRadius: BorderRadius.circular(16),
