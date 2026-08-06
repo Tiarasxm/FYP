@@ -141,6 +141,7 @@ class _SocialScreenState extends State<SocialScreen> {
       }
 
       final likeCounts = <String, int>{};
+      final commentCounts = <String, int>{};
       final likedPostIds = <String>{};
       final currentUserId = _supabase.auth.currentUser?.id;
       if (postIds.isNotEmpty) {
@@ -157,6 +158,17 @@ class _SocialScreenState extends State<SocialScreen> {
           likeCounts[postId] = (likeCounts[postId] ?? 0) + 1;
           if (userId == currentUserId) likedPostIds.add(postId);
         }
+
+        final commentRows = await _supabase
+            .from('post_comments')
+            .select('post_id')
+            .inFilter('post_id', postIds);
+        for (final item in commentRows as List<dynamic>) {
+          final postId =
+              (item as Map<String, dynamic>)['post_id']?.toString();
+          if (postId == null) continue;
+          commentCounts[postId] = (commentCounts[postId] ?? 0) + 1;
+        }
       }
 
       final posts = rows.map((item) {
@@ -169,6 +181,7 @@ class _SocialScreenState extends State<SocialScreen> {
           content: row['content']?.toString() ?? '',
           imageUrl: row['image_url']?.toString(),
           likeCount: likeCounts[postId] ?? 0,
+          commentCount: commentCounts[postId] ?? 0,
           isLiked: likedPostIds.contains(postId),
           createdAt: DateTime.tryParse(row['created_at']?.toString() ?? ''),
           author: authors[userId],
@@ -408,11 +421,12 @@ class _SocialScreenState extends State<SocialScreen> {
         itemBuilder: (context, index) {
           final post = posts[index];
           return GestureDetector(
-            onTap: () {
-              Navigator.push(
+            onTap: () async {
+              await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => ViewPostPage(post: post)),
               );
+              if (mounted) await _loadPosts();
             },
             child: PostCard(
               post: post,
