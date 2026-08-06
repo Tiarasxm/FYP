@@ -361,12 +361,51 @@ create table if not exists public.reports (
   reporter_id uuid,
   content_type text,
   report_type text,
+  reported_user_id uuid,
+  post_id uuid,
+  details text,
   status text default 'pending',
   submitted_at timestamptz default now(),
-  constraint reports_reporter_id_fkey foreign key (reporter_id) references public.profiles(id)
+  constraint reports_reporter_id_fkey foreign key (reporter_id) references public.profiles(id),
+  constraint reports_reported_user_id_fkey foreign key (reported_user_id) references public.profiles(id) on delete cascade
 );
 
 alter table public.reports enable row level security;
+
+create index if not exists reports_reporter_id_idx
+on public.reports(reporter_id);
+
+create index if not exists reports_reported_user_id_idx
+on public.reports(reported_user_id);
+
+create index if not exists reports_post_id_idx
+on public.reports(post_id);
+
+create unique index if not exists reports_one_user_report_idx
+on public.reports(reporter_id, reported_user_id)
+where content_type = 'user' and reported_user_id is not null;
+
+create unique index if not exists reports_one_post_report_idx
+on public.reports(reporter_id, post_id)
+where content_type = 'post' and post_id is not null;
+
+drop policy if exists "Users can create social reports" on public.reports;
+drop policy if exists "Users can read own social reports" on public.reports;
+
+create policy "Users can create social reports"
+on public.reports for insert to authenticated
+with check (
+  reporter_id = auth.uid()
+  and (
+    (content_type = 'post' and post_id is not null and reported_user_id is not null and reported_user_id <> auth.uid())
+    or
+    (content_type = 'user' and post_id is null and reported_user_id is not null and reported_user_id <> auth.uid())
+  )
+);
+
+create policy "Users can read own social reports"
+on public.reports for select to authenticated
+using (reporter_id = auth.uid());
 
 -- =========================================================
 -- 9. AUDIT LOGS TABLE
@@ -1136,6 +1175,16 @@ create table if not exists public.posts (
   constraint posts_user_id_fkey
     foreign key (user_id) references public.profiles(id) on delete cascade
 );
+
+do $$
+begin
+  alter table public.reports
+  add constraint reports_post_id_fkey
+  foreign key (post_id) references public.posts(id) on delete cascade;
+exception
+  when duplicate_object then null;
+end
+$$;
 
 create index if not exists posts_user_id_idx
 on public.posts(user_id);
