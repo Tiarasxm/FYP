@@ -5,6 +5,7 @@ import '../../models/client/social_post.dart';
 import '../../models/client/user_profile.dart';
 import 'edit_post_page.dart';
 import 'post_card.dart';
+import 'report_dialog.dart';
 import 'view_post_page.dart';
 
 class PublicProfilePage extends StatefulWidget {
@@ -266,6 +267,21 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
     }
   }
 
+  Future<void> _reportUser() async {
+    final targetUserId = _targetUserId;
+    if (_isOwnProfile || targetUserId == null) return;
+    final submitted = await showSocialReportDialog(
+      context: context,
+      contentType: 'user',
+      reportedUserId: targetUserId,
+    );
+    if (submitted && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User reported successfully.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -274,6 +290,14 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
         title: const Text('Public Profile'),
+        actions: [
+          if (!_isOwnProfile)
+            IconButton(
+              tooltip: 'Report user',
+              onPressed: _reportUser,
+              icon: const Icon(Icons.flag_outlined),
+            ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
