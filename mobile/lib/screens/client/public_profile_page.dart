@@ -106,6 +106,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
           .whereType<String>()
           .toList();
       final likeCounts = <String, int>{};
+      final commentCounts = <String, int>{};
       final likedPosts = <String>{};
       final currentUserId = _supabase.auth.currentUser?.id;
 
@@ -123,6 +124,18 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
             likedPosts.add(postId);
           }
         }
+
+        final commentRows = await _supabase
+            .from('post_comments')
+            .select('post_id')
+            .inFilter('post_id', postIds);
+        for (final item in commentRows as List<dynamic>) {
+          final commentPostId =
+              (item as Map<String, dynamic>)['post_id']?.toString();
+          if (commentPostId == null) continue;
+          commentCounts[commentPostId] =
+              (commentCounts[commentPostId] ?? 0) + 1;
+        }
       }
 
       final posts = postRows.map((item) {
@@ -134,6 +147,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
           content: row['content']?.toString() ?? '',
           imageUrl: row['image_url']?.toString(),
           likeCount: likeCounts[postId] ?? 0,
+          commentCount: commentCounts[postId] ?? 0,
           isLiked: likedPosts.contains(postId),
           createdAt: DateTime.tryParse(row['created_at']?.toString() ?? ''),
           author: profile,
@@ -326,13 +340,16 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                                       children: [
                                         Positioned.fill(
                                           child: GestureDetector(
-                                            onTap: () => Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (_) =>
-                                                    ViewPostPage(post: post),
-                                              ),
-                                            ),
+                                            onTap: () async {
+                                              await Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      ViewPostPage(post: post),
+                                                ),
+                                              );
+                                              if (mounted) await _loadProfile();
+                                            },
                                             child: PostCard(post: post),
                                           ),
                                         ),
