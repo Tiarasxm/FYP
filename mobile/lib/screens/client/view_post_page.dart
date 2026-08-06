@@ -4,6 +4,7 @@ import '../../models/client/social_comment.dart';
 import '../../models/client/social_post.dart';
 import '../../models/client/user_profile.dart';
 import 'public_profile_page.dart';
+import 'report_dialog.dart';
 
 class ViewPostPage extends StatelessWidget {
   final SocialPost? post;
@@ -17,6 +18,25 @@ class ViewPostPage extends StatelessWidget {
         builder: (_) => PublicProfilePage(userId: post?.userId),
       ),
     );
+  }
+
+  Future<void> reportPost(BuildContext context) async {
+    final item = post;
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    if (item == null || currentUserId == null || item.userId == currentUserId) {
+      return;
+    }
+    final submitted = await showSocialReportDialog(
+      context: context,
+      contentType: 'post',
+      reportedUserId: item.userId,
+      postId: item.id,
+    );
+    if (submitted && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Post reported successfully.')),
+      );
+    }
   }
 
   @override
@@ -65,6 +85,14 @@ class ViewPostPage extends StatelessWidget {
                     ),
                   ),
                   if (post != null) _FollowButton(targetUserId: post!.userId),
+                  if (post != null &&
+                      post!.userId !=
+                          Supabase.instance.client.auth.currentUser?.id)
+                    IconButton(
+                      tooltip: 'Report post',
+                      onPressed: () => reportPost(context),
+                      icon: const Icon(Icons.flag_outlined),
+                    ),
                 ],
               ),
             ),
