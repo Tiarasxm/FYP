@@ -308,6 +308,41 @@ class _CommentsPanelState extends State<_CommentsPanel> {
     }
   }
 
+  Future<void> _editComment(SocialComment comment) async {
+    final currentUserId = _supabase.auth.currentUser?.id;
+    if (currentUserId == null || comment.userId != currentUserId) return;
+
+    final updatedContent = await showDialog<String>(
+      context: context,
+      builder: (_) => _EditCommentDialog(initialContent: comment.content),
+    );
+    if (!mounted) return;
+    if (updatedContent == null || updatedContent == comment.content) return;
+
+    try {
+      await _supabase
+          .from('post_comments')
+          .update({
+            'content': updatedContent,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', comment.id)
+          .eq('user_id', currentUserId);
+      await _loadComments();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Comment updated successfully.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to update comment: $error')),
+        );
+      }
+    }
+  }
+
   void _openProfile(String userId) {
     Navigator.push(
       context,
@@ -422,14 +457,93 @@ class _CommentsPanelState extends State<_CommentsPanel> {
             ),
           ),
           if (isOwner)
-            IconButton(
-              visualDensity: VisualDensity.compact,
-              tooltip: 'Delete comment',
-              onPressed: () => _deleteComment(comment),
-              icon: const Icon(Icons.delete_outline, size: 18),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Edit comment',
+                  onPressed: () => _editComment(comment),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Delete comment',
+                  onPressed: () => _deleteComment(comment),
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                ),
+              ],
             ),
         ],
       ),
+    );
+  }
+}
+
+class _EditCommentDialog extends StatefulWidget {
+  final String initialContent;
+
+  const _EditCommentDialog({required this.initialContent});
+
+  @override
+  State<_EditCommentDialog> createState() => _EditCommentDialogState();
+}
+
+class _EditCommentDialogState extends State<_EditCommentDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialContent);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final content = _controller.text.trim();
+    if (content.isEmpty) return;
+    FocusScope.of(context).unfocus();
+    Navigator.pop(context, content);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Edit comment'),
+      content: SingleChildScrollView(
+        child: TextField(
+          controller: _controller,
+          autofocus: true,
+          minLines: 3,
+          maxLines: 6,
+          maxLength: 500,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _save(),
+          decoration: const InputDecoration(
+            hintText: 'Write your comment...',
+            border: OutlineInputBorder(),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _save,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.deepPurpleAccent,
+            foregroundColor: Colors.white,
+          ),
+          child: const Text('Save'),
+        ),
+      ],
     );
   }
 }
