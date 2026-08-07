@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../auth/welcome_screen.dart';
 import 'change_password_page.dart';
 import 'delete_account_page.dart';
 
@@ -12,6 +14,20 @@ class ManageAccountPage extends StatelessWidget {
       MaterialPageRoute(
         builder: (_) => page,
       ),
+    );
+  }
+
+  Future<void> _logout(BuildContext context) async {
+    await Supabase.instance.client.auth.signOut();
+
+    if (!context.mounted) return;
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const WelcomeScreen(),
+      ),
+      (route) => false,
     );
   }
 
@@ -34,17 +50,7 @@ class ManageAccountPage extends StatelessWidget {
             TextButton(
               onPressed: () {
                 Navigator.pop(dialogContext);
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      "Logout function will be connected later.",
-                    ),
-                  ),
-                );
-
-                // 以后连接 Supabase：
-                // await Supabase.instance.client.auth.signOut();
+                _logout(context);
               },
               child: const Text("Logout"),
             ),
@@ -64,7 +70,6 @@ class ManageAccountPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 顶部标题
               Row(
                 children: [
                   _CircleBackButton(
@@ -86,10 +91,7 @@ class ManageAccountPage extends StatelessWidget {
                   const SizedBox(width: 38),
                 ],
               ),
-
               const SizedBox(height: 28),
-
-              // Security / Account 卡片
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(
@@ -129,6 +131,7 @@ class ManageAccountPage extends StatelessWidget {
                     ),
                     _AccountMenuItem(
                       title: "Delete Account",
+                      titleColor: Colors.red,
                       onTap: () {
                         _openPage(
                           context,
@@ -139,10 +142,7 @@ class ManageAccountPage extends StatelessWidget {
                   ],
                 ),
               ),
-
               const SizedBox(height: 18),
-
-              // Logout 按钮
               SizedBox(
                 width: double.infinity,
                 height: 46,
@@ -178,10 +178,12 @@ class ManageAccountPage extends StatelessWidget {
 class _AccountMenuItem extends StatelessWidget {
   final String title;
   final VoidCallback onTap;
+  final Color? titleColor;
 
   const _AccountMenuItem({
     required this.title,
     required this.onTap,
+    this.titleColor,
   });
 
   @override
@@ -193,8 +195,9 @@ class _AccountMenuItem extends StatelessWidget {
       ),
       title: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 12,
+          color: titleColor,
         ),
       ),
       trailing: const Icon(

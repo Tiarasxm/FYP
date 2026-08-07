@@ -59,13 +59,22 @@ class _SignInScreenState extends State<SignInScreen> {
 
       final Map<String, dynamic>? profile = await supabase
           .from('profiles')
-          .select('user_type')
+          .select('user_type, status')
           .eq('id', user.id)
           .maybeSingle();
 
       if (profile == null) {
         await supabase.auth.signOut();
         showError('No profile found for this account.');
+        return;
+      }
+
+      final String status =
+          profile['status']?.toString().trim().toLowerCase() ?? 'active';
+
+      if (status == 'deleted') {
+        await supabase.auth.signOut();
+        showError('This account has been deleted.');
         return;
       }
 

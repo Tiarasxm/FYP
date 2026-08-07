@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ChangePasswordPage extends StatefulWidget {
   const ChangePasswordPage({super.key});
@@ -28,6 +29,16 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
     newPasswordController.dispose();
     confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+      ),
+    );
   }
 
   Future<void> _changePassword() async {
@@ -68,31 +79,44 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
     });
 
     try {
-      await Future<void>.delayed(
-        const Duration(seconds: 1),
-      );
+      final client = Supabase.instance.client;
+      final user = client.auth.currentUser;
+      final email = user?.email;
 
-      if (!mounted) {
-        return;
+      if (user == null || email == null || email.isEmpty) {
+        throw Exception('User email was not found.');
       }
 
-      _showMessage("Password changed successfully.");
+      await client.auth.signInWithPassword(
+        email: email,
+        password: currentPassword,
+      );
+
+      await client.auth.updateUser(
+        UserAttributes(
+          password: newPassword,
+        ),
+      );
+
+      if (!mounted) return;
 
       currentPasswordController.clear();
       newPasswordController.clear();
       confirmPasswordController.clear();
 
-      // 以后连接 Supabase 时：
-      //
-      // await Supabase.instance.client.auth.updateUser(
-      //   UserAttributes(
-      //     password: newPassword,
-      //   ),
-      // );
-    } catch (error) {
-      if (!mounted) {
-        return;
+      _showMessage("Password changed successfully.");
+
+      Navigator.pop(context);
+    } on AuthException catch (error) {
+      if (!mounted) return;
+
+      if (error.message.toLowerCase().contains('invalid')) {
+        _showMessage('Current password is incorrect.');
+      } else {
+        _showMessage('Unable to change password: ${error.message}');
       }
+    } catch (error) {
+      if (!mounted) return;
 
       _showMessage(
         "Unable to change password: $error",
@@ -106,14 +130,6 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
     }
   }
 
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -123,7 +139,6 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
           child: Column(
             children: [
-              // 顶部标题
               Row(
                 children: [
                   _CircleBackButton(
@@ -145,9 +160,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                   const SizedBox(width: 38),
                 ],
               ),
-
               const SizedBox(height: 30),
-
               Expanded(
                 child: SingleChildScrollView(
                   child: Column(
@@ -189,7 +202,6 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                   ),
                 ),
               ),
-
               SizedBox(
                 width: double.infinity,
                 height: 48,
@@ -199,7 +211,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                     backgroundColor: Colors.deepPurpleAccent,
                     foregroundColor: Colors.white,
                     disabledBackgroundColor:
-                        Colors.deepPurpleAccent.withValues(alpha: 0.5),
+                        Colors.deepPurpleAccent.withOpacity(0.5),
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),

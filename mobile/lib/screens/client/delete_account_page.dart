@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../auth/welcome_screen.dart';
 
 class DeleteAccountPage extends StatefulWidget {
   const DeleteAccountPage({super.key});
@@ -11,14 +14,15 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
   bool isDeleting = false;
 
   Future<void> _deleteAccount() async {
+    if (isDeleting) return;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text("Delete Account?"),
           content: const Text(
-            "This action is permanent and cannot be undone. "
-            "Your account and all associated data will be deleted.",
+            "This will deactivate your account. You will not be able to use this account again.",
           ),
           actions: [
             TextButton(
@@ -33,9 +37,7 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
               },
               child: const Text(
                 "Delete",
-                style: TextStyle(
-                  color: Colors.red,
-                ),
+                style: TextStyle(color: Colors.red),
               ),
             ),
           ],
@@ -43,50 +45,42 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
       },
     );
 
-    if (confirmed != true || !mounted) {
-      return;
-    }
+    if (confirmed != true || !mounted) return;
 
     setState(() {
       isDeleting = true;
     });
 
     try {
-      await Future<void>.delayed(
-        const Duration(seconds: 1),
-      );
+      final client = Supabase.instance.client;
+      final userId = client.auth.currentUser?.id;
 
-      if (!mounted) {
-        return;
+      if (userId == null) {
+        throw Exception("You must be signed in.");
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            "Delete account function will be connected later.",
-          ),
+      await client.from('profiles').update({
+        'status': 'deleted',
+      }).eq('id', userId);
+
+      await client.auth.signOut();
+
+      if (!mounted) return;
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const WelcomeScreen(),
         ),
+        (route) => false,
       );
-
-      // 以后连接 Supabase 时，建议使用后端函数处理：
-      //
-      // 1. 删除 posts
-      // 2. 删除 comments
-      // 3. 删除 likes
-      // 4. 删除 followers/following
-      // 5. 删除用户上传的图片
-      // 6. 删除 profile
-      // 7. 删除 Supabase Auth 用户
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            "Unable to delete account: $error",
-          ),
+          content: Text("Failed to delete account: $error"),
+          backgroundColor: Colors.red,
         ),
       );
     } finally {
@@ -107,7 +101,6 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
           child: Column(
             children: [
-              // 顶部标题
               Row(
                 children: [
                   _CircleBackButton(
@@ -151,8 +144,7 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
               const SizedBox(height: 10),
 
               Text(
-                "This will permanently erase your account and all data "
-                "from our servers. It cannot be undone.",
+                "This will deactivate your account. It will be marked as deleted and you will be logged out.",
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 12,
@@ -169,10 +161,9 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
                 child: ElevatedButton(
                   onPressed: isDeleting ? null : _deleteAccount,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurpleAccent,
+                    backgroundColor: Colors.red,
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor:
-                        Colors.deepPurpleAccent.withValues(alpha: 0.5),
+                    disabledBackgroundColor: Colors.red.withOpacity(0.5),
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
