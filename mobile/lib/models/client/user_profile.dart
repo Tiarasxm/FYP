@@ -6,6 +6,7 @@ class UserProfile {
   final String userType;
   final String status;
   final DateTime? createdAt;
+  final String? avatarUrl;
 
   const UserProfile({
     required this.id,
@@ -15,6 +16,7 @@ class UserProfile {
     required this.userType,
     required this.status,
     required this.createdAt,
+    required this.avatarUrl,
   });
 
   UserProfile copyWith({
@@ -23,6 +25,7 @@ class UserProfile {
     String? gender,
     String? userType,
     String? status,
+    String? avatarUrl,
   }) {
     return UserProfile(
       id: id,
@@ -32,6 +35,7 @@ class UserProfile {
       userType: userType ?? this.userType,
       status: status ?? this.status,
       createdAt: createdAt,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
     );
   }
 }
