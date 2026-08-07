@@ -88,7 +88,10 @@ export default function RegisterPage() {
     const databaseRole =
       role === "fitness_professional" ? "Fitness professional" : "Free";
 
-    localStorage.setItem("googleRegisterRole", databaseRole);
+    localStorage.setItem(
+      "googleRegisterRole",
+      JSON.stringify({ role: databaseRole, ts: Date.now() })
+    );
   
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",

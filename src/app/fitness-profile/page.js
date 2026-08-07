@@ -5,6 +5,34 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
+const GOOGLE_REGISTER_ROLE_KEY = "googleRegisterRole";
+const GOOGLE_REGISTER_ROLE_MAX_AGE_MS = 10 * 60 * 1000;
+
+function readAndClearGoogleRegisterRole() {
+  const raw = localStorage.getItem(GOOGLE_REGISTER_ROLE_KEY);
+  localStorage.removeItem(GOOGLE_REGISTER_ROLE_KEY);
+
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+
+    if (
+      parsed?.role &&
+      typeof parsed.ts === "number" &&
+      Date.now() - parsed.ts < GOOGLE_REGISTER_ROLE_MAX_AGE_MS
+    ) {
+      return parsed.role;
+    }
+  } catch {
+    // malformed value, ignore
+  }
+
+  return null;
+}
+
 export default function FitnessProfilePage() {
   const router = useRouter();
 
@@ -26,7 +54,7 @@ export default function FitnessProfilePage() {
     const user = userData.user;
 
     const role =
-      localStorage.getItem("googleRegisterRole") ||
+      readAndClearGoogleRegisterRole() ||
       user.user_metadata?.role ||
       "Fitness professional";
 
@@ -44,7 +72,7 @@ export default function FitnessProfilePage() {
         full_name: fullName,
         email: user.email,
         user_type: role,
-        status: "active",
+        status: "incomplete",
       },
       {
         onConflict: "id",
@@ -65,8 +93,6 @@ export default function FitnessProfilePage() {
         role,
       },
     });
-
-    localStorage.removeItem("googleRegisterRole");
   }
 
   useEffect(() => {

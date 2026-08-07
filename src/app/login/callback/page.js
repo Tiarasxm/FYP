@@ -7,10 +7,6 @@ import { supabase } from "@/lib/supabase";
 export default function LoginCallbackPage() {
   const router = useRouter();
 
-  useEffect(() => {
-    handleCallback();
-  }, []);
-
   async function handleCallback() {
     const { data, error } = await supabase.auth.getUser();
 
@@ -26,7 +22,7 @@ export default function LoginCallbackPage() {
       .single();
 
     if (profileError || !profile) {
-      router.replace("/login");
+      router.replace("/welcome");
       return;
     }
 
@@ -36,6 +32,11 @@ export default function LoginCallbackPage() {
       router.replace("/welcome");
     }
   }
+
+  useEffect(() => {
+    handleCallback();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally run once on mount
+  }, []);
 
   return (
     <main className="min-h-screen bg-[#f8f8ff] flex items-center justify-center">
