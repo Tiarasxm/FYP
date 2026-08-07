@@ -39,6 +39,15 @@ add column if not exists height_cm numeric;
 alter table public.profiles
 add column if not exists avatar_url text;
 
+alter table public.profiles
+add column if not exists activity_level text;
+
+alter table public.profiles
+add column if not exists fitness_goal text;
+
+alter table public.profiles
+add column if not exists has_completed_onboarding boolean default false;
+
 -- PROFILE AVATAR STORAGE
 
 insert into storage.buckets (

@@ -5,6 +5,7 @@ class UserProfile {
   final String gender;
   final String userType;
   final String status;
+  final String? avatarUrl;
   final DateTime? createdAt;
   final String? avatarUrl;
 
@@ -15,6 +16,7 @@ class UserProfile {
     required this.gender,
     required this.userType,
     required this.status,
+    this.avatarUrl,
     required this.createdAt,
     required this.avatarUrl,
   });
@@ -34,6 +36,7 @@ class UserProfile {
       gender: gender ?? this.gender,
       userType: userType ?? this.userType,
       status: status ?? this.status,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
       createdAt: createdAt,
       avatarUrl: avatarUrl ?? this.avatarUrl,
     );

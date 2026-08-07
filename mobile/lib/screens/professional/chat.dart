@@ -136,7 +136,7 @@ class _ChatState extends State<Chat> {
     try {
       final profile = await client
           .from('profiles')
-          .select('full_name, gender, user_type')
+          .select('full_name, gender, user_type, date_of_birth, weight_kg, height_cm, activity_level, fitness_goal')
           .eq('id', widget.clientId!)
           .maybeSingle();
 
@@ -145,6 +145,15 @@ class _ChatState extends State<Chat> {
       final isPriority = (profile['user_type'] ?? '').toString().toLowerCase() == 'priority';
       final fullName = profile['full_name'] ?? 'Unknown';
       final gender = profile['gender'] ?? 'Not specified';
+
+      final dob = profile['date_of_birth'];
+      final age = dob != null
+          ? DateTime.now().year - DateTime.parse(dob.toString()).year
+          : null;
+      final weight = profile['weight_kg']?.toString();
+      final height = profile['height_cm']?.toString();
+      final activityLevel = profile['activity_level']?.toString();
+      final fitnessGoal = profile['fitness_goal']?.toString();
 
       showDialog(
         context: context,
@@ -230,15 +239,26 @@ class _ChatState extends State<Chat> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'Account Info',
+                            'Fitness Information',
                             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
                           ),
                           const SizedBox(height: 10),
-                          Text('Name: $fullName', style: TextStyle(fontSize: 12, color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
-                          const SizedBox(height: 6),
+                          if (age != null)
+                            Text('Age: $age', style: TextStyle(fontSize: 12, color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
+                          if (age != null) const SizedBox(height: 6),
                           Text('Gender: $gender', style: TextStyle(fontSize: 12, color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
                           const SizedBox(height: 6),
-                          Text('Type: ${profile['user_type'] ?? 'Free'}', style: TextStyle(fontSize: 12, color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
+                          if (weight != null)
+                            Text('Weight: $weight kg', style: TextStyle(fontSize: 12, color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
+                          if (weight != null) const SizedBox(height: 6),
+                          if (height != null)
+                            Text('Height: $height cm', style: TextStyle(fontSize: 12, color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
+                          if (height != null) const SizedBox(height: 6),
+                          if (activityLevel != null)
+                            Text('Activity Level: $activityLevel', style: TextStyle(fontSize: 12, color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
+                          if (activityLevel != null) const SizedBox(height: 6),
+                          if (fitnessGoal != null)
+                            Text('Fitness Goal: $fitnessGoal', style: TextStyle(fontSize: 12, color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
                         ],
                       ),
                     ),

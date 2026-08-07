@@ -5,6 +5,7 @@ import '../../widgets/professional/mobile_page_wrapper.dart';
 import '../../widgets/professional/required_label.dart';
 
 import '../client/client_shell.dart';
+import '../client/onboarding_screen.dart';
 import '../professional/professional_shell.dart';
 
 class SignInScreen extends StatefulWidget {
@@ -59,7 +60,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
       final Map<String, dynamic>? profile = await supabase
           .from('profiles')
-          .select('user_type, status')
+          .select('user_type, status, has_completed_onboarding')
           .eq('id', user.id)
           .maybeSingle();
 
@@ -108,13 +109,28 @@ class _SignInScreenState extends State<SignInScreen> {
           (route) => false,
         );
       } else if (userType == 'free' || userType == 'priority') {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const ClientShell(),
-          ),
-          (route) => false,
-        );
+        final bool hasCompletedOnboarding =
+            profile['has_completed_onboarding'] == true;
+
+        if (!mounted) return;
+
+        if (hasCompletedOnboarding) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const ClientShell(),
+            ),
+            (route) => false,
+          );
+        } else {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const OnboardingScreen(),
+            ),
+            (route) => false,
+          );
+        }
       } else {
         await supabase.auth.signOut();
         showError('This account type cannot log in to the mobile app.');
