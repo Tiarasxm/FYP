@@ -6,6 +6,7 @@ class Professional {
   final int reviewCount;
   final int yearsExp;
   final String? bio;
+  final String? avatarUrl;
 
   const Professional({
     this.profileId,
@@ -15,6 +16,7 @@ class Professional {
     required this.reviewCount,
     this.yearsExp = 10,
     this.bio,
+    this.avatarUrl,
   });
 
   factory Professional.fromSupabase(Map<String, dynamic> row) {
@@ -31,6 +33,7 @@ class Professional {
 
     final avgRating = (fp['avg_rating'] as num?)?.toDouble() ?? 0.0;
     final reviewCount = (fp['review_count'] as num?)?.toInt() ?? 0;
+    final url = profile?['avatar_url']?.toString().trim();
 
     return Professional(
       profileId: fp['profile_id']?.toString(),
@@ -40,6 +43,7 @@ class Professional {
       reviewCount: reviewCount,
       yearsExp: yearsExp,
       bio: fp['bio']?.toString(),
+      avatarUrl: (url != null && url.isNotEmpty) ? url : null,
     );
   }
 }

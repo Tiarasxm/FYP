@@ -28,11 +28,22 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
 
   String displayName = 'Professional';
   String avatarLetter = 'P';
+  String? avatarUrl;
+
+  RealtimeChannel? _profileChannel;
 
   @override
   void initState() {
     super.initState();
     loadHomeData();
+  }
+
+  @override
+  void dispose() {
+    if (_profileChannel != null) {
+      Supabase.instance.client.removeChannel(_profileChannel!);
+    }
+    super.dispose();
   }
 
   Future<void> loadHomeData() async {
@@ -133,7 +144,7 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
 
       final profileRow = await client
           .from('profiles')
-          .select('full_name, email')
+          .select('full_name, email, avatar_url')
           .eq('id', userId)
           .maybeSingle();
 
@@ -154,14 +165,51 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
               ? profileName
               : 'Professional';
 
+      final url = profileRow?['avatar_url']?.toString().trim();
+
       if (!mounted) return;
 
       setState(() {
         displayName = name;
         avatarLetter = getFirstLetter(name);
+        avatarUrl = (url != null && url.isNotEmpty) ? url : null;
       });
+
+      _subscribeToProfile(client, userId);
     } catch (_) {
     }
+  }
+
+  void _subscribeToProfile(SupabaseClient client, String userId) {
+    if (_profileChannel != null) return;
+
+    _profileChannel = client
+        .channel('public:profiles:pro_home:$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'profiles',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: userId,
+          ),
+          callback: (payload) {
+            final record = payload.newRecord;
+            final fullName = record['full_name']?.toString().trim();
+            final url = record['avatar_url']?.toString().trim();
+
+            if (!mounted) return;
+            setState(() {
+              if (fullName != null && fullName.isNotEmpty) {
+                displayName = fullName;
+                avatarLetter = getFirstLetter(fullName);
+              }
+              avatarUrl = (url != null && url.isNotEmpty) ? url : null;
+            });
+          },
+        )
+        .subscribe();
   }
 
   Future<void> loadPlans() async {
@@ -364,14 +412,17 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
                     CircleAvatar(
                       radius: 30,
                       backgroundColor: Colors.black,
-                      child: Text(
-                        avatarLetter,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
+                      backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl!) : null,
+                      child: avatarUrl == null
+                          ? Text(
+                              avatarLetter,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            )
+                          : null,
                     ),
                   ],
                 ),

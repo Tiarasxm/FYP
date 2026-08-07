@@ -7,6 +7,7 @@ import '../../models/professional/workout_plan.dart';
 import '../../services/chat_service.dart';
 import '../../widgets/professional/mobile_page_wrapper.dart';
 import 'plan_detail.dart';
+import 'report_customer_dialog.dart';
 import 'send_plan.dart';
 
 class Chat extends StatefulWidget {
@@ -36,10 +37,63 @@ class _ChatState extends State<Chat> {
   bool _loading = true;
   RealtimeChannel? _channel;
 
+  String? _clientAvatarUrl;
+  RealtimeChannel? _profileChannel;
+
   @override
   void initState() {
     super.initState();
     _loadMessages();
+    _loadClientAvatar();
+  }
+
+  Future<void> _loadClientAvatar() async {
+    final clientId = widget.clientId;
+    if (clientId == null) return;
+
+    try {
+      final profile = await Supabase.instance.client
+          .from('profiles')
+          .select('avatar_url')
+          .eq('id', clientId)
+          .maybeSingle();
+
+      final url = profile?['avatar_url']?.toString().trim();
+
+      if (!mounted) return;
+      setState(() {
+        _clientAvatarUrl = (url != null && url.isNotEmpty) ? url : null;
+      });
+
+      _subscribeToClientProfile(clientId);
+    } catch (e) {
+      debugPrint('Error loading client avatar: $e');
+    }
+  }
+
+  void _subscribeToClientProfile(String clientId) {
+    if (_profileChannel != null) return;
+
+    _profileChannel = Supabase.instance.client
+        .channel('public:profiles:pro_chat:$clientId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'profiles',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: clientId,
+          ),
+          callback: (payload) {
+            final url = payload.newRecord['avatar_url']?.toString().trim();
+            if (!mounted) return;
+            setState(() {
+              _clientAvatarUrl = (url != null && url.isNotEmpty) ? url : null;
+            });
+          },
+        )
+        .subscribe();
   }
 
   Future<void> _loadMessages() async {
@@ -88,6 +142,9 @@ class _ChatState extends State<Chat> {
   @override
   void dispose() {
     if (_channel != null) _chatService.unsubscribe(_channel!);
+    if (_profileChannel != null) {
+      Supabase.instance.client.removeChannel(_profileChannel!);
+    }
     messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -479,11 +536,22 @@ class _ChatState extends State<Chat> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     offset: const Offset(0, 44),
-                    onSelected: (value) {
+                    onSelected: (value) async {
                       if (value == 'assign_tag') {
                         _showAssignTagPopup();
                       } else if (value == 'report') {
-                        // TODO: implement report
+                        final clientId = widget.clientId;
+                        if (clientId == null) return;
+
+                        final submitted = await showReportCustomerDialog(
+                          context: context,
+                          clientId: clientId,
+                        );
+                        if (submitted && mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Report submitted. Our team will review it.')),
+                          );
+                        }
                       }
                     },
                     itemBuilder: (context) => [
@@ -523,6 +591,7 @@ class _ChatState extends State<Chat> {
                           text: message.content ?? '',
                           isMe: isMe,
                           avatarText: initials,
+                          avatarUrl: _clientAvatarUrl,
                           onAvatarTap: isMe ? null : _showCustomerProfile,
                         );
                       },
@@ -582,12 +651,14 @@ class _TextMessageBubble extends StatelessWidget {
   final String text;
   final bool isMe;
   final String avatarText;
+  final String? avatarUrl;
   final VoidCallback? onAvatarTap;
 
   const _TextMessageBubble({
     required this.text,
     required this.isMe,
     required this.avatarText,
+    this.avatarUrl,
     this.onAvatarTap,
   });
 
@@ -623,14 +694,17 @@ class _TextMessageBubble extends StatelessWidget {
           child: CircleAvatar(
             radius: 15,
             backgroundColor: Colors.black,
-            child: Text(
-              avatarText,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
+            backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl!) : null,
+            child: avatarUrl == null
+                ? Text(
+                    avatarText,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  )
+                : null,
           ),
         ),
 

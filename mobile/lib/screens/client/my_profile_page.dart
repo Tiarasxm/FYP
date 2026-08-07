@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../theme/app_theme.dart';
+
 class MyProfilePage extends StatefulWidget {
   const MyProfilePage({super.key});
 
@@ -387,7 +389,7 @@ class _MyProfilePageState extends State<MyProfilePage> {
   Widget build(BuildContext context) {
     if (isLoading) {
       return const Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.card,
         body: Center(
           child: CircularProgressIndicator(),
         ),
@@ -395,7 +397,7 @@ class _MyProfilePageState extends State<MyProfilePage> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.card,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
@@ -430,12 +432,12 @@ class _MyProfilePageState extends State<MyProfilePage> {
                   children: [
                     CircleAvatar(
                       radius: 36,
-                      backgroundColor: Colors.grey,
+                      backgroundColor: AppColors.primarySoft,
                       backgroundImage: _avatarImageProvider,
                       child: _avatarImageProvider == null
                           ? const Icon(
                               Icons.person,
-                              color: Colors.white,
+                              color: AppColors.primary,
                               size: 34,
                             )
                           : null,
@@ -449,7 +451,7 @@ class _MyProfilePageState extends State<MyProfilePage> {
                           width: 24,
                           height: 24,
                           decoration: const BoxDecoration(
-                            color: Colors.deepPurpleAccent,
+                            color: AppColors.primary,
                             shape: BoxShape.circle,
                           ),
                           child: isUploadingAvatar
@@ -513,9 +515,9 @@ class _MyProfilePageState extends State<MyProfilePage> {
                 child: ElevatedButton(
                   onPressed: isSaving ? null : updateProfile,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurpleAccent,
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey.shade400,
+                    disabledBackgroundColor: AppColors.textMuted,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
@@ -575,8 +577,7 @@ class ProfileInputField extends StatelessWidget {
             decoration: InputDecoration(
               hintText: hintText,
               filled: true,
-              fillColor:
-                  enabled ? const Color(0xFFF5F3FC) : Colors.grey.shade200,
+              fillColor: enabled ? AppColors.cardMuted : AppColors.border,
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 14,
                 vertical: 14,
@@ -610,7 +611,7 @@ class _BackButton extends StatelessWidget {
       width: 38,
       height: 38,
       decoration: const BoxDecoration(
-        color: Color(0xFFF5F3FC),
+        color: AppColors.cardMuted,
         shape: BoxShape.circle,
       ),
       child: IconButton(

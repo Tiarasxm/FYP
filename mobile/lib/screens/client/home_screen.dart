@@ -26,6 +26,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _userName = 'User';
   String _avatarLetter = 'U';
+  String? _avatarUrl;
+
+  RealtimeChannel? _profileChannel;
 
   String? _activePlanId;
   String? _activePlanTitle;
@@ -53,6 +56,14 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadHomeData();
+  }
+
+  @override
+  void dispose() {
+    if (_profileChannel != null) {
+      Supabase.instance.client.removeChannel(_profileChannel!);
+    }
+    super.dispose();
   }
 
   Future<void> _loadHomeData() async {
@@ -89,12 +100,13 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadProfile(SupabaseClient client, String userId) async {
     final profile = await client
         .from('profiles')
-        .select('full_name, email')
+        .select('full_name, email, avatar_url')
         .eq('id', userId)
         .maybeSingle();
 
     final fullName = profile?['full_name']?.toString().trim();
     final email = profile?['email']?.toString().trim();
+    final avatarUrl = profile?['avatar_url']?.toString().trim();
 
     String name = 'User';
 
@@ -109,7 +121,48 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _userName = name;
       _avatarLetter = name.isEmpty ? 'U' : name[0].toUpperCase();
+      _avatarUrl = (avatarUrl != null && avatarUrl.isNotEmpty) ? avatarUrl : null;
     });
+
+    _subscribeToProfile(client, userId);
+  }
+
+  void _subscribeToProfile(SupabaseClient client, String userId) {
+    if (_profileChannel != null) return;
+
+    _profileChannel = client
+        .channel('public:profiles:home:$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'profiles',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: userId,
+          ),
+          callback: (payload) {
+            final record = payload.newRecord;
+            final fullName = record['full_name']?.toString().trim();
+            final email = record['email']?.toString().trim();
+            final avatarUrl = record['avatar_url']?.toString().trim();
+
+            String name = _userName;
+            if (fullName != null && fullName.isNotEmpty) {
+              name = fullName;
+            } else if (email != null && email.isNotEmpty) {
+              name = email.split('@').first;
+            }
+
+            if (!mounted) return;
+            setState(() {
+              _userName = name;
+              _avatarLetter = name.isEmpty ? 'U' : name[0].toUpperCase();
+              _avatarUrl = (avatarUrl != null && avatarUrl.isNotEmpty) ? avatarUrl : null;
+            });
+          },
+        )
+        .subscribe();
   }
 
   Future<void> _loadActivePlan(SupabaseClient client, String userId) async {
@@ -424,14 +477,17 @@ class _HomeScreenState extends State<HomeScreen> {
         CircleAvatar(
           radius: 24,
           backgroundColor: AppColors.primarySoft,
-          child: Text(
-            _avatarLetter,
-            style: const TextStyle(
-              color: AppColors.primary,
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
+          backgroundImage: _avatarUrl != null ? NetworkImage(_avatarUrl!) : null,
+          child: _avatarUrl == null
+              ? Text(
+                  _avatarLetter,
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                )
+              : null,
         ),
       ],
     );

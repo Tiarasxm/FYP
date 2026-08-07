@@ -359,7 +359,43 @@ create table if not exists public.reviews (
   constraint reviews_reviewer_id_fkey foreign key (reviewer_id) references public.profiles(id)
 );
 
+alter table public.reviews
+add column if not exists professional_id uuid;
+
+alter table public.reviews
+drop constraint if exists reviews_professional_id_fkey;
+
+alter table public.reviews
+add constraint reviews_professional_id_fkey foreign key (professional_id) references public.profiles(id) on delete cascade;
+
+alter table public.reviews
+drop constraint if exists reviews_one_per_client_key;
+
+alter table public.reviews
+add constraint reviews_one_per_client_key unique (reviewer_id, professional_id);
+
 alter table public.reviews enable row level security;
+
+drop policy if exists "Users can create own reviews" on public.reviews;
+drop policy if exists "Users can update own reviews" on public.reviews;
+drop policy if exists "Anyone can read reviews" on public.reviews;
+
+create policy "Users can create own reviews"
+on public.reviews for insert to authenticated
+with check (
+  reviewer_id = auth.uid()
+  and professional_id is not null
+  and professional_id <> auth.uid()
+);
+
+create policy "Users can update own reviews"
+on public.reviews for update to authenticated
+using (reviewer_id = auth.uid())
+with check (reviewer_id = auth.uid());
+
+create policy "Anyone can read reviews"
+on public.reviews for select to authenticated
+using (true);
 
 -- =========================================================
 -- 8. REPORTS TABLE

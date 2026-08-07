@@ -20,6 +20,16 @@ class ProfessionalProfile extends StatefulWidget {
 class _ProfessionalProfileState extends State<ProfessionalProfile> {
   bool isLoading = true;
   String fullName = '';
+  String? avatarUrl;
+  String specialties = '';
+
+  double avgRating = 0;
+  int reviewCount = 0;
+  int activePlansCount = 0;
+  int clientsCount = 0;
+
+  RealtimeChannel? _profileChannel;
+  RealtimeChannel? _statsChannel;
 
   @override
   void initState() {
@@ -27,19 +37,147 @@ class _ProfessionalProfileState extends State<ProfessionalProfile> {
     _loadProfile();
   }
 
+  @override
+  void dispose() {
+    if (_profileChannel != null) {
+      Supabase.instance.client.removeChannel(_profileChannel!);
+    }
+    if (_statsChannel != null) {
+      Supabase.instance.client.removeChannel(_statsChannel!);
+    }
+    super.dispose();
+  }
+
+  Future<void> _loadStats(String userId) async {
+    final client = Supabase.instance.client;
+
+    try {
+      final professionalRow = await client
+          .from('fitness_professional')
+          .select('specializations')
+          .eq('profile_id', userId)
+          .maybeSingle();
+
+      final reviewRows = await client
+          .from('reviews')
+          .select('rating')
+          .eq('professional_id', userId);
+
+      final plansRows = await client
+          .from('free_plans')
+          .select('free_plan_id')
+          .eq('professional_id', userId)
+          .or('status.is.null,status.neq.archived');
+
+      final roomsRows = await client
+          .from('chat_rooms')
+          .select('client_id')
+          .eq('professional_id', userId);
+
+      final reviews = List<Map<String, dynamic>>.from(reviewRows as List);
+      double rating = 0;
+      if (reviews.isNotEmpty) {
+        final total = reviews.fold<double>(
+            0, (sum, r) => sum + ((r['rating'] as num?)?.toDouble() ?? 0));
+        rating = total / reviews.length;
+      }
+
+      final uniqueClients = <String>{
+        for (final row in (roomsRows as List)) row['client_id'].toString(),
+      };
+
+      if (!mounted) return;
+      setState(() {
+        specialties = professionalRow?['specializations']?.toString() ?? '';
+        avgRating = rating;
+        reviewCount = reviews.length;
+        activePlansCount = (plansRows as List).length;
+        clientsCount = uniqueClients.length;
+      });
+    } catch (e) {
+      debugPrint('Error loading profile stats: $e');
+    }
+
+    _subscribeToStats(userId);
+  }
+
+  void _subscribeToStats(String userId) {
+    if (_statsChannel != null) return;
+
+    _statsChannel = Supabase.instance.client
+        .channel('public:pro_profile_stats:$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'reviews',
+          callback: (payload) {
+            final affectedId = (payload.newRecord['professional_id'] ??
+                    payload.oldRecord['professional_id'])
+                ?.toString();
+            if (affectedId == userId) _loadStats(userId);
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'free_plans',
+          callback: (payload) {
+            final affectedId = (payload.newRecord['professional_id'] ??
+                    payload.oldRecord['professional_id'])
+                ?.toString();
+            if (affectedId == userId) _loadStats(userId);
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'chat_rooms',
+          callback: (payload) {
+            final affectedId = (payload.newRecord['professional_id'] ??
+                    payload.oldRecord['professional_id'])
+                ?.toString();
+            if (affectedId == userId) _loadStats(userId);
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'fitness_professional',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'profile_id',
+            value: userId,
+          ),
+          callback: (payload) {
+            final specs = payload.newRecord['specializations']?.toString();
+            if (!mounted) return;
+            setState(() {
+              specialties = specs ?? specialties;
+            });
+          },
+        )
+        .subscribe();
+  }
+
   Future<void> _loadProfile() async {
     try {
+      final userId = Supabase.instance.client.auth.currentUser!.id;
       final data = await Supabase.instance.client
           .from('profiles')
-          .select('full_name, email')
-          .eq('id', Supabase.instance.client.auth.currentUser!.id)
+          .select('full_name, email, avatar_url')
+          .eq('id', userId)
           .single();
 
       if (!mounted) return;
       setState(() {
         fullName = data['full_name'] as String? ?? '';
+        final url = data['avatar_url']?.toString().trim();
+        avatarUrl = (url != null && url.isNotEmpty) ? url : null;
         isLoading = false;
       });
+
+      _subscribeToProfile(userId);
+      await _loadStats(userId);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -49,6 +187,37 @@ class _ProfessionalProfileState extends State<ProfessionalProfile> {
         SnackBar(content: Text('Failed to load profile: $e')),
       );
     }
+  }
+
+  void _subscribeToProfile(String userId) {
+    if (_profileChannel != null) return;
+
+    _profileChannel = Supabase.instance.client
+        .channel('public:profiles:pro_profile:$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'profiles',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: userId,
+          ),
+          callback: (payload) {
+            final record = payload.newRecord;
+            final name = record['full_name']?.toString().trim();
+            final url = record['avatar_url']?.toString().trim();
+
+            if (!mounted) return;
+            setState(() {
+              if (name != null && name.isNotEmpty) {
+                fullName = name;
+              }
+              avatarUrl = (url != null && url.isNotEmpty) ? url : null;
+            });
+          },
+        )
+        .subscribe();
   }
 
   Future<void> logout(BuildContext context) async {
@@ -107,14 +276,17 @@ class _ProfessionalProfileState extends State<ProfessionalProfile> {
                         CircleAvatar(
                           radius: 38,
                           backgroundColor: Colors.black,
-                          child: Text(
-                            fullName.isNotEmpty ? fullName[0].toUpperCase() : '',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 26,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
+                          backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl!) : null,
+                          child: avatarUrl == null
+                              ? Text(
+                                  fullName.isNotEmpty ? fullName[0].toUpperCase() : '',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                )
+                              : null,
                         ),
 
                         const SizedBox(width: 16),
@@ -156,7 +328,9 @@ class _ProfessionalProfileState extends State<ProfessionalProfile> {
                               const SizedBox(height: 4),
 
                               Text(
-                                'Nutrition • Strength',
+                                specialties.isNotEmpty
+                                    ? specialties.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).join(' • ')
+                                    : 'No specializations set',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: Colors.grey.shade600,
@@ -171,13 +345,13 @@ class _ProfessionalProfileState extends State<ProfessionalProfile> {
 
                     const SizedBox(height: 22),
 
-                    const Row(
+                    Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _ProfileStat(value: '4.8', label: 'RATING'),
-                        _ProfileStat(value: '34', label: 'REVIEWS'),
-                        _ProfileStat(value: '12', label: 'ACTIVE PLANS'),
-                        _ProfileStat(value: '31', label: 'CLIENTS'),
+                        _ProfileStat(value: avgRating.toStringAsFixed(1), label: 'RATING'),
+                        _ProfileStat(value: '$reviewCount', label: 'REVIEWS'),
+                        _ProfileStat(value: '$activePlansCount', label: 'ACTIVE PLANS'),
+                        _ProfileStat(value: '$clientsCount', label: 'CLIENTS'),
                       ],
                     ),
                   ],

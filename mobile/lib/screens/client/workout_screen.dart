@@ -37,10 +37,113 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   List<Professional> _professionals = [];
   String _proSearchText = '';
 
+  RealtimeChannel? _reviewsChannel;
+  RealtimeChannel? _professionalsChannel;
+
   @override
   void initState() {
     super.initState();
     _loadWorkoutData();
+    _subscribeToReviews();
+    _subscribeToProfessionalUpdates();
+  }
+
+  @override
+  void dispose() {
+    if (_reviewsChannel != null) {
+      Supabase.instance.client.removeChannel(_reviewsChannel!);
+    }
+    if (_professionalsChannel != null) {
+      Supabase.instance.client.removeChannel(_professionalsChannel!);
+    }
+    super.dispose();
+  }
+
+  void _subscribeToProfessionalUpdates() {
+    final client = Supabase.instance.client;
+
+    _professionalsChannel = client
+        .channel('public:professionals:workout')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'fitness_professional',
+          callback: (payload) {
+            _loadProfessionals(client);
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'profiles',
+          callback: (payload) {
+            final changedId = payload.newRecord['id']?.toString();
+            if (changedId == null) return;
+            final isRelevant = _professionals.any((p) => p.profileId == changedId);
+            if (isRelevant) {
+              _loadProfessionals(client);
+            }
+          },
+        )
+        .subscribe();
+  }
+
+  void _subscribeToReviews() {
+    _reviewsChannel = Supabase.instance.client
+        .channel('public:reviews:workout')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'reviews',
+          callback: (payload) {
+            final professionalId = (payload.newRecord['professional_id'] ??
+                    payload.oldRecord['professional_id'])
+                ?.toString();
+            if (professionalId != null) {
+              _refreshProfessionalRating(professionalId);
+            }
+          },
+        )
+        .subscribe();
+  }
+
+  Future<void> _refreshProfessionalRating(String professionalId) async {
+    try {
+      final client = Supabase.instance.client;
+      final reviewData = await client
+          .from('reviews')
+          .select('rating')
+          .eq('professional_id', professionalId);
+
+      final reviewRows = List<Map<String, dynamic>>.from(reviewData as List);
+      final reviewCount = reviewRows.length;
+      double avgRating = 0;
+      if (reviewCount > 0) {
+        final total = reviewRows.fold<double>(
+            0, (sum, r) => sum + ((r['rating'] as num?)?.toDouble() ?? 0));
+        avgRating = total / reviewCount;
+      }
+
+      if (!mounted) return;
+
+      final index = _professionals.indexWhere((p) => p.profileId == professionalId);
+      if (index == -1) return;
+
+      final old = _professionals[index];
+      setState(() {
+        _professionals[index] = Professional(
+          profileId: old.profileId,
+          name: old.name,
+          specialties: old.specialties,
+          rating: avgRating,
+          reviewCount: reviewCount,
+          yearsExp: old.yearsExp,
+          bio: old.bio,
+        );
+      });
+    } catch (e) {
+      debugPrint('Error refreshing professional rating: $e');
+    }
   }
 
   Future<void> _loadWorkoutData() async {
@@ -291,7 +394,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   Future<void> _loadProfessionals(SupabaseClient client) async {
     final data = await client
         .from('fitness_professional')
-        .select('profile_id, display_name, bio, experience, specializations, approved, profiles!inner(full_name)')
+        .select('profile_id, display_name, bio, experience, specializations, approved, profiles!inner(full_name, avatar_url)')
         .eq('approved', true);
 
     final rows = List<Map<String, dynamic>>.from(data as List);
@@ -303,7 +406,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       final reviewData = await client
           .from('reviews')
           .select('rating')
-          .eq('reviewer_id', profileId);
+          .eq('professional_id', profileId);
       final reviewRows = List<Map<String, dynamic>>.from(reviewData as List);
       final reviewCount = reviewRows.length;
       double avgRating = 0;
@@ -784,13 +887,18 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         ),
         child: Row(
           children: [
-            const CircleAvatar(
+            CircleAvatar(
               radius: 24,
               backgroundColor: AppColors.primarySoft,
-              child: Icon(
-                Icons.person,
-                color: AppColors.primary,
-              ),
+              backgroundImage: professional.avatarUrl != null
+                  ? NetworkImage(professional.avatarUrl!)
+                  : null,
+              child: professional.avatarUrl == null
+                  ? const Icon(
+                      Icons.person,
+                      color: AppColors.primary,
+                    )
+                  : null,
             ),
 
             const SizedBox(width: 12),

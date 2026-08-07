@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/client/professional.dart';
 import '../../theme/app_theme.dart';
@@ -7,10 +8,165 @@ import '../../widgets/client/sub_screen_scaffold.dart';
 import 'chat_screen.dart';
 import 'reviews_screen.dart';
 
-class ProfessionalDetailScreen extends StatelessWidget {
+class ProfessionalDetailScreen extends StatefulWidget {
   final Professional professional;
 
   const ProfessionalDetailScreen({super.key, required this.professional});
+
+  @override
+  State<ProfessionalDetailScreen> createState() => _ProfessionalDetailScreenState();
+}
+
+class _ProfessionalDetailScreenState extends State<ProfessionalDetailScreen> {
+  late Professional professional;
+  RealtimeChannel? _reviewsChannel;
+  RealtimeChannel? _profileChannel;
+
+  @override
+  void initState() {
+    super.initState();
+    professional = widget.professional;
+    _loadRating();
+    _subscribeToReviews();
+    _subscribeToProfileChanges();
+  }
+
+  @override
+  void dispose() {
+    if (_reviewsChannel != null) {
+      Supabase.instance.client.removeChannel(_reviewsChannel!);
+    }
+    if (_profileChannel != null) {
+      Supabase.instance.client.removeChannel(_profileChannel!);
+    }
+    super.dispose();
+  }
+
+  void _subscribeToProfileChanges() {
+    final profId = professional.profileId;
+    if (profId == null) return;
+
+    _profileChannel = Supabase.instance.client
+        .channel('public:profile_detail:$profId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'profiles',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: profId,
+          ),
+          callback: (payload) {
+            final record = payload.newRecord;
+            final name = record['full_name']?.toString().trim();
+            final url = record['avatar_url']?.toString().trim();
+
+            if (!mounted) return;
+            setState(() {
+              professional = Professional(
+                profileId: professional.profileId,
+                name: (name != null && name.isNotEmpty) ? name : professional.name,
+                specialties: professional.specialties,
+                rating: professional.rating,
+                reviewCount: professional.reviewCount,
+                yearsExp: professional.yearsExp,
+                bio: professional.bio,
+                avatarUrl: (url != null && url.isNotEmpty) ? url : null,
+              );
+            });
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'fitness_professional',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'profile_id',
+            value: profId,
+          ),
+          callback: (payload) {
+            final record = payload.newRecord;
+            final displayName = record['display_name']?.toString().trim();
+            final bio = record['bio']?.toString();
+            final specializations = record['specializations']?.toString();
+
+            if (!mounted) return;
+            setState(() {
+              professional = Professional(
+                profileId: professional.profileId,
+                name: (displayName != null && displayName.isNotEmpty) ? displayName : professional.name,
+                specialties: specializations ?? professional.specialties,
+                rating: professional.rating,
+                reviewCount: professional.reviewCount,
+                yearsExp: professional.yearsExp,
+                bio: bio ?? professional.bio,
+                avatarUrl: professional.avatarUrl,
+              );
+            });
+          },
+        )
+        .subscribe();
+  }
+
+  void _subscribeToReviews() {
+    final profId = professional.profileId;
+    if (profId == null) return;
+
+    _reviewsChannel = Supabase.instance.client
+        .channel('public:reviews:detail:$profId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'reviews',
+          callback: (payload) {
+            final affectedId = (payload.newRecord['professional_id'] ??
+                    payload.oldRecord['professional_id'])
+                ?.toString();
+            if (affectedId == profId) {
+              _loadRating();
+            }
+          },
+        )
+        .subscribe();
+  }
+
+  Future<void> _loadRating() async {
+    final profId = professional.profileId;
+    if (profId == null) return;
+
+    try {
+      final data = await Supabase.instance.client
+          .from('reviews')
+          .select('rating')
+          .eq('professional_id', profId);
+
+      final rows = List<Map<String, dynamic>>.from(data as List);
+      final reviewCount = rows.length;
+      double avgRating = 0;
+      if (reviewCount > 0) {
+        final total = rows.fold<double>(
+            0, (sum, r) => sum + ((r['rating'] as num?)?.toDouble() ?? 0));
+        avgRating = total / reviewCount;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        professional = Professional(
+          profileId: professional.profileId,
+          name: professional.name,
+          specialties: professional.specialties,
+          rating: avgRating,
+          reviewCount: reviewCount,
+          yearsExp: professional.yearsExp,
+          bio: professional.bio,
+        );
+      });
+    } catch (e) {
+      debugPrint('Error loading professional rating: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,10 +186,15 @@ class ProfessionalDetailScreen extends StatelessWidget {
         Center(
           child: Column(
             children: [
-              const CircleAvatar(
+              CircleAvatar(
                 radius: 44,
                 backgroundColor: AppColors.primarySoft,
-                child: Icon(Icons.person, size: 44, color: AppColors.primary),
+                backgroundImage: professional.avatarUrl != null
+                    ? NetworkImage(professional.avatarUrl!)
+                    : null,
+                child: professional.avatarUrl == null
+                    ? const Icon(Icons.person, size: 44, color: AppColors.primary)
+                    : null,
               ),
               const SizedBox(height: 12),
               Text(
@@ -93,11 +254,15 @@ class ProfessionalDetailScreen extends StatelessWidget {
         _divider(),
         GestureDetector(
           onTap: () {
+            final profId = professional.profileId;
+            if (profId == null) return;
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ReviewsScreen()),
+              MaterialPageRoute(
+                builder: (_) => ReviewsScreen(professionalId: profId),
+              ),
             );
           },
-          child: _stat('${professional.reviewCount + 28}', 'Reviews'),
+          child: _stat('${professional.reviewCount}', 'Reviews'),
         ),
       ],
     );

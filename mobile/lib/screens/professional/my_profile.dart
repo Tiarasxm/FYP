@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../widgets/professional/mobile_page_wrapper.dart';
@@ -13,6 +16,12 @@ class MyProfile extends StatefulWidget {
 class _MyProfileState extends State<MyProfile> {
   bool isLoading = true;
   bool isSaving = false;
+  bool isUploadingAvatar = false;
+
+  String avatarUrl = '';
+  Uint8List? selectedAvatarBytes;
+
+  final ImagePicker picker = ImagePicker();
 
   final TextEditingController nameController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
@@ -85,7 +94,7 @@ class _MyProfileState extends State<MyProfile> {
 
       final profileRow = await client
           .from('profiles')
-          .select('full_name, email')
+          .select('full_name, email, avatar_url')
           .eq('id', userId)
           .maybeSingle();
 
@@ -132,6 +141,7 @@ class _MyProfileState extends State<MyProfile> {
 
       setState(() {
         avatarLetter = getFirstLetter(name);
+        avatarUrl = profileRow?['avatar_url']?.toString() ?? '';
       });
     } catch (error) {
       if (!mounted) return;
@@ -143,6 +153,129 @@ class _MyProfileState extends State<MyProfile> {
         });
       }
     }
+  }
+
+  String _safeImageExtension(XFile image) {
+    final name = image.name.toLowerCase();
+    final path = image.path.toLowerCase();
+
+    String extension = 'jpg';
+
+    if (name.contains('.')) {
+      extension = name.split('.').last;
+    } else if (path.contains('.')) {
+      extension = path.split('.').last;
+    }
+
+    if (extension == 'jpeg') return 'jpg';
+    if (extension == 'jpg') return 'jpg';
+    if (extension == 'png') return 'png';
+    if (extension == 'webp') return 'webp';
+    if (extension == 'gif') return 'gif';
+
+    return 'jpg';
+  }
+
+  String _contentTypeForExtension(String extension) {
+    if (extension == 'png') return 'image/png';
+    if (extension == 'webp') return 'image/webp';
+    if (extension == 'gif') return 'image/gif';
+
+    return 'image/jpeg';
+  }
+
+  Future<String> _uploadAvatar({
+    required String userId,
+    required XFile image,
+    required Uint8List bytes,
+  }) async {
+    final extension = _safeImageExtension(image);
+    final contentType = _contentTypeForExtension(extension);
+
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final filePath = '$userId/avatar_$timestamp.$extension';
+
+    await Supabase.instance.client.storage.from('profile-avatars').uploadBinary(
+          filePath,
+          bytes,
+          fileOptions: FileOptions(
+            contentType: contentType,
+            upsert: false,
+          ),
+        );
+
+    return Supabase.instance.client.storage
+        .from('profile-avatars')
+        .getPublicUrl(filePath);
+  }
+
+  Future<void> _pickAndUploadAvatar() async {
+    if (isUploadingAvatar) return;
+
+    try {
+      final image = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+        maxWidth: 1200,
+      );
+
+      if (image == null) return;
+
+      final bytes = await image.readAsBytes();
+
+      if (!mounted) return;
+
+      setState(() {
+        selectedAvatarBytes = bytes;
+        isUploadingAvatar = true;
+      });
+
+      final client = Supabase.instance.client;
+      final userId = client.auth.currentUser?.id;
+
+      if (userId == null) {
+        throw Exception('User is not signed in.');
+      }
+
+      final uploadedUrl = await _uploadAvatar(
+        userId: userId,
+        image: image,
+        bytes: bytes,
+      );
+
+      await client.from('profiles').update({
+        'avatar_url': uploadedUrl,
+      }).eq('id', userId);
+
+      if (!mounted) return;
+
+      setState(() {
+        avatarUrl = uploadedUrl;
+        selectedAvatarBytes = null;
+      });
+
+      showMessage('Avatar updated successfully.');
+    } catch (e) {
+      showMessage('Failed to upload avatar: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          isUploadingAvatar = false;
+        });
+      }
+    }
+  }
+
+  ImageProvider? get _avatarImageProvider {
+    if (selectedAvatarBytes != null) {
+      return MemoryImage(selectedAvatarBytes!);
+    }
+
+    if (avatarUrl.isNotEmpty) {
+      return NetworkImage(avatarUrl);
+    }
+
+    return null;
   }
 
   Future<void> updateProfile() async {
@@ -245,26 +378,40 @@ class _MyProfileState extends State<MyProfile> {
                         CircleAvatar(
                           radius: 52,
                           backgroundColor: Colors.black,
-                          child: Text(
-                            avatarLetter,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 34,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
+                          backgroundImage: _avatarImageProvider,
+                          child: _avatarImageProvider == null
+                              ? Text(
+                                  avatarLetter,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 34,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                )
+                              : null,
                         ),
-                        Container(
-                          width: 28,
-                          height: 28,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF6C63FF),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.camera_alt,
-                            size: 15,
-                            color: Colors.white,
+                        GestureDetector(
+                          onTap: isUploadingAvatar ? null : _pickAndUploadAvatar,
+                          child: Container(
+                            width: 28,
+                            height: 28,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF6C63FF),
+                              shape: BoxShape.circle,
+                            ),
+                            child: isUploadingAvatar
+                                ? const Padding(
+                                    padding: EdgeInsets.all(6),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.camera_alt,
+                                    size: 15,
+                                    color: Colors.white,
+                                  ),
                           ),
                         ),
                       ],

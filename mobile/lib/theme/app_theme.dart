@@ -7,7 +7,7 @@ class AppColors {
 
   static const Color pageBg = Color(0xFFF7F7FF);
   static const Color card = Color(0xFFFFFFFF);
-  static const Color cardMuted = Color(0xFFF4F4F8);
+  static const Color cardMuted = Color(0xFFEBEAF2);
 
   static const Color textPrimary = Color(0xFF111111);
   static const Color textSecondary = Color(0xFF6B7280);
@@ -56,11 +56,12 @@ class AppTheme {
     return BoxDecoration(
       color: color ?? AppColors.card,
       borderRadius: BorderRadius.circular(radius ?? AppSpacing.cardRadius),
+      border: Border.all(color: AppColors.border, width: 1),
       boxShadow: const [
         BoxShadow(
-          color: Color(0x0F000000),
-          blurRadius: 24,
-          offset: Offset(0, 12),
+          color: Color(0x14000000),
+          blurRadius: 20,
+          offset: Offset(0, 8),
         ),
       ],
     );

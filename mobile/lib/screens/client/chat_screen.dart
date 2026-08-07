@@ -7,6 +7,8 @@ import '../../models/client/professional.dart';
 import '../../services/chat_service.dart';
 import '../../theme/app_theme.dart';
 import 'plan_detail_screen.dart';
+import 'report_professional_dialog.dart';
+import 'review_dialog.dart';
 
 class ChatScreen extends StatefulWidget {
   final Professional professional;
@@ -179,7 +181,32 @@ class _ChatScreenState extends State<ChatScreen> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
-            onSelected: (_) {},
+            onSelected: (value) async {
+              final profId = widget.professional.profileId;
+              if (profId == null) return;
+
+              if (value == 'review') {
+                final submitted = await showReviewDialog(
+                  context: context,
+                  professionalId: profId,
+                );
+                if (submitted && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Review submitted. Thank you!')),
+                  );
+                }
+              } else if (value == 'report') {
+                final submitted = await showReportProfessionalDialog(
+                  context: context,
+                  professionalId: profId,
+                );
+                if (submitted && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Report submitted. Our team will review it.')),
+                  );
+                }
+              }
+            },
             itemBuilder: (context) => const [
               PopupMenuItem(
                 value: 'review',

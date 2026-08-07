@@ -12,6 +12,7 @@ class ChatRoomModel {
   final int unreadCount;
   final String otherUserName;
   final String otherUserType;
+  final String? otherUserAvatarUrl;
 
   ChatRoomModel({
     required this.id,
@@ -23,6 +24,7 @@ class ChatRoomModel {
     this.unreadCount = 0,
     this.otherUserName = 'Unknown',
     this.otherUserType = 'Free',
+    this.otherUserAvatarUrl,
   });
 }
 
@@ -105,16 +107,19 @@ class ChatService {
       // Get the other user's name
       String otherName = 'Unknown';
       String otherType = 'Free';
+      String? otherAvatarUrl;
 
       final profile = await _client
           .from('profiles')
-          .select('full_name, user_type')
+          .select('full_name, user_type, avatar_url')
           .eq('id', otherUserId)
           .maybeSingle();
 
       if (profile != null) {
         otherName = profile['full_name']?.toString() ?? 'Unknown';
         otherType = profile['user_type']?.toString() ?? 'Free';
+        final url = profile['avatar_url']?.toString().trim();
+        otherAvatarUrl = (url != null && url.isNotEmpty) ? url : null;
       }
 
       // If the other user is a professional, try display_name
@@ -165,6 +170,7 @@ class ChatService {
         unreadCount: (unreadData as List).length,
         otherUserName: otherName,
         otherUserType: otherType,
+        otherUserAvatarUrl: otherAvatarUrl,
       ));
     }
 

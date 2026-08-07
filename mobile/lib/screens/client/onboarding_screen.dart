@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../theme/app_theme.dart';
 import 'client_shell.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -161,7 +162,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Color(0xFF6C63FF),
+              primary: AppColors.primary,
             ),
           ),
           child: child!,
@@ -214,13 +215,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF3F2FA),
+                  color: AppColors.cardMuted,
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
                   Icons.arrow_back_ios_new,
                   size: 16,
-                  color: Colors.black54,
+                  color: AppColors.textSecondary,
                 ),
               ),
             )
@@ -262,7 +263,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             'To ensure we provide the best experience, we would like to get to know a bit about you.',
             style: TextStyle(
               fontSize: 12,
-              color: Colors.grey.shade600,
+              color: AppColors.textSecondary,
               height: 1.5,
             ),
           ),
@@ -274,7 +275,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               decoration: BoxDecoration(
-                color: const Color(0xFFF3F2FA),
+                color: AppColors.cardMuted,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
@@ -283,7 +284,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     : DateFormat('dd/MM/yyyy').format(_dateOfBirth!),
                 style: TextStyle(
                   fontSize: 14,
-                  color: _dateOfBirth == null ? Colors.grey.shade500 : Colors.black,
+                  color: _dateOfBirth == null ? AppColors.textMuted : AppColors.textPrimary,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -294,7 +295,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              color: const Color(0xFFF3F2FA),
+              color: AppColors.cardMuted,
               borderRadius: BorderRadius.circular(12),
             ),
             child: DropdownButtonHideUnderline(
@@ -304,7 +305,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 hint: Text(
                   'Select gender',
                   style: TextStyle(
-                    color: Colors.grey.shade500,
+                    color: AppColors.textMuted,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
@@ -345,7 +346,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             'To ensure we provide the best experience, we would like to get to know a bit about you.',
             style: TextStyle(
               fontSize: 12,
-              color: Colors.grey.shade600,
+              color: AppColors.textSecondary,
               height: 1.5,
             ),
           ),
@@ -448,10 +449,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFECE9FF) : const Color(0xFFF3F2FA),
+          color: selected ? AppColors.primarySoft : AppColors.cardMuted,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: selected ? const Color(0xFF6C63FF) : Colors.transparent,
+            color: selected ? AppColors.primary : Colors.transparent,
             width: 1.5,
           ),
         ),
@@ -466,7 +467,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
-                      color: selected ? const Color(0xFF6C63FF) : Colors.black,
+                      color: selected ? AppColors.primary : AppColors.textPrimary,
                     ),
                   ),
                   if (subtitle != null) ...[
@@ -475,7 +476,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       subtitle,
                       style: TextStyle(
                         fontSize: 11,
-                        color: Colors.grey.shade600,
+                        color: AppColors.textSecondary,
                       ),
                     ),
                   ],
@@ -488,7 +489,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: selected ? const Color(0xFF6C63FF) : Colors.grey.shade400,
+                  color: selected ? AppColors.primary : AppColors.textMuted,
                   width: 2,
                 ),
               ),
@@ -497,7 +498,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       child: Icon(
                         Icons.circle,
                         size: 10,
-                        color: Color(0xFF6C63FF),
+                        color: AppColors.primary,
                       ),
                     )
                   : null,
@@ -533,12 +534,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: TextStyle(
-          color: Colors.grey.shade500,
+          color: AppColors.textMuted,
           fontSize: 14,
           fontWeight: FontWeight.w600,
         ),
         filled: true,
-        fillColor: const Color(0xFFF3F2FA),
+        fillColor: AppColors.cardMuted,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -565,8 +566,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: index == _currentPage
-                      ? const Color(0xFF6C63FF)
-                      : Colors.grey.shade300,
+                      ? AppColors.primary
+                      : AppColors.border,
                 ),
               );
             }),
@@ -578,10 +579,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: ElevatedButton(
               onPressed: _canProceed && !_isLoading ? _nextPage : null,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6C63FF),
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 elevation: 0,
-                disabledBackgroundColor: Colors.grey.shade300,
+                disabledBackgroundColor: AppColors.textMuted,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),

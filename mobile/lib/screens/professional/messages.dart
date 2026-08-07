@@ -21,12 +21,43 @@ class _ProfessionalMessagesState extends State<ProfessionalMessages> {
   Map<String, List<String>> _roomTags = {}; // roomId -> list of tags
   bool _loading = true;
 
+  RealtimeChannel? _profilesChannel;
+
   final List<String> _filterOptions = ['All', 'New', 'Consult', 'Follow-up', 'Urgent', 'Weight Loss'];
 
   @override
   void initState() {
     super.initState();
     _loadRooms();
+    _subscribeToProfileChanges();
+  }
+
+  @override
+  void dispose() {
+    if (_profilesChannel != null) {
+      Supabase.instance.client.removeChannel(_profilesChannel!);
+    }
+    super.dispose();
+  }
+
+  void _subscribeToProfileChanges() {
+    _profilesChannel = Supabase.instance.client
+        .channel('public:profiles:pro_messages')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'profiles',
+          callback: (payload) {
+            final changedId = payload.newRecord['id']?.toString();
+            if (changedId == null) return;
+            final isRelevant = _rooms.any((room) =>
+                room.clientId == changedId || room.professionalId == changedId);
+            if (isRelevant) {
+              _loadRooms();
+            }
+          },
+        )
+        .subscribe();
   }
 
   Future<void> _loadRooms() async {
@@ -272,13 +303,18 @@ class _ConversationItem extends StatelessWidget {
               CircleAvatar(
                 radius: 22,
                 backgroundColor: Colors.black,
-                child: Text(
-                  initials,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
+                backgroundImage: room.otherUserAvatarUrl != null
+                    ? NetworkImage(room.otherUserAvatarUrl!)
+                    : null,
+                child: room.otherUserAvatarUrl == null
+                    ? Text(
+                        initials,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      )
+                    : null,
               ),
 
               const SizedBox(width: 12),
