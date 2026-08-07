@@ -1418,3 +1418,160 @@ using (
   bucket_id = 'post-images'
   and (storage.foldername(name))[1] = auth.uid()::text
 );
+
+-- =========================================================
+-- 37. NOTIFICATION SETTINGS
+-- =========================================================
+
+create table if not exists public.notification_settings (
+  profile_id uuid primary key references public.profiles(id) on delete cascade,
+  daily_reminder_enabled boolean not null default true,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.notification_settings enable row level security;
+
+drop policy if exists "Users can view own notification settings" on public.notification_settings;
+drop policy if exists "Users can insert own notification settings" on public.notification_settings;
+drop policy if exists "Users can update own notification settings" on public.notification_settings;
+drop policy if exists "Users can delete own notification settings" on public.notification_settings;
+
+create policy "Users can view own notification settings"
+on public.notification_settings
+for select
+to authenticated
+using (profile_id = auth.uid());
+
+create policy "Users can insert own notification settings"
+on public.notification_settings
+for insert
+to authenticated
+with check (profile_id = auth.uid());
+
+create policy "Users can update own notification settings"
+on public.notification_settings
+for update
+to authenticated
+using (profile_id = auth.uid())
+with check (profile_id = auth.uid());
+
+create policy "Users can delete own notification settings"
+on public.notification_settings
+for delete
+to authenticated
+using (profile_id = auth.uid());
+
+-- =========================================================
+-- 38. NOTIFICATION REMINDERS
+-- =========================================================
+
+create table if not exists public.notification_reminders (
+  reminder_id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles(id) on delete cascade,
+  reminder_type text not null check (
+    reminder_type in (
+      'Exercise Reminder',
+      'Hydration Reminder',
+      'Rest Reminder',
+      'Meal Reminder'
+    )
+  ),
+  reminder_time text not null,
+  enabled boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists notification_reminders_profile_id_idx
+on public.notification_reminders(profile_id);
+
+alter table public.notification_reminders enable row level security;
+
+drop policy if exists "Users can view own notification reminders" on public.notification_reminders;
+drop policy if exists "Users can insert own notification reminders" on public.notification_reminders;
+drop policy if exists "Users can update own notification reminders" on public.notification_reminders;
+drop policy if exists "Users can delete own notification reminders" on public.notification_reminders;
+
+create policy "Users can view own notification reminders"
+on public.notification_reminders
+for select
+to authenticated
+using (profile_id = auth.uid());
+
+create policy "Users can insert own notification reminders"
+on public.notification_reminders
+for insert
+to authenticated
+with check (profile_id = auth.uid());
+
+create policy "Users can update own notification reminders"
+on public.notification_reminders
+for update
+to authenticated
+using (profile_id = auth.uid())
+with check (profile_id = auth.uid());
+
+create policy "Users can delete own notification reminders"
+on public.notification_reminders
+for delete
+to authenticated
+using (profile_id = auth.uid());
+
+-- =========================================================
+-- 39. WEARABLE CONNECTIONS
+-- =========================================================
+
+create table if not exists public.wearable_connections (
+  connection_id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles(id) on delete cascade,
+  provider text not null check (
+    provider in (
+      'apple_health',
+      'motion_fitness',
+      'google_fit',
+      'fitbit'
+    )
+  ),
+  is_connected boolean not null default false,
+  connected_at timestamptz,
+  disconnected_at timestamptz,
+  last_synced_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(profile_id, provider)
+);
+
+create index if not exists wearable_connections_profile_id_idx
+on public.wearable_connections(profile_id);
+
+alter table public.wearable_connections enable row level security;
+
+drop policy if exists "Users can view own wearable connections" on public.wearable_connections;
+drop policy if exists "Users can insert own wearable connections" on public.wearable_connections;
+drop policy if exists "Users can update own wearable connections" on public.wearable_connections;
+drop policy if exists "Users can delete own wearable connections" on public.wearable_connections;
+
+create policy "Users can view own wearable connections"
+on public.wearable_connections
+for select
+to authenticated
+using (profile_id = auth.uid());
+
+create policy "Users can insert own wearable connections"
+on public.wearable_connections
+for insert
+to authenticated
+with check (profile_id = auth.uid());
+
+create policy "Users can update own wearable connections"
+on public.wearable_connections
+for update
+to authenticated
+using (profile_id = auth.uid())
+with check (profile_id = auth.uid());
+
+create policy "Users can delete own wearable connections"
+on public.wearable_connections
+for delete
+to authenticated
+using (profile_id = auth.uid());

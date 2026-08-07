@@ -152,7 +152,7 @@ class _FitnessPlanScreenState extends State<FitnessPlanScreen> {
 
       setState(() {
         _planId = planId;
-        _planTitle = plan?['plan_name']?.toString() ?? 'My Fitness Plan';
+        _planTitle = plan['plan_name']?.toString() ?? 'My Fitness Plan';
         _days = days;
         _selectedDayIndex = initialIndex;
       });
