@@ -27,12 +27,17 @@ migrate_working_dir/
 /build/
 
 # Generated platform folders (recreate with `flutter create .`)
-/android/
 /ios/
 /linux/
 /macos/
 /windows/
 /web/
+
+# Android build output (android/ itself is tracked)
+android/build/
+android/.gradle/
+android/local.properties
+android/app/build/
 
 # Symbolication related
 app.*.symbols
