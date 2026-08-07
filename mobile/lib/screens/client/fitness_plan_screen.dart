@@ -58,6 +58,16 @@ class _FitnessPlanScreenState extends State<FitnessPlanScreen> {
         throw Exception('User is not signed in.');
       }
 
+      final profile = await client
+          .from('profiles')
+          .select('user_type')
+          .eq('id', userId)
+          .maybeSingle();
+
+      final userType =
+          profile?['user_type']?.toString().trim().toLowerCase() ?? 'free';
+      final isPriority = userType == 'priority';
+
       final savedResponse = await client
           .from('saved_plans')
           .select('free_plan_id, saved_at')
@@ -85,12 +95,15 @@ class _FitnessPlanScreenState extends State<FitnessPlanScreen> {
 
       final plan = await client
           .from('free_plans')
-          .select('free_plan_id, plan_name, status')
+          .select('free_plan_id, plan_name, visibility, status')
           .eq('free_plan_id', planId)
           .or('status.is.null,status.neq.archived')
           .maybeSingle();
 
-      if (plan == null) {
+      final visibility =
+          plan?['visibility']?.toString().trim().toLowerCase() ?? 'public';
+
+      if (plan == null || (!isPriority && visibility != 'public')) {
         setState(() {
           _planId = null;
           _planTitle = null;

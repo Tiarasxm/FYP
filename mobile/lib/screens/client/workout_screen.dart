@@ -11,6 +11,7 @@ import '../../widgets/client/section_header.dart';
 import 'chat_list_screen.dart';
 import 'plan_detail_screen.dart';
 import 'professional_detail_screen.dart';
+import 'membership_page.dart';
 
 class WorkoutScreen extends StatefulWidget {
   const WorkoutScreen({super.key});
@@ -25,11 +26,11 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   String _filter = 'All';
   String _proFilter = 'All';
 
-  bool _fpUnlocked = false;
+  bool _isPriority = false;
   bool _isLoadingPlans = true;
   bool _isLoadingPros = true;
 
-  List<Map<String, dynamic>> _publicPlans = [];
+  List<Map<String, dynamic>> _availablePlans = [];
   Map<String, dynamic>? _activePlan;
   String? _activePlanId;
 
@@ -55,13 +56,25 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         throw Exception('User is not signed in.');
       }
 
+      await _loadMembershipStatus(client, userId);
       await _loadActivePlan(client, userId);
-      await _loadPublicPlans(client);
-      await _loadProfessionals(client);
+      await _loadAvailablePlans(client);
+
+      if (_isPriority) {
+        await _loadProfessionals(client);
+      } else {
+        if (!mounted) return;
+        setState(() {
+          _professionals = [];
+          _isLoadingPros = false;
+        });
+      }
 
       if (!mounted) return;
 
-      setState(() => _isLoadingPros = false);
+      if (_isPriority) {
+        setState(() => _isLoadingPros = false);
+      }
 
       final filters = _workoutFilters;
       if (!filters.contains(_filter)) {
@@ -82,6 +95,28 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         });
       }
     }
+  }
+
+  Future<void> _loadMembershipStatus(
+    SupabaseClient client,
+    String userId,
+  ) async {
+    final profile = await client
+        .from('profiles')
+        .select('user_type')
+        .eq('id', userId)
+        .maybeSingle();
+
+    final userType =
+        profile?['user_type']?.toString().trim().toLowerCase() ?? 'free';
+    final isPriority = userType == 'priority';
+
+    if (!mounted) return;
+
+    setState(() {
+      _isPriority = isPriority;
+      _isLoadingPros = isPriority;
+    });
   }
 
   Future<void> _loadActivePlan(SupabaseClient client, String userId) async {
@@ -129,33 +164,70 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     if (!mounted) return;
 
+    final visibility =
+        activePlan?['visibility']?.toString().trim().toLowerCase() ?? 'public';
+
+    // A downgraded Free user must not keep access to a previously saved
+    // private plan. We leave the saved row untouched, but hide the plan here.
+    if (!_isPriority && visibility != 'public') {
+      setState(() {
+        _activePlanId = null;
+        _activePlan = null;
+      });
+      return;
+    }
+
     setState(() {
       _activePlanId = activePlanId;
       _activePlan = activePlan;
     });
   }
 
-  Future<void> _loadPublicPlans(SupabaseClient client) async {
-    final response = await client
-        .from('free_plans')
-        .select(
-          'free_plan_id, professional_id, plan_name, category, tag1, tag2, tag3, visibility, duration_weeks, status, created_at',
-        )
-        .ilike('visibility', 'public')
-        .or('status.is.null,status.neq.archived')
-        .order('created_at', ascending: false);
+  Future<void> _loadAvailablePlans(SupabaseClient client) async {
+    dynamic response;
+
+    if (_isPriority) {
+      response = await client
+          .from('free_plans')
+          .select(
+            'free_plan_id, professional_id, plan_name, category, tag1, tag2, tag3, visibility, duration_weeks, status, created_at',
+          )
+          .or('status.is.null,status.neq.archived')
+          .order('created_at', ascending: false);
+    } else {
+      response = await client
+          .from('free_plans')
+          .select(
+            'free_plan_id, professional_id, plan_name, category, tag1, tag2, tag3, visibility, duration_weeks, status, created_at',
+          )
+          .ilike('visibility', 'public')
+          .or('status.is.null,status.neq.archived')
+          .order('created_at', ascending: false);
+    }
+
+    final plans = List<Map<String, dynamic>>.from(response as List);
+
+    // Priority can see both public and private plans. Ignore any unexpected
+    // visibility values so they are not accidentally exposed.
+    if (_isPriority) {
+      plans.removeWhere((plan) {
+        final visibility =
+            plan['visibility']?.toString().trim().toLowerCase() ?? '';
+        return visibility != 'public' && visibility != 'private';
+      });
+    }
 
     if (!mounted) return;
 
     setState(() {
-      _publicPlans = List<Map<String, dynamic>>.from(response as List);
+      _availablePlans = plans;
     });
   }
 
   List<String> get _workoutFilters {
     final tags = <String>{};
 
-    for (final plan in _publicPlans) {
+    for (final plan in _availablePlans) {
       for (final tag in _planTags(plan)) {
         final cleanTag = tag.trim();
 
@@ -175,10 +247,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   List<Map<String, dynamic>> get _visiblePlans {
     if (_filter == 'All') {
-      return _publicPlans;
+      return _availablePlans;
     }
 
-    return _publicPlans.where((plan) {
+    return _availablePlans.where((plan) {
       final tags = _planTags(plan);
 
       return tags.any(
@@ -312,6 +384,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   Future<void> _openPlan(Map<String, dynamic> plan) async {
     final planId = plan['free_plan_id']?.toString();
+    final visibility =
+        plan['visibility']?.toString().trim().toLowerCase() ?? 'public';
+
+    if (!_isPriority && visibility != 'public') {
+      await _openMembership();
+      return;
+    }
 
     if (planId == null || planId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -334,9 +413,19 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     }
   }
 
+  Future<void> _openMembership() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const MembershipPage()),
+    );
+
+    if (mounted) {
+      await _loadWorkoutData();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final showChatFab = _topTab == 1 && _fpUnlocked;
+    final showChatFab = _topTab == 1 && _isPriority;
 
     return SafeArea(
       bottom: false,
@@ -356,7 +445,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                 const SizedBox(height: 22),
                 if (_topTab == 0)
                   ..._workoutTab()
-                else if (_fpUnlocked)
+                else if (_isPriority)
                   ..._professionalsTab()
                 else
                   _professionalLockedTab(),
@@ -449,9 +538,11 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         SectionCard(
           color: AppColors.cardMuted,
           radius: 16,
-          child: const Text(
-            'No active plan yet. Choose a public plan below.',
-            style: TextStyle(
+          child: Text(
+            _isPriority
+                ? 'No active plan yet. Choose a plan below.'
+                : 'No active plan yet. Choose a public plan below.',
+            style: const TextStyle(
               color: AppColors.textSecondary,
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -469,7 +560,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
       const SizedBox(height: 24),
 
-      const SectionHeader('Free Plans'),
+      SectionHeader(_isPriority ? 'Available Plans' : 'Public Plans'),
 
       const SizedBox(height: 12),
 
@@ -491,11 +582,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           child: Center(child: CircularProgressIndicator()),
         )
       else if (_visiblePlans.isEmpty)
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 24),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 24),
           child: Center(
             child: Text(
-              'No public plans in this category yet.',
+              _isPriority
+                  ? 'No plans in this category yet.'
+                  : 'No public plans in this category yet.',
               style: TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 13,
@@ -527,6 +620,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final duration = _durationText(plan);
     final sessionLength = _sessionLengthText(plan);
     final tags = _planTags(plan);
+    final visibility =
+        plan['visibility']?.toString().trim().toLowerCase() ?? 'public';
 
     return GestureDetector(
       onTap: onTap,
@@ -591,6 +686,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               spacing: 8,
               runSpacing: 8,
               children: [
+                PillTag(visibility == 'private' ? 'Private' : 'Public'),
                 for (final tag in tags) PillTag(tag),
               ],
             ),
@@ -803,11 +899,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      _fpUnlocked = true;
-                    });
-                  },
+                  onPressed: _openMembership,
                   icon: const Icon(
                     Icons.workspace_premium,
                     size: 18,

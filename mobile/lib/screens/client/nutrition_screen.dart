@@ -8,6 +8,7 @@ import '../../widgets/client/section_card.dart';
 import '../../widgets/client/section_header.dart';
 import 'food_scan_screen.dart';
 import 'log_meal_screen.dart';
+import 'membership_page.dart';
 
 class NutritionScreen extends StatefulWidget {
   const NutritionScreen({super.key});
@@ -25,7 +26,8 @@ class _NutritionScreenState extends State<NutritionScreen> {
   int _water = 0;
   int _waterGoal = 2000;
 
-  bool _scanUnlocked = false;
+  bool _isPriority = false;
+  bool _isLoadingMembership = true;
   bool _isLoadingMeals = true;
   bool _isLoadingWater = true;
   bool _isAddingWater = false;
@@ -43,6 +45,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
       _loadMeals(),
       _loadWaterGoal(),
       _loadWater(),
+      _loadMembershipStatus(),
     ]);
   }
 
@@ -192,6 +195,52 @@ class _NutritionScreenState extends State<NutritionScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
+  }
+
+  Future<void> _loadMembershipStatus() async {
+    try {
+      final client = Supabase.instance.client;
+      final userId = client.auth.currentUser?.id;
+
+      if (userId == null) {
+        throw Exception('User is not signed in.');
+      }
+
+      final profile = await client
+          .from('profiles')
+          .select('user_type')
+          .eq('id', userId)
+          .maybeSingle();
+
+      final userType =
+          profile?['user_type']?.toString().trim().toLowerCase() ?? 'free';
+
+      if (!mounted) return;
+
+      setState(() {
+        _isPriority = userType == 'priority';
+        _isLoadingMembership = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() {
+        _isPriority = false;
+        _isLoadingMembership = false;
+      });
+
+      _showMessage('Failed to load membership: $error');
+    }
+  }
+
+  Future<void> _openMembership() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const MembershipPage()),
+    );
+
+    if (mounted) {
+      await _loadMembershipStatus();
+    }
   }
 
   Future<void> _loadMeals() async {
@@ -664,7 +713,19 @@ class _NutritionScreenState extends State<NutritionScreen> {
   }
 
   Widget _aiFoodScanCard() {
-    if (_scanUnlocked) {
+    if (_isLoadingMembership) {
+      return SectionCard(
+        color: AppColors.primarySoft,
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: CircularProgressIndicator(),
+          ),
+        ),
+      );
+    }
+
+    if (_isPriority) {
       return SizedBox(
         width: double.infinity,
         child: ElevatedButton.icon(
@@ -731,7 +792,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: () => setState(() => _scanUnlocked = true),
+              onPressed: _openMembership,
               icon: const Icon(Icons.workspace_premium, size: 18),
               label: const Text('Unlock Priority'),
               style: ElevatedButton.styleFrom(
