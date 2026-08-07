@@ -1575,3 +1575,132 @@ on public.wearable_connections
 for delete
 to authenticated
 using (profile_id = auth.uid());
+
+-- =========================================================
+-- 40. APP FEEDBACK TABLE
+-- =========================================================
+
+create table if not exists public.app_feedback (
+  feedback_id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles(id) on delete cascade,
+  rating int not null check (rating between 1 and 5),
+  feedback_text text not null,
+  permission_to_publish boolean not null default false,
+  media_url text,
+  status text not null default 'submitted' check (
+    status in ('submitted', 'reviewed', 'hidden')
+  ),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists app_feedback_profile_id_idx
+on public.app_feedback(profile_id);
+
+create index if not exists app_feedback_created_at_idx
+on public.app_feedback(created_at);
+
+alter table public.app_feedback enable row level security;
+
+drop policy if exists "Users can view own app feedback" on public.app_feedback;
+drop policy if exists "Users can insert own app feedback" on public.app_feedback;
+drop policy if exists "Users can update own app feedback" on public.app_feedback;
+drop policy if exists "Users can delete own app feedback" on public.app_feedback;
+
+create policy "Users can view own app feedback"
+on public.app_feedback
+for select
+to authenticated
+using (profile_id = auth.uid());
+
+create policy "Users can insert own app feedback"
+on public.app_feedback
+for insert
+to authenticated
+with check (profile_id = auth.uid());
+
+create policy "Users can update own app feedback"
+on public.app_feedback
+for update
+to authenticated
+using (profile_id = auth.uid())
+with check (profile_id = auth.uid());
+
+create policy "Users can delete own app feedback"
+on public.app_feedback
+for delete
+to authenticated
+using (profile_id = auth.uid());
+
+-- =========================================================
+-- 40b. APP FEEDBACK MEDIA STORAGE
+-- =========================================================
+
+insert into storage.buckets (
+  id,
+  name,
+  public,
+  file_size_limit,
+  allowed_mime_types
+)
+values (
+  'feedback-media',
+  'feedback-media',
+  true,
+  5242880,
+  array[
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/gif'
+  ]
+)
+on conflict (id) do update
+set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Anyone can read feedback media" on storage.objects;
+drop policy if exists "Users can upload own feedback media" on storage.objects;
+drop policy if exists "Users can update own feedback media" on storage.objects;
+drop policy if exists "Users can delete own feedback media" on storage.objects;
+
+create policy "Anyone can read feedback media"
+on storage.objects
+for select
+to public
+using (
+  bucket_id = 'feedback-media'
+);
+
+create policy "Users can upload own feedback media"
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'feedback-media'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+create policy "Users can update own feedback media"
+on storage.objects
+for update
+to authenticated
+using (
+  bucket_id = 'feedback-media'
+  and (storage.foldername(name))[1] = auth.uid()::text
+)
+with check (
+  bucket_id = 'feedback-media'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+create policy "Users can delete own feedback media"
+on storage.objects
+for delete
+to authenticated
+using (
+  bucket_id = 'feedback-media'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
