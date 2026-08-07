@@ -13,26 +13,22 @@ export default function FitnessProfilePage() {
   const [experience, setExperience] = useState(0);
   const [specializations, setSpecializations] = useState("");
   const [certificate, setCertificate] = useState(null);
+  const [profileErrorMessage, setProfileErrorMessage] = useState("");
 
-  useEffect(() => {
-    completeGoogleProfile();
-  }, []);
-
-  async function completeGoogleProfile() {
-    const databaseRole = localStorage.getItem("googleRegisterRole");
-
-    if (!databaseRole) {
-      return;
-    }
-
+  async function completeProfile() {
     const { data: userData, error: userError } = await supabase.auth.getUser();
 
     if (userError || !userData?.user) {
-      console.error("Google user error:", userError?.message);
+      router.push("/login");
       return;
     }
 
     const user = userData.user;
+
+    const role =
+      localStorage.getItem("googleRegisterRole") ||
+      user.user_metadata?.role ||
+      "Fitness professional";
 
     const fullName =
       user.user_metadata?.full_name ||
@@ -47,7 +43,7 @@ export default function FitnessProfilePage() {
         id: user.id,
         full_name: fullName,
         email: user.email,
-        user_type: "Fitness professional",
+        user_type: role,
         status: "active",
       },
       {
@@ -57,18 +53,27 @@ export default function FitnessProfilePage() {
 
     if (profileError) {
       console.error("Profile save error:", profileError.message);
+      setProfileErrorMessage(
+        "We couldn't finish setting up your account. Please refresh this page or contact support."
+      );
       return;
     }
 
     await supabase.auth.updateUser({
       data: {
         full_name: fullName,
-        role: "Fitness professional",
+        role,
       },
     });
 
     localStorage.removeItem("googleRegisterRole");
   }
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- setState calls happen after network awaits, not synchronously
+    completeProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally run once on mount
+  }, []);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -189,6 +194,12 @@ export default function FitnessProfilePage() {
           Register
         </Link>
       </nav>
+
+      {profileErrorMessage && (
+        <div className="bg-red-50 border-b border-red-200 text-red-700 text-[14px] text-center px-6 py-3">
+          {profileErrorMessage}
+        </div>
+      )}
 
       {/* Form Section */}
       <section className="min-h-[760px] flex items-center justify-center px-6 py-16">
