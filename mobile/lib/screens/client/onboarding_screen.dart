@@ -177,8 +177,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final keyboardIsVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+
     return Scaffold(
       backgroundColor: Colors.white,
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: Column(
           children: [
@@ -196,7 +199,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ],
               ),
             ),
-            _buildBottomBar(),
+            if (!keyboardIsVisible) _buildBottomBar(),
           ],
         ),
       ),
@@ -357,6 +360,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             controller: _weightController,
             hint: 'Select weight',
             keyboardType: TextInputType.number,
+            textInputAction: TextInputAction.next,
+            onSubmitted: (_) => FocusScope.of(context).nextFocus(),
           ),
           const SizedBox(height: 20),
           _buildLabel('Height (cm)'),
@@ -364,6 +369,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             controller: _heightController,
             hint: 'Select height',
             keyboardType: TextInputType.number,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => FocusScope.of(context).unfocus(),
           ),
         ],
       ),
@@ -527,10 +534,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     required TextEditingController controller,
     required String hint,
     TextInputType keyboardType = TextInputType.text,
+    TextInputAction? textInputAction,
+    ValueChanged<String>? onSubmitted,
   }) {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
+      textInputAction: textInputAction,
+      onSubmitted: onSubmitted,
       onChanged: (_) => setState(() {}),
       decoration: InputDecoration(
         hintText: hint,
