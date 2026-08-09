@@ -26,6 +26,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
   int _followers = 0;
   int _following = 0;
   bool _isFollowing = false;
+  bool _isPrivate = false;
   bool _isLoading = true;
   bool _isFollowSaving = false;
   String? _error;
@@ -35,6 +36,9 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
 
   bool get _isOwnProfile =>
       _targetUserId == Supabase.instance.client.auth.currentUser?.id;
+
+  bool get _postsArePrivate =>
+      _isPrivate && !_isOwnProfile && !_isFollowing;
 
   @override
   void initState() {
@@ -60,7 +64,9 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
     try {
       final profileRow = await _supabase
           .from('profiles')
-          .select('id, full_name, email, gender, user_type, status, avatar_url, created_at')
+          .select(
+            'id, full_name, email, gender, user_type, status, avatar_url, is_private, created_at',
+          )
           .eq('id', userId)
           .maybeSingle();
       if (profileRow == null) throw Exception('Profile not found.');
@@ -96,9 +102,8 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
 
       final postRows = await _supabase
           .from('posts')
-          .select('id, user_id, content, image_url, created_at')
+          .select('id, user_id, content, image_url, visibility, created_at')
           .eq('user_id', userId)
-          .eq('visibility', 'public')
           .order('created_at', ascending: false);
 
       final postIds = (postRows as List<dynamic>)
@@ -146,6 +151,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
           userId: userId,
           content: row['content']?.toString() ?? '',
           imageUrl: row['image_url']?.toString(),
+          visibility: row['visibility']?.toString() ?? 'public',
           likeCount: likeCounts[postId] ?? 0,
           commentCount: commentCounts[postId] ?? 0,
           isLiked: likedPosts.contains(postId),
@@ -181,6 +187,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
         _followers = (followerRows as List<dynamic>).length;
         _following = (followingRows as List<dynamic>).length;
         _isFollowing = isFollowing;
+        _isPrivate = profileRow['is_private'] == true;
       });
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
@@ -214,6 +221,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
           'following_id': targetUserId,
         });
       }
+      await _loadProfile();
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -303,7 +311,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
-        title: const Text('Public Profile'),
+        title: const Text('Profile'),
         actions: [
           if (!_isOwnProfile)
             IconButton(
@@ -326,10 +334,29 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                       SliverPadding(
                         padding: const EdgeInsets.fromLTRB(18, 0, 18, 24),
                         sliver: _posts.isEmpty
-                            ? const SliverToBoxAdapter(
+                            ? SliverToBoxAdapter(
                                 child: Padding(
-                                  padding: EdgeInsets.only(top: 50),
-                                  child: Center(child: Text('No posts yet.')),
+                                  padding: const EdgeInsets.only(top: 50),
+                                  child: Center(
+                                    child: Column(
+                                      children: [
+                                        if (_postsArePrivate)
+                                          const Icon(
+                                            Icons.lock_outline,
+                                            size: 38,
+                                            color: Colors.grey,
+                                          ),
+                                        if (_postsArePrivate)
+                                          const SizedBox(height: 10),
+                                        Text(
+                                          _postsArePrivate
+                                              ? 'This account is private.\nFollow this user to see their posts.'
+                                              : 'No posts yet.',
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
                               )
                             : SliverGrid(
