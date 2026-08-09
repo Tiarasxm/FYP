@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -19,6 +21,9 @@ class _SocialScreenState extends State<SocialScreen> {
   final _searchController = TextEditingController();
   final _supabase = Supabase.instance.client;
   List<SocialPost> _posts = [];
+  List<UserProfile> _userResults = [];
+  Timer? _searchDebounce;
+  bool _isSearchingUsers = false;
   bool _isLoading = true;
   String? _errorMessage;
   String? _currentUserName;
@@ -62,8 +67,77 @@ class _SocialScreenState extends State<SocialScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged(String value) {
+    setState(() {});
+    _searchDebounce?.cancel();
+
+    final search = value.trim();
+    if (search.isEmpty) {
+      setState(() {
+        _userResults = [];
+        _isSearchingUsers = false;
+      });
+      return;
+    }
+
+    _searchDebounce = Timer(
+      const Duration(milliseconds: 350),
+      () => _searchUsers(search),
+    );
+  }
+
+  Future<void> _searchUsers(String search) async {
+    if (mounted) setState(() => _isSearchingUsers = true);
+
+    try {
+      final response = await _supabase
+          .from('profiles')
+          .select(
+            'id, full_name, user_type, status, avatar_url, created_at',
+          )
+          .ilike('full_name', '%$search%')
+          .limit(20);
+
+      if (!mounted || _searchController.text.trim() != search) return;
+
+      final users = (response as List<dynamic>)
+          .map((item) {
+            final row = item as Map<String, dynamic>;
+            return UserProfile(
+              id: row['id']?.toString() ?? '',
+              fullName: row['full_name']?.toString() ?? 'ShapeRush User',
+              email: '',
+              gender: '',
+              userType: row['user_type']?.toString() ?? '',
+              status: row['status']?.toString() ?? '',
+              avatarUrl: row['avatar_url']?.toString(),
+              createdAt: DateTime.tryParse(
+                row['created_at']?.toString() ?? '',
+              ),
+            );
+          })
+          .where(
+            (user) =>
+                user.id.isNotEmpty &&
+                user.status.toLowerCase() != 'deleted' &&
+                user.userType.trim().toLowerCase() != 'fitness professional',
+          )
+          .toList();
+
+      setState(() => _userResults = users);
+    } catch (error) {
+      if (!mounted || _searchController.text.trim() != search) return;
+      setState(() => _userResults = []);
+    } finally {
+      if (mounted && _searchController.text.trim() == search) {
+        setState(() => _isSearchingUsers = false);
+      }
+    }
   }
 
   Future<void> _loadPosts() async {
@@ -97,8 +171,7 @@ class _SocialScreenState extends State<SocialScreen> {
 
       dynamic query = _supabase
           .from('posts')
-          .select('id, user_id, content, image_url, created_at')
-          .eq('visibility', 'public');
+          .select('id, user_id, content, image_url, visibility, created_at');
 
       if (allowedUserIds != null) {
         query = query.inFilter('user_id', allowedUserIds);
@@ -180,6 +253,7 @@ class _SocialScreenState extends State<SocialScreen> {
           userId: userId,
           content: row['content']?.toString() ?? '',
           imageUrl: row['image_url']?.toString(),
+          visibility: row['visibility']?.toString() ?? 'public',
           likeCount: likeCounts[postId] ?? 0,
           commentCount: commentCounts[postId] ?? 0,
           isLiked: likedPostIds.contains(postId),
@@ -247,6 +321,7 @@ class _SocialScreenState extends State<SocialScreen> {
           userId: post.userId,
           content: post.content,
           imageUrl: post.imageUrl,
+          visibility: post.visibility,
           likeCount: (post.likeCount + (isLiked ? 1 : -1)).clamp(0, 1 << 31),
           commentCount: post.commentCount,
           isLiked: isLiked,
@@ -343,7 +418,7 @@ class _SocialScreenState extends State<SocialScreen> {
               const SizedBox(height: 16),
               TextField(
                 controller: _searchController,
-                onChanged: (_) => setState(() {}),
+                onChanged: _onSearchChanged,
                 decoration: InputDecoration(
                   hintText: 'Search users or posts...',
                   prefixIcon: const Icon(Icons.search),
@@ -383,6 +458,10 @@ class _SocialScreenState extends State<SocialScreen> {
     }
 
     final posts = _filteredPosts;
+    if (_searchController.text.trim().isNotEmpty) {
+      return _buildSearchResults(posts);
+    }
+
     if (posts.isEmpty) {
       return RefreshIndicator(
         onRefresh: _loadPosts,
@@ -434,6 +513,121 @@ class _SocialScreenState extends State<SocialScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildSearchResults(List<SocialPost> posts) {
+    final hasResults = _userResults.isNotEmpty || posts.isNotEmpty;
+
+    return RefreshIndicator(
+      onRefresh: _loadPosts,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          Row(
+            children: [
+              const Text(
+                'Users',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+              if (_isSearchingUsers) ...[
+                const SizedBox(width: 10),
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (!_isSearchingUsers && _userResults.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 10),
+              child: Text('No users found.', style: TextStyle(color: Colors.grey)),
+            ),
+          ..._userResults.map(_buildUserResult),
+          const SizedBox(height: 18),
+          const Text(
+            'Posts',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 10),
+          if (posts.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Text('No posts found.', style: TextStyle(color: Colors.grey)),
+            )
+          else
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: posts.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 0.68,
+              ),
+              itemBuilder: (context, index) {
+                final post = posts[index];
+                return GestureDetector(
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ViewPostPage(post: post),
+                      ),
+                    );
+                    if (mounted) await _loadPosts();
+                  },
+                  child: PostCard(
+                    post: post,
+                    onLike: () => _toggleLike(post),
+                  ),
+                );
+              },
+            ),
+          if (!hasResults && !_isSearchingUsers)
+            const SizedBox(height: 120),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUserResult(UserProfile user) {
+    final name = user.fullName.trim();
+    return Card(
+      elevation: 0,
+      color: Colors.grey.shade50,
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PublicProfilePage(userId: user.id),
+          ),
+        ),
+        leading: CircleAvatar(
+          backgroundColor: const Color(0xFFE1D9FF),
+          backgroundImage: user.avatarUrl?.isNotEmpty == true
+              ? NetworkImage(user.avatarUrl!)
+              : null,
+          child: user.avatarUrl?.isNotEmpty == true
+              ? null
+              : Text(
+                  name.isNotEmpty ? name[0].toUpperCase() : '?',
+                  style: const TextStyle(color: Colors.deepPurple),
+                ),
+        ),
+        title: Text(
+          name.isNotEmpty ? name : 'ShapeRush User',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        trailing: const Icon(Icons.chevron_right),
       ),
     );
   }
