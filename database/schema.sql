@@ -346,6 +346,23 @@ create table if not exists public.personalized_plans (
 
 alter table public.personalized_plans enable row level security;
 
+drop policy if exists "Professionals can manage own personalized plans" on public.personalized_plans;
+drop policy if exists "Clients can read own personalized plans" on public.personalized_plans;
+drop policy if exists "Admins can manage all personalized plans" on public.personalized_plans;
+
+create policy "Professionals can manage own personalized plans"
+on public.personalized_plans
+for all
+to authenticated
+using (professional_id = auth.uid() or public.is_admin())
+with check (professional_id = auth.uid() or public.is_admin());
+
+create policy "Clients can read own personalized plans"
+on public.personalized_plans
+for select
+to authenticated
+using (client_id = auth.uid() or professional_id = auth.uid() or public.is_admin());
+
 -- =========================================================
 -- 7. REVIEWS TABLE
 -- =========================================================
@@ -552,6 +569,42 @@ create table if not exists public.personalized_plan_days (
   constraint personalized_plan_days_personalized_plan_id_fkey foreign key (personalized_plan_id) references public.personalized_plans(personalized_plan_id)
 );
 
+alter table public.personalized_plan_days enable row level security;
+
+drop policy if exists "Professionals can manage own personalized plan days" on public.personalized_plan_days;
+drop policy if exists "Clients can read own personalized plan days" on public.personalized_plan_days;
+
+create policy "Professionals can manage own personalized plan days"
+on public.personalized_plan_days
+for all
+to authenticated
+using (
+  exists (
+    select 1 from public.personalized_plans
+    where personalized_plan_id = personalized_plan_days.personalized_plan_id
+      and (professional_id = auth.uid() or public.is_admin())
+  )
+)
+with check (
+  exists (
+    select 1 from public.personalized_plans
+    where personalized_plan_id = personalized_plan_days.personalized_plan_id
+      and (professional_id = auth.uid() or public.is_admin())
+  )
+);
+
+create policy "Clients can read own personalized plan days"
+on public.personalized_plan_days
+for select
+to authenticated
+using (
+  exists (
+    select 1 from public.personalized_plans
+    where personalized_plan_id = personalized_plan_days.personalized_plan_id
+      and (client_id = auth.uid() or professional_id = auth.uid() or public.is_admin())
+  )
+);
+
 -- =========================================================
 -- 15. PERSONALIZED PLAN EXERCISES TABLE
 -- =========================================================
@@ -569,6 +622,48 @@ create table if not exists public.personalized_plan_exercises (
   constraint personalized_plan_exercises_exercise_id_fkey foreign key (exercise_id) references public.exercise_library(exercise_id)
 );
 
+alter table public.personalized_plan_exercises enable row level security;
+
+drop policy if exists "Professionals can manage own personalized plan exercises" on public.personalized_plan_exercises;
+drop policy if exists "Clients can read own personalized plan exercises" on public.personalized_plan_exercises;
+
+create policy "Professionals can manage own personalized plan exercises"
+on public.personalized_plan_exercises
+for all
+to authenticated
+using (
+  exists (
+    select 1
+    from public.personalized_plan_days ppd
+    join public.personalized_plans pp on pp.personalized_plan_id = ppd.personalized_plan_id
+    where ppd.personalized_plan_day_id = personalized_plan_exercises.personalized_plan_day_id
+      and (pp.professional_id = auth.uid() or public.is_admin())
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.personalized_plan_days ppd
+    join public.personalized_plans pp on pp.personalized_plan_id = ppd.personalized_plan_id
+    where ppd.personalized_plan_day_id = personalized_plan_exercises.personalized_plan_day_id
+      and (pp.professional_id = auth.uid() or public.is_admin())
+  )
+);
+
+create policy "Clients can read own personalized plan exercises"
+on public.personalized_plan_exercises
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.personalized_plan_days ppd
+    join public.personalized_plans pp on pp.personalized_plan_id = ppd.personalized_plan_id
+    where ppd.personalized_plan_day_id = personalized_plan_exercises.personalized_plan_day_id
+      and (pp.client_id = auth.uid() or pp.professional_id = auth.uid() or public.is_admin())
+  )
+);
+
 -- =========================================================
 -- 16. SAVED PLANS TABLE
 -- =========================================================
@@ -583,6 +678,17 @@ create table if not exists public.saved_plans (
   constraint saved_plans_free_plan_id_fkey foreign key (free_plan_id) references public.free_plans(free_plan_id),
   constraint saved_plans_personalized_plan_id_fkey foreign key (personalized_plan_id) references public.personalized_plans(personalized_plan_id)
 );
+
+alter table public.saved_plans enable row level security;
+
+drop policy if exists "Users can manage own saved plans" on public.saved_plans;
+
+create policy "Users can manage own saved plans"
+on public.saved_plans
+for all
+to authenticated
+using (profile_id = auth.uid() or public.is_admin())
+with check (profile_id = auth.uid() or public.is_admin());
 
 -- =========================================================
 -- 17. WORKOUT LOGS TABLE
@@ -1003,6 +1109,95 @@ end;
 $$;
 
 grant execute on function public.create_chat_room(uuid, uuid) to authenticated;
+
+-- Duplicate a free plan for a client (used when a professional sends a plan via chat)
+create or replace function public.duplicate_plan_for_client(
+  p_professional_id uuid,
+  p_client_id uuid,
+  p_free_plan_id uuid
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_new_plan_id uuid;
+  v_day_record record;
+  v_new_day_id uuid;
+  v_exercise_record record;
+begin
+  -- Create the personalized plan from the free plan
+  insert into public.personalized_plans (
+    professional_id,
+    client_id,
+    plan_name,
+    duration_weeks,
+    status
+  )
+  select
+    p_professional_id,
+    p_client_id,
+    plan_name,
+    duration_weeks,
+    'active'
+  from public.free_plans
+  where free_plan_id = p_free_plan_id
+  returning personalized_plan_id into v_new_plan_id;
+
+  -- Copy each day and its exercises
+  for v_day_record in
+    select plan_day_id, week_number, day_number, day_name, is_rest_day
+    from public.plan_days
+    where free_plan_id = p_free_plan_id
+    order by week_number, day_number
+  loop
+    insert into public.personalized_plan_days (
+      personalized_plan_id,
+      week_number,
+      day_number,
+      day_name,
+      is_rest_day
+    ) values (
+      v_new_plan_id,
+      v_day_record.week_number,
+      v_day_record.day_number,
+      v_day_record.day_name,
+      v_day_record.is_rest_day
+    )
+    returning personalized_plan_day_id into v_new_day_id;
+
+    for v_exercise_record in
+      select exercise_id, order_index, sets, rep_min, rep_max, rest_sec
+      from public.plan_exercises
+      where plan_day_id = v_day_record.plan_day_id
+      order by order_index
+    loop
+      insert into public.personalized_plan_exercises (
+        personalized_plan_day_id,
+        exercise_id,
+        order_index,
+        sets,
+        rep_min,
+        rep_max,
+        rest_sec
+      ) values (
+        v_new_day_id,
+        v_exercise_record.exercise_id,
+        v_exercise_record.order_index,
+        v_exercise_record.sets,
+        v_exercise_record.rep_min,
+        v_exercise_record.rep_max,
+        v_exercise_record.rest_sec
+      );
+    end loop;
+  end loop;
+
+  return v_new_plan_id;
+end;
+$$;
+
+grant execute on function public.duplicate_plan_for_client(uuid, uuid, uuid) to authenticated;
 
 -- Mark all messages in a room as read by the current user
 create or replace function public.mark_room_messages_read(p_room_id uuid)

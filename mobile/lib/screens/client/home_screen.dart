@@ -31,7 +31,6 @@ class _HomeScreenState extends State<HomeScreen> {
   RealtimeChannel? _profileChannel;
 
   String? _activePlanId;
-  String? _activePlanTitle;
   String? _activePlanDayId;
 
   String _todayPlanTitle = 'No active plan';
@@ -171,7 +170,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadActivePlan(SupabaseClient client, String userId) async {
     final savedResponse = await client
         .from('saved_plans')
-        .select('saved_plan_id, free_plan_id, saved_at')
+        .select('saved_plan_id, free_plan_id, personalized_plan_id, saved_at')
         .eq('profile_id', userId)
         .order('saved_at', ascending: false)
         .limit(1);
@@ -184,31 +183,79 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     final freePlanId = savedRows.first['free_plan_id']?.toString();
+    final personalizedPlanId = savedRows.first['personalized_plan_id']?.toString();
+    final isPersonalized = personalizedPlanId != null && personalizedPlanId.isNotEmpty;
+    final planId = isPersonalized ? personalizedPlanId : freePlanId;
 
-    if (freePlanId == null || freePlanId.isEmpty) {
+    if (planId == null || planId.isEmpty) {
       _clearActivePlan();
       return;
     }
 
-    final plan = await client
-        .from('free_plans')
-        .select('free_plan_id, plan_name, duration_weeks')
-        .eq('free_plan_id', freePlanId)
-        .maybeSingle();
+    String? planName;
+    if (isPersonalized) {
+      final plan = await client
+          .from('personalized_plans')
+          .select('personalized_plan_id, plan_name, duration_weeks, status')
+          .eq('personalized_plan_id', planId)
+          .maybeSingle();
+      if (plan == null) {
+        _clearActivePlan();
+        return;
+      }
+      planName = plan['plan_name']?.toString();
+    } else {
+      final plan = await client
+          .from('free_plans')
+          .select('free_plan_id, plan_name, duration_weeks, visibility, status')
+          .eq('free_plan_id', planId)
+          .maybeSingle();
 
-    if (plan == null) {
-      _clearActivePlan();
-      return;
+      if (plan == null) {
+        _clearActivePlan();
+        return;
+      }
+
+      final visibility =
+          plan['visibility']?.toString().trim().toLowerCase() ?? 'public';
+      final userType = await client
+          .from('profiles')
+          .select('user_type')
+          .eq('id', userId)
+          .maybeSingle()
+          .then((p) => p?['user_type']?.toString().trim().toLowerCase() ?? 'free');
+      final isPriority = userType == 'priority';
+
+      if (!isPriority && visibility != 'public') {
+        _clearActivePlan();
+        return;
+      }
+
+      planName = plan['plan_name']?.toString();
     }
 
-    final daysResponse = await client
-        .from('plan_days')
-        .select('plan_day_id, week_number, day_number, day_name, is_rest_day')
-        .eq('free_plan_id', freePlanId)
-        .order('week_number', ascending: true)
-        .order('day_number', ascending: true);
+    final daysResponse = isPersonalized
+        ? await client
+            .from('personalized_plan_days')
+            .select('personalized_plan_day_id, week_number, day_number, day_name, is_rest_day')
+            .eq('personalized_plan_id', planId)
+            .order('week_number', ascending: true)
+            .order('day_number', ascending: true)
+        : await client
+            .from('plan_days')
+            .select('plan_day_id, week_number, day_number, day_name, is_rest_day')
+            .eq('free_plan_id', planId)
+            .order('week_number', ascending: true)
+            .order('day_number', ascending: true);
 
-    final dayRows = List<Map<String, dynamic>>.from(daysResponse as List);
+    final dayRows = List<Map<String, dynamic>>.from(daysResponse as List).map((day) {
+      return isPersonalized
+          ? {
+              ...day,
+              'plan_day_id': day['personalized_plan_day_id'],
+            }
+          : day;
+    }).toList();
 
     dayRows.sort((a, b) {
       final aWeek = _parseInt(a['week_number']) ?? 0;
@@ -224,14 +271,15 @@ class _HomeScreenState extends State<HomeScreen> {
       return aDay.compareTo(bDay);
     });
 
+    final activePlanTitle = planName ?? 'Active Plan';
+
     if (dayRows.isEmpty) {
       if (!mounted) return;
 
       setState(() {
-        _activePlanId = freePlanId;
-        _activePlanTitle = plan['plan_name']?.toString() ?? 'Active Plan';
+        _activePlanId = planId;
         _activePlanDayId = null;
-        _todayPlanTitle = _activePlanTitle!;
+        _todayPlanTitle = activePlanTitle;
         _todayPlanMeta = 'No days in this plan yet';
         _hasActiveWorkoutDay = false;
       });
@@ -252,25 +300,32 @@ class _HomeScreenState extends State<HomeScreen> {
     int exerciseCount = 0;
 
     if (planDayId != null && planDayId.isNotEmpty && !isRestDay) {
-      final exercisesResponse = await client
-          .from('plan_exercises')
-          .select('plan_exercise_id')
-          .eq('plan_day_id', planDayId);
+      final exercisesResponse = isPersonalized
+          ? await client
+              .from('personalized_plan_exercises')
+              .select('personalized_plan_exercise_id')
+              .eq('personalized_plan_day_id', planDayId)
+          : await client
+              .from('plan_exercises')
+              .select('plan_exercise_id')
+              .eq('plan_day_id', planDayId);
 
       exerciseCount = (exercisesResponse as List).length;
     }
 
-    final title = dayName == null || dayName.isEmpty
+    final dayTitle = dayName == null || dayName.isEmpty
         ? 'Day $dayNumber'
         : 'Day $dayNumber: $dayName';
+    final title = '$activePlanTitle - $dayTitle';
 
-    final meta = isRestDay ? 'Rest Day' : '~45 min • $exerciseCount exercises';
+    final meta = isRestDay
+        ? 'Rest Day'
+        : '~45 min • $exerciseCount exercises';
 
     if (!mounted) return;
 
     setState(() {
-      _activePlanId = freePlanId;
-      _activePlanTitle = plan['plan_name']?.toString() ?? 'Active Plan';
+      _activePlanId = planId;
       _activePlanDayId = planDayId;
       _todayPlanTitle = title;
       _todayPlanMeta = meta;
@@ -341,7 +396,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     setState(() {
       _activePlanId = null;
-      _activePlanTitle = null;
       _activePlanDayId = null;
       _todayPlanTitle = 'No active plan';
       _todayPlanMeta = 'Choose a plan from Workout tab';
@@ -627,11 +681,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _todaysPlan(BuildContext context) {
-    final String planName =
-        _activePlanTitle == null || _activePlanTitle!.trim().isEmpty
-            ? 'No active plan'
-            : _activePlanTitle!;
-
     return SectionCard(
       color: AppColors.primarySoft,
       child: Row(
@@ -661,36 +710,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        "Current Plan",
+                        "Today's Workout",
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
-                        ),
-                      ),
-
-                      const SizedBox(height: 2),
-
-                      Text(
-                        planName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: _activePlanTitle == null
-                              ? AppColors.textSecondary
-                              : AppColors.primary,
-                        ),
-                      ),
-
-                      const SizedBox(height: 6),
-
-                      const Text(
-                        "Today's Workout",
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textSecondary,
                         ),
                       ),
 
@@ -701,8 +724,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
                           color: _hasActiveWorkoutDay
                               ? AppColors.textPrimary
                               : AppColors.textSecondary,

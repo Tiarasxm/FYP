@@ -268,6 +268,7 @@ class _ChatScreenState extends State<ChatScreen> {
     int days = 0;
     String duration = '~45 min';
     List<String> tags = [];
+    bool isPersonalized = false;
 
     if (content != null && content.isNotEmpty) {
       try {
@@ -277,6 +278,7 @@ class _ChatScreenState extends State<ChatScreen> {
         days = data['days'] ?? 0;
         duration = data['duration'] ?? '~45 min';
         tags = (data['tags'] as List?)?.map((t) => t.toString()).toList() ?? [];
+        isPersonalized = data['is_personalized'] == true;
       } catch (_) {
         title = content;
       }
@@ -349,6 +351,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         builder: (_) => PlanDetailScreen(
                           planId: planId!,
                           title: title,
+                          isPersonalized: isPersonalized,
                         ),
                       ),
                     );

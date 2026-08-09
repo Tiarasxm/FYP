@@ -179,9 +179,15 @@ class _ChatState extends State<Chat> {
           days: selectedPlan.days,
           duration: selectedPlan.duration,
           tags: selectedPlan.tags,
+          clientId: widget.clientId,
         );
       } catch (e) {
         debugPrint('Error sending plan: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to send plan: $e')),
+          );
+        }
       }
     }
   }

@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -203,19 +205,37 @@ class ChatService {
     });
   }
 
-  /// Send a plan message (stores plan details in content as JSON)
-  Future<void> sendPlanMessage(String roomId, {
+  /// Send a plan message (duplicates the plan for the client first, then stores details as JSON)
+  Future<String?> sendPlanMessage(
+    String roomId, {
     required String planId,
     required String title,
     required int days,
     required String duration,
     required List<String> tags,
+    String? clientId,
   }) async {
     final userId = currentUserId;
     if (userId == null) throw Exception('Not signed in');
+    if (clientId == null || clientId.isEmpty) {
+      throw Exception('Client id is required to duplicate the plan.');
+    }
 
-    // Store plan info as JSON in content to avoid FK constraint issues
-    final planJson = '{"plan_id":"$planId","title":"$title","days":$days,"duration":"$duration","tags":${tags.map((t) => '"$t"').toList()}}';
+    // Duplicate the free plan so changes to the original don't affect the client
+    final newPlanId = await _client.rpc('duplicate_plan_for_client', params: {
+      'p_professional_id': userId,
+      'p_client_id': clientId,
+      'p_free_plan_id': planId,
+    });
+
+    final planJson = jsonEncode({
+      'plan_id': newPlanId,
+      'title': title,
+      'days': days,
+      'duration': duration,
+      'tags': tags,
+      'is_personalized': true,
+    });
 
     await _client.from('chat_messages').insert({
       'room_id': roomId,
@@ -223,6 +243,8 @@ class ChatService {
       'content': planJson,
       'message_type': 'plan',
     });
+
+    return newPlanId as String?;
   }
 
   /// Mark messages as read

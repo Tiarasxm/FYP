@@ -7,11 +7,13 @@ import '../../widgets/client/sub_screen_scaffold.dart';
 class PlanDetailScreen extends StatefulWidget {
   final String planId;
   final String title;
+  final bool isPersonalized;
 
   const PlanDetailScreen({
     super.key,
     required this.planId,
     required this.title,
+    this.isPersonalized = false,
   });
 
   @override
@@ -100,19 +102,35 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     });
 
     try {
-      final response = await Supabase.instance.client
-          .from('plan_days')
-          .select(
-            'plan_day_id, week_number, day_number, day_name, is_rest_day',
-          )
-          .eq('free_plan_id', widget.planId)
-          .order('week_number')
-          .order('day_number');
+      final response = widget.isPersonalized
+          ? await Supabase.instance.client
+              .from('personalized_plan_days')
+              .select(
+                'personalized_plan_day_id, week_number, day_number, day_name, is_rest_day',
+              )
+              .eq('personalized_plan_id', widget.planId)
+              .order('week_number')
+              .order('day_number')
+          : await Supabase.instance.client
+              .from('plan_days')
+              .select(
+                'plan_day_id, week_number, day_number, day_name, is_rest_day',
+              )
+              .eq('free_plan_id', widget.planId)
+              .order('week_number')
+              .order('day_number');
 
       if (!mounted) return;
 
       setState(() {
-        _days = List<Map<String, dynamic>>.from(response as List);
+        _days = List<Map<String, dynamic>>.from(response as List).map((day) {
+          return widget.isPersonalized
+              ? {
+                  ...day,
+                  'plan_day_id': day['personalized_plan_day_id'],
+                }
+              : day;
+        }).toList();
         _selectedWeekIndex = 0;
         _selectedDayIndex = 0;
       });
@@ -148,13 +166,21 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     });
 
     try {
-      final response = await Supabase.instance.client
-          .from('plan_exercises')
-          .select(
-            'sets, rep_min, rep_max, rest_sec, order_index, exercise_library(name, muscle_group)',
-          )
-          .eq('plan_day_id', day['plan_day_id'] as String)
-          .order('order_index');
+      final response = widget.isPersonalized
+          ? await Supabase.instance.client
+              .from('personalized_plan_exercises')
+              .select(
+                'sets, rep_min, rep_max, rest_sec, order_index, exercise_library(name, muscle_group)',
+              )
+              .eq('personalized_plan_day_id', day['plan_day_id'] as String)
+              .order('order_index')
+          : await Supabase.instance.client
+              .from('plan_exercises')
+              .select(
+                'sets, rep_min, rep_max, rest_sec, order_index, exercise_library(name, muscle_group)',
+              )
+              .eq('plan_day_id', day['plan_day_id'] as String)
+              .order('order_index');
 
       if (!mounted) return;
 
@@ -227,13 +253,22 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       final existingRows =
           List<Map<String, dynamic>>.from(existingResponse as List);
 
+      final insertPayload = widget.isPersonalized
+          ? {
+              'profile_id': userId,
+              'free_plan_id': null,
+              'personalized_plan_id': widget.planId,
+              'saved_at': DateTime.now().toIso8601String(),
+            }
+          : {
+              'profile_id': userId,
+              'free_plan_id': widget.planId,
+              'personalized_plan_id': null,
+              'saved_at': DateTime.now().toIso8601String(),
+            };
+
       if (existingRows.isEmpty) {
-        await client.from('saved_plans').insert({
-          'profile_id': userId,
-          'free_plan_id': widget.planId,
-          'personalized_plan_id': null,
-          'saved_at': DateTime.now().toIso8601String(),
-        });
+        await client.from('saved_plans').insert(insertPayload);
       } else {
         final keepRow = existingRows.first;
         final keepSavedPlanId = keepRow['saved_plan_id']?.toString();
@@ -244,11 +279,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
 
         await client
             .from('saved_plans')
-            .update({
-              'free_plan_id': widget.planId,
-              'personalized_plan_id': null,
-              'saved_at': DateTime.now().toIso8601String(),
-            })
+            .update(insertPayload)
             .eq('saved_plan_id', keepSavedPlanId)
             .eq('profile_id', userId);
 
