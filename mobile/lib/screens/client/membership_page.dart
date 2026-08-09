@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../theme/app_theme.dart';
 
 class MembershipPage extends StatefulWidget {
   const MembershipPage({super.key});
@@ -313,7 +314,7 @@ class MembershipCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: isCurrentPlan
             ? Border.all(
-                color: Colors.deepPurpleAccent,
+                color: AppColors.primary,
                 width: 1.2,
               )
             : null,
@@ -346,7 +347,7 @@ class MembershipCard extends StatelessWidget {
                     "Current Plan",
                     style: TextStyle(
                       fontSize: 10,
-                      color: Colors.deepPurpleAccent,
+                      color: AppColors.primary,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -371,7 +372,7 @@ class MembershipCard extends StatelessWidget {
             style: TextStyle(
               fontSize: 11,
               height: 1.5,
-              color: Colors.grey.shade700,
+              color: AppColors.textSecondary,
             ),
           ),
 
@@ -417,11 +418,11 @@ class MembershipCard extends StatelessWidget {
                   foregroundColor:
                       buttonText == 'Cancel Subscription'
                           ? Colors.red
-                          : Colors.deepPurpleAccent,
+                          : AppColors.primary,
                   side: BorderSide(
                     color: buttonText == 'Cancel Subscription'
                         ? Colors.red
-                        : Colors.deepPurpleAccent,
+                        : AppColors.primary,
                   ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -465,7 +466,7 @@ class _BenefitRow extends StatelessWidget {
           const Icon(
             Icons.check_circle,
             size: 15,
-            color: Colors.deepPurpleAccent,
+            color: AppColors.primary,
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -473,7 +474,7 @@ class _BenefitRow extends StatelessWidget {
               text,
               style: TextStyle(
                 fontSize: 11,
-                color: Colors.grey.shade700,
+                color: AppColors.textSecondary,
                 fontWeight: FontWeight.w600,
               ),
             ),

@@ -25,6 +25,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   String _filter = 'All';
   String _proFilter = 'All';
+  String _durationFilter = 'All';
+
+  final _planSearchController = TextEditingController();
+  String _planSearchText = '';
 
   bool _isPriority = false;
   bool _isLoadingPlans = true;
@@ -44,6 +48,12 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   void initState() {
     super.initState();
     _loadWorkoutData();
+  }
+
+  @override
+  void dispose() {
+    _planSearchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadWorkoutData() async {
@@ -83,6 +93,12 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       if (!filters.contains(_filter)) {
         setState(() {
           _filter = 'All';
+        });
+      }
+
+      if (!_durationFilters.contains(_durationFilter)) {
+        setState(() {
+          _durationFilter = 'All';
         });
       }
     } catch (error) {
@@ -361,16 +377,36 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     return ['All', ...result];
   }
 
-  List<Map<String, dynamic>> get _visiblePlans {
-    final plans = _filter == 'All'
-        ? List<Map<String, dynamic>>.from(_availablePlans)
-        : _availablePlans.where((plan) {
-            final tags = _planTags(plan);
+  List<String> get _durationFilters {
+    return const ['All', '7 Days', '14 Days', '30 Days'];
+  }
 
-            return tags.any(
-              (tag) => tag.toLowerCase() == _filter.toLowerCase(),
-            );
-          }).toList();
+  List<Map<String, dynamic>> get _visiblePlans {
+    var plans = List<Map<String, dynamic>>.from(_availablePlans);
+
+    if (_planSearchText.trim().isNotEmpty) {
+      final query = _planSearchText.trim().toLowerCase();
+      plans = plans.where((plan) {
+        final name = _planTitle(plan).toLowerCase();
+        final tags = _planTags(plan).join(' ').toLowerCase();
+        return name.contains(query) || tags.contains(query);
+      }).toList();
+    }
+
+    if (_filter != 'All') {
+      plans = plans.where((plan) {
+        final tags = _planTags(plan);
+        return tags.any(
+          (tag) => tag.toLowerCase() == _filter.toLowerCase(),
+        );
+      }).toList();
+    }
+
+    if (_durationFilter != 'All') {
+      plans = plans.where((plan) {
+        return _durationText(plan) == _durationFilter;
+      }).toList();
+    }
 
     plans.sort((a, b) {
       final scoreA = _recommendationScore(a);
@@ -633,6 +669,310 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     );
   }
 
+  Widget _planSearchField() {
+    return TextField(
+      controller: _planSearchController,
+      decoration: InputDecoration(
+        hintText: 'Search by plan name',
+        prefixIcon: const Icon(
+          Icons.search,
+          size: 20,
+          color: AppColors.textSecondary,
+        ),
+        suffixIcon: _planSearchText.isNotEmpty
+            ? GestureDetector(
+                onTap: () {
+                  _planSearchController.clear();
+                  setState(() {
+                    _planSearchText = '';
+                  });
+                },
+                child: const Icon(
+                  Icons.close,
+                  size: 18,
+                  color: AppColors.textSecondary,
+                ),
+              )
+            : null,
+      ),
+      style: const TextStyle(
+        fontSize: 14,
+        color: AppColors.textPrimary,
+      ),
+      onChanged: (value) {
+        setState(() {
+          _planSearchText = value;
+        });
+      },
+    );
+  }
+
+  bool get _hasActiveFilters =>
+      _filter != 'All' || _durationFilter != 'All';
+
+  int get _activeFilterCount {
+    var count = 0;
+    if (_filter != 'All') count++;
+    if (_durationFilter != 'All') count++;
+    return count;
+  }
+
+  Widget _filterButton() {
+    final active = _hasActiveFilters;
+
+    return GestureDetector(
+      onTap: _showFilterPopup,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: active ? AppColors.primary : AppColors.card,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: active ? AppColors.primary : AppColors.border,
+            width: 1.5,
+          ),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Icon(
+              Icons.tune,
+              size: 20,
+              color: active ? Colors.white : AppColors.primary,
+            ),
+            if (_activeFilterCount > 0)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: AppColors.red,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showFilterPopup() async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Container(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              decoration: const BoxDecoration(
+                color: AppColors.pageBg,
+                borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
+              ),
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: AppColors.border,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Filters',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: const Icon(
+                            Icons.close,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    const Text(
+                      'Category',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _workoutFilters.map((option) {
+                        final selected = option == _filter;
+                        return _filterChip(
+                          label: option,
+                          selected: selected,
+                          onTap: () {
+                            setState(() {
+                              _filter = option;
+                            });
+                            setSheetState(() {});
+                          },
+                        );
+                      }).toList(),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    const Text(
+                      'Duration',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _durationFilters.map((option) {
+                        final selected = option == _durationFilter;
+                        return _filterChip(
+                          label: option,
+                          selected: selected,
+                          onTap: () {
+                            setState(() {
+                              _durationFilter = option;
+                            });
+                            setSheetState(() {});
+                          },
+                        );
+                      }).toList(),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _filter = 'All';
+                                _durationFilter = 'All';
+                              });
+                              setSheetState(() {});
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              decoration: BoxDecoration(
+                                color: AppColors.card,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppColors.border),
+                              ),
+                              alignment: Alignment.center,
+                              child: const Text(
+                                'Clear all',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(width: 12),
+
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => Navigator.pop(context),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                'Show ${_visiblePlans.length} results',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _filterChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : AppColors.card,
+          borderRadius: BorderRadius.circular(AppSpacing.pillRadius),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.border,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: selected ? Colors.white : AppColors.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _topToggle() {
     return Container(
       padding: const EdgeInsets.all(5),
@@ -698,9 +1038,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           color: AppColors.cardMuted,
           radius: 16,
           child: Text(
-            _isPriority
-                ? 'No active plan yet. Choose a plan below.'
-                : 'No active plan yet. Choose a public plan below.',
+            'No active plan yet. Choose a plan below.',
             style: const TextStyle(
               color: AppColors.textSecondary,
               fontSize: 13,
@@ -720,22 +1058,16 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
       const SizedBox(height: 24),
 
-      SectionHeader(_isPriority ? 'Available Plans' : 'Public Plans'),
-
-      const SizedBox(height: 8),
-
-      _recommendationHint(),
+      const SectionHeader('Available Plans'),
 
       const SizedBox(height: 12),
 
-      FilterChips(
-        options: _workoutFilters,
-        selected: _filter,
-        onSelected: (value) {
-          setState(() {
-            _filter = value;
-          });
-        },
+      Row(
+        children: [
+          Expanded(child: _planSearchField()),
+          const SizedBox(width: 10),
+          _filterButton(),
+        ],
       ),
 
       const SizedBox(height: 16),
@@ -750,9 +1082,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           padding: const EdgeInsets.symmetric(vertical: 24),
           child: Center(
             child: Text(
-              _isPriority
-                  ? 'No plans in this category yet.'
-                  : 'No public plans in this category yet.',
+              'No plans match your search or filters.',
               style: const TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 13,
@@ -779,8 +1109,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           if (otherPlans.isNotEmpty) const SizedBox(height: 10),
         ],
         if (otherPlans.isNotEmpty) ...[
-          SectionHeader(recommendedPlans.isEmpty ? 'All Plans' : 'Other Plans'),
-          const SizedBox(height: 12),
+          if (recommendedPlans.isNotEmpty) ...[
+            const SectionHeader('Other Plans'),
+            const SizedBox(height: 12),
+          ],
           for (final plan in otherPlans) ...[
             _planCard(
               plan: plan,
@@ -795,36 +1127,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         ],
       ],
     ];
-  }
-
-  Widget _recommendationHint() {
-    final activity = _userActivityLevel?.trim();
-    final goal = _userFitnessGoal?.trim();
-
-    final hasActivity = activity != null && activity.isNotEmpty;
-    final hasGoal = goal != null && goal.isNotEmpty;
-
-    if (!hasActivity && !hasGoal) {
-      return Text(
-        'Complete your profile to get better workout recommendations.',
-        style: TextStyle(
-          fontSize: 11,
-          height: 1.35,
-          color: Colors.grey.shade600,
-          fontWeight: FontWeight.w600,
-        ),
-      );
-    }
-
-    return Text(
-      'Recommended based on ${hasActivity ? activity : 'your activity level'} and ${hasGoal ? goal : 'your fitness goal'}.',
-      style: TextStyle(
-        fontSize: 11,
-        height: 1.35,
-        color: Colors.grey.shade600,
-        fontWeight: FontWeight.w600,
-      ),
-    );
   }
 
   Widget _planCard({

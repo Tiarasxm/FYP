@@ -1,9 +1,13 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:screenshot/screenshot.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../theme/app_theme.dart';
 import '../../widgets/client/sub_screen_scaffold.dart';
 
-class WorkoutCompleteScreen extends StatelessWidget {
+class WorkoutCompleteScreen extends StatefulWidget {
   final String dayLabel;
   final int durationSeconds;
   final double totalVolumeKg;
@@ -17,9 +21,17 @@ class WorkoutCompleteScreen extends StatelessWidget {
     required this.totalSets,
   });
 
+  @override
+  State<WorkoutCompleteScreen> createState() => _WorkoutCompleteScreenState();
+}
+
+class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
+  final ScreenshotController _screenshotController = ScreenshotController();
+  bool _isSharing = false;
+
   String get _durationText {
-    final minutes = durationSeconds ~/ 60;
-    final seconds = durationSeconds % 60;
+    final minutes = widget.durationSeconds ~/ 60;
+    final seconds = widget.durationSeconds % 60;
 
     if (minutes <= 0) {
       return '${seconds}s';
@@ -29,11 +41,62 @@ class WorkoutCompleteScreen extends StatelessWidget {
   }
 
   String get _volumeText {
-    if (totalVolumeKg % 1 == 0) {
-      return '${totalVolumeKg.toInt()} KG';
+    if (widget.totalVolumeKg % 1 == 0) {
+      return '${widget.totalVolumeKg.toInt()} KG';
     }
 
-    return '${totalVolumeKg.toStringAsFixed(1)} KG';
+    return '${widget.totalVolumeKg.toStringAsFixed(1)} KG';
+  }
+
+  String get _shareCaption {
+    return 'Just finished "${widget.dayLabel}" on ShapeRush \u2014 '
+        '$_durationText, $_volumeText volume, ${widget.totalSets} sets completed! \ud83d\udcaa';
+  }
+
+  Future<Uint8List?> _captureCard() {
+    return _screenshotController.capture(pixelRatio: 2.5);
+  }
+
+  Future<void> _handleShare(String label) async {
+    if (_isSharing) return;
+    setState(() => _isSharing = true);
+
+    try {
+      final bytes = await _captureCard();
+
+      if (bytes == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not prepare the image to share.')),
+        );
+        return;
+      }
+
+      final file = XFile.fromData(
+        bytes,
+        name: 'shaperush_workout.png',
+        mimeType: 'image/png',
+      );
+
+      if (label == 'Download') {
+        await Share.shareXFiles(
+          [file],
+          fileNameOverrides: const ['shaperush_workout.png'],
+        );
+      } else {
+        await Share.shareXFiles(
+          [file],
+          text: _shareCaption,
+        );
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to share: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSharing = false);
+    }
   }
 
   @override
@@ -53,7 +116,7 @@ class WorkoutCompleteScreen extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                dayLabel,
+                widget.dayLabel,
                 style: const TextStyle(
                   fontSize: 14,
                   color: AppColors.textSecondary,
@@ -83,7 +146,9 @@ class WorkoutCompleteScreen extends StatelessWidget {
   }
 
   Widget _summaryCard() {
-    return Container(
+    return Screenshot(
+      controller: _screenshotController,
+      child: Container(
       width: double.infinity,
       decoration: BoxDecoration(
         color: AppColors.card,
@@ -112,7 +177,7 @@ class WorkoutCompleteScreen extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            dayLabel,
+            widget.dayLabel,
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
           ),
@@ -124,7 +189,7 @@ class WorkoutCompleteScreen extends StatelessWidget {
               _divider(),
               _stat(_volumeText, 'VOLUME'),
               _divider(),
-              _stat('$totalSets', 'SETS'),
+              _stat('${widget.totalSets}', 'SETS'),
             ],
           ),
           const Spacer(),
@@ -150,12 +215,13 @@ class WorkoutCompleteScreen extends StatelessWidget {
                 Spacer(),
                 Text(
                   'Workout Completed',
-                  style: TextStyle(fontSize: 12, color: Colors.white70),
+                  style: TextStyle(fontSize: 12, color: AppColors.textMuted),
                 ),
               ],
             ),
           ),
         ],
+      ),
       ),
     );
   }
@@ -200,27 +266,35 @@ class WorkoutCompleteScreen extends StatelessWidget {
         for (final item in items)
           Padding(
             padding: const EdgeInsets.only(right: 18),
-            child: Column(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: AppColors.card,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.border),
+            child: GestureDetector(
+              onTap: () => _handleShare(item.$2),
+              child: Column(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppColors.card,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: _isSharing
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Icon(item.$1, size: 20, color: AppColors.textPrimary),
                   ),
-                  child: Icon(item.$1, size: 20, color: AppColors.textPrimary),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  item.$2,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: AppColors.textSecondary,
+                  const SizedBox(height: 6),
+                  Text(
+                    item.$2,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
       ],

@@ -308,7 +308,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 '$days Days • $duration',
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey.shade600,
+                  color: AppColors.textSecondary,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -325,14 +325,14 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      border: Border.all(color: Colors.grey.shade300),
+                      border: Border.all(color: AppColors.border),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       tag,
                       style: TextStyle(
                         fontSize: 10,
-                        color: Colors.grey.shade600,
+                        color: AppColors.textSecondary,
                       ),
                     ),
                   );

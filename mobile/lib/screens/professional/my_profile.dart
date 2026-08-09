@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../widgets/professional/mobile_page_wrapper.dart';
+import '../../theme/app_theme.dart';
 
 class MyProfile extends StatefulWidget {
   const MyProfile({super.key});
@@ -377,7 +378,7 @@ class _MyProfileState extends State<MyProfile> {
                       children: [
                         CircleAvatar(
                           radius: 52,
-                          backgroundColor: Colors.black,
+                          backgroundColor: AppColors.textPrimary,
                           backgroundImage: _avatarImageProvider,
                           child: _avatarImageProvider == null
                               ? Text(
@@ -396,7 +397,7 @@ class _MyProfileState extends State<MyProfile> {
                             width: 28,
                             height: 28,
                             decoration: const BoxDecoration(
-                              color: Color(0xFF6C63FF),
+                              color: AppColors.primary,
                               shape: BoxShape.circle,
                             ),
                             child: isUploadingAvatar
@@ -459,7 +460,7 @@ class _MyProfileState extends State<MyProfile> {
                                 text: TextSpan(
                                   text: 'Specializations ',
                                   style: const TextStyle(
-                                    color: Colors.black,
+                                    color: AppColors.textPrimary,
                                     fontSize: 14,
                                     fontWeight: FontWeight.w800,
                                   ),
@@ -467,7 +468,7 @@ class _MyProfileState extends State<MyProfile> {
                                     TextSpan(
                                       text: '(max 3)',
                                       style: TextStyle(
-                                        color: Colors.grey.shade600,
+                                        color: AppColors.textSecondary,
                                         fontWeight: FontWeight.w500,
                                       ),
                                     ),
@@ -509,9 +510,9 @@ class _MyProfileState extends State<MyProfile> {
                       child: ElevatedButton(
                         onPressed: isSaving ? null : updateProfile,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF6C63FF),
+                          backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
-                          disabledBackgroundColor: Colors.grey.shade300,
+                          disabledBackgroundColor: AppColors.border,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
@@ -568,7 +569,7 @@ class _InputField extends StatelessWidget {
           style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w800,
-            color: Colors.black,
+            color: AppColors.textPrimary,
           ),
         ),
         const SizedBox(height: 8),
@@ -579,7 +580,7 @@ class _InputField extends StatelessWidget {
           decoration: InputDecoration(
             filled: true,
             fillColor: enabled
-                ? const Color(0xFFF3F2FA)
+                ? AppColors.cardMuted
                 : const Color(0xFFEDEDED),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
@@ -593,7 +594,7 @@ class _InputField extends StatelessWidget {
           style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w500,
-            color: enabled ? Colors.black : Colors.grey.shade600,
+            color: enabled ? AppColors.textPrimary : AppColors.textSecondary,
           ),
         ),
       ],
@@ -619,7 +620,7 @@ class _NumberedInputField extends StatelessWidget {
           child: Text(
             number,
             style: TextStyle(
-              color: Colors.grey.shade600,
+              color: AppColors.textSecondary,
               fontSize: 14,
               fontWeight: FontWeight.w600,
             ),
@@ -630,7 +631,7 @@ class _NumberedInputField extends StatelessWidget {
             controller: controller,
             decoration: InputDecoration(
               filled: true,
-              fillColor: const Color(0xFFF3F2FA),
+              fillColor: AppColors.cardMuted,
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
                 vertical: 15,
@@ -664,7 +665,7 @@ class _BackButton extends StatelessWidget {
       width: 44,
       height: 44,
       decoration: const BoxDecoration(
-        color: Color(0xFFF3F2FA),
+        color: AppColors.cardMuted,
         shape: BoxShape.circle,
       ),
       child: IconButton(
@@ -672,7 +673,7 @@ class _BackButton extends StatelessWidget {
         icon: const Icon(
           Icons.arrow_back_ios_new,
           size: 18,
-          color: Colors.black54,
+          color: AppColors.textMuted,
         ),
       ),
     );

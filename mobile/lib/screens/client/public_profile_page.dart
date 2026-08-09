@@ -7,6 +7,7 @@ import 'edit_post_page.dart';
 import 'post_card.dart';
 import 'report_dialog.dart';
 import 'view_post_page.dart';
+import '../../theme/app_theme.dart';
 
 class PublicProfilePage extends StatefulWidget {
   final String? userId;
@@ -344,7 +345,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                                           const Icon(
                                             Icons.lock_outline,
                                             size: 38,
-                                            color: Colors.grey,
+                                            color: AppColors.textMuted,
                                           ),
                                         if (_postsArePrivate)
                                           const SizedBox(height: 10),
@@ -463,7 +464,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
         children: [
           CircleAvatar(
             radius: 43,
-            backgroundColor: const Color(0xFFE1D9FF),
+            backgroundColor: AppColors.primarySoft,
             backgroundImage: _avatarUrl?.isNotEmpty == true
                 ? NetworkImage(_avatarUrl!)
                 : null,
@@ -496,9 +497,9 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                 onPressed: _isFollowSaving ? null : _toggleFollow,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _isFollowing
-                      ? Colors.grey.shade200
-                      : Colors.deepPurpleAccent,
-                  foregroundColor: _isFollowing ? Colors.black87 : Colors.white,
+                      ? AppColors.border
+                      : AppColors.primary,
+                  foregroundColor: _isFollowing ? AppColors.textPrimary : Colors.white,
                 ),
                 child: Text(_isFollowing ? 'Following' : 'Follow'),
               ),
@@ -514,7 +515,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
             alignment: Alignment.centerLeft,
             child: Text(
               _bio.trim().isEmpty ? 'No bio available.' : _bio,
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
             ),
           ),
           const SizedBox(height: 22),
@@ -558,7 +559,7 @@ class PublicProfileStat extends StatelessWidget {
       children: [
         Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 3),
-        Text(label, style: TextStyle(fontSize: 9, color: Colors.grey.shade600)),
+        Text(label, style: TextStyle(fontSize: 9, color: AppColors.textSecondary)),
       ],
     );
   }

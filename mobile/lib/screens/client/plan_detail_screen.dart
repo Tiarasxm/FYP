@@ -482,7 +482,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                     style: TextStyle(
                       fontSize: 9,
                       fontWeight: FontWeight.w600,
-                      color: isSelected ? Colors.white70 : AppColors.textMuted,
+                      color: isSelected ? AppColors.textMuted : AppColors.textMuted,
                     ),
                   ),
 
@@ -567,7 +567,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                   meta,
                   style: const TextStyle(
                     fontSize: 12,
-                    color: Colors.white70,
+                    color: AppColors.textMuted,
                   ),
                 ),
               ],

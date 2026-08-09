@@ -172,13 +172,22 @@ class _FitnessPlanScreenState extends State<FitnessPlanScreen> {
       int initialIndex = 0;
 
       if (days.isNotEmpty) {
-        final firstTrainingDay = days.indexWhere(
-          (day) => day['is_rest_day'] != true,
+        final completedLogsResponse = await client
+            .from('workout_logs')
+            .select('plan_day_id')
+            .eq('profile_id', userId)
+            .eq(isPersonalized ? 'personalized_plan_id' : 'free_plan_id', planId)
+            .not('plan_day_id', 'is', null);
+
+        final completedDayIds = List<Map<String, dynamic>>.from(
+          completedLogsResponse as List,
+        ).map((row) => row['plan_day_id']?.toString()).whereType<String>().toSet();
+
+        final nextDayIndex = days.indexWhere(
+          (day) => !completedDayIds.contains(day['plan_day_id']?.toString()),
         );
 
-        if (firstTrainingDay != -1) {
-          initialIndex = firstTrainingDay;
-        }
+        initialIndex = nextDayIndex != -1 ? nextDayIndex : days.length - 1;
       }
 
       if (!mounted) return;
@@ -346,11 +355,13 @@ class _FitnessPlanScreenState extends State<FitnessPlanScreen> {
   Widget build(BuildContext context) {
     return SubScreenScaffold(
       title: 'My Fitness Plan',
-      bottomButton: PrimaryButton(
-        label: 'Start Workout',
-        icon: Icons.chevron_right,
-        onPressed: _isLoading ? null : _startWorkout,
-      ),
+      bottomButton: _isRestDay
+          ? null
+          : PrimaryButton(
+              label: 'Start Workout',
+              icon: Icons.chevron_right,
+              onPressed: _isLoading ? null : _startWorkout,
+            ),
       children: [
         if (_isLoading)
           const Padding(
@@ -450,7 +461,7 @@ class _FitnessPlanScreenState extends State<FitnessPlanScreen> {
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
-                      color: selected ? Colors.white70 : AppColors.textMuted,
+                      color: selected ? AppColors.textMuted : AppColors.textMuted,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -509,7 +520,7 @@ class _FitnessPlanScreenState extends State<FitnessPlanScreen> {
                 const SizedBox(height: 2),
                 Text(
                   _dayMeta(),
-                  style: const TextStyle(fontSize: 12, color: Colors.white70),
+                  style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
                 ),
               ],
             ),

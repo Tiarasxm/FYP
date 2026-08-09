@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/client/social_post.dart';
+import '../../theme/app_theme.dart';
 import '../../models/client/user_profile.dart';
 import 'create_post_page.dart';
 import 'post_card.dart';
@@ -350,9 +351,9 @@ class _SocialScreenState extends State<SocialScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.pageBg,
       floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.deepPurpleAccent,
+        backgroundColor: AppColors.primary,
         onPressed: _openCreatePost,
         child: const Icon(Icons.add, color: Colors.white),
       ),
@@ -367,8 +368,9 @@ class _SocialScreenState extends State<SocialScreen> {
                     child: Container(
                       height: 42,
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(25),
+                        color: AppColors.card,
+                        borderRadius: BorderRadius.circular(AppSpacing.pillRadius),
+                        border: Border.all(color: AppColors.border),
                       ),
                       child: Row(
                         children: [
@@ -395,7 +397,7 @@ class _SocialScreenState extends State<SocialScreen> {
                       },
                       child: CircleAvatar(
                         radius: 22,
-                        backgroundColor: const Color(0xFFE1D9FF),
+                        backgroundColor: AppColors.primarySoft,
                         backgroundImage: _currentUserAvatarUrl?.isNotEmpty == true
                             ? NetworkImage(_currentUserAvatarUrl!)
                             : null,
@@ -406,8 +408,8 @@ class _SocialScreenState extends State<SocialScreen> {
                                     ? _currentUserName!.trim()[0].toUpperCase()
                                     : '?',
                                 style: const TextStyle(
-                                  color: Colors.deepPurple,
-                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w800,
                                 ),
                               ),
                       ),
@@ -419,15 +421,9 @@ class _SocialScreenState extends State<SocialScreen> {
               TextField(
                 controller: _searchController,
                 onChanged: _onSearchChanged,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   hintText: 'Search users or posts...',
-                  prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  fillColor: Colors.grey.shade100,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    borderSide: BorderSide.none,
-                  ),
+                  prefixIcon: Icon(Icons.search),
                 ),
               ),
               const SizedBox(height: 18),
@@ -447,7 +443,7 @@ class _SocialScreenState extends State<SocialScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_outlined, size: 42, color: Colors.grey),
+            const Icon(Icons.cloud_off_outlined, size: 42, color: AppColors.textMuted),
             const SizedBox(height: 12),
             const Text('Unable to load posts.'),
             const SizedBox(height: 12),
@@ -472,7 +468,7 @@ class _SocialScreenState extends State<SocialScreen> {
             Icon(
               selectedTab == 1 ? Icons.people_outline : Icons.photo_library_outlined,
               size: 48,
-              color: Colors.grey,
+              color: AppColors.textMuted,
             ),
             const SizedBox(height: 12),
             Text(
@@ -545,7 +541,7 @@ class _SocialScreenState extends State<SocialScreen> {
           if (!_isSearchingUsers && _userResults.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 10),
-              child: Text('No users found.', style: TextStyle(color: Colors.grey)),
+              child: Text('No users found.', style: TextStyle(color: AppColors.textMuted)),
             ),
           ..._userResults.map(_buildUserResult),
           const SizedBox(height: 18),
@@ -557,7 +553,7 @@ class _SocialScreenState extends State<SocialScreen> {
           if (posts.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text('No posts found.', style: TextStyle(color: Colors.grey)),
+              child: Text('No posts found.', style: TextStyle(color: AppColors.textMuted)),
             )
           else
             GridView.builder(
@@ -610,7 +606,7 @@ class _SocialScreenState extends State<SocialScreen> {
           ),
         ),
         leading: CircleAvatar(
-          backgroundColor: const Color(0xFFE1D9FF),
+          backgroundColor: AppColors.primarySoft,
           backgroundImage: user.avatarUrl?.isNotEmpty == true
               ? NetworkImage(user.avatarUrl!)
               : null,
@@ -645,15 +641,17 @@ class _SocialScreenState extends State<SocialScreen> {
           margin: const EdgeInsets.all(4),
           decoration: BoxDecoration(
             color: selectedTab == index
-                ? Colors.deepPurpleAccent
+                ? AppColors.primary
                 : Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(AppSpacing.pillRadius),
           ),
           child: Center(
             child: Text(
               title,
               style: TextStyle(
-                color: selectedTab == index ? Colors.white : Colors.black,
+                fontSize: 14,
+                fontWeight: selectedTab == index ? FontWeight.w700 : FontWeight.w600,
+                color: selectedTab == index ? Colors.white : AppColors.textSecondary,
               ),
             ),
           ),

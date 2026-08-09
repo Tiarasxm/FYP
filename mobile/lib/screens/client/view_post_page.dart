@@ -5,6 +5,7 @@ import '../../models/client/social_post.dart';
 import '../../models/client/user_profile.dart';
 import 'public_profile_page.dart';
 import 'report_dialog.dart';
+import '../../theme/app_theme.dart';
 
 class ViewPostPage extends StatelessWidget {
   final SocialPost? post;
@@ -59,7 +60,7 @@ class ViewPostPage extends StatelessWidget {
                     onTap: () => openPublicProfile(context),
                   child: CircleAvatar(
                     radius: 18,
-                    backgroundColor: const Color(0xFFE1D9FF),
+                    backgroundColor: AppColors.primarySoft,
                     backgroundImage: post?.author?.avatarUrl?.isNotEmpty == true
                         ? NetworkImage(post!.author!.avatarUrl!)
                         : null,
@@ -108,12 +109,12 @@ class ViewPostPage extends StatelessWidget {
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => Container(
                           height: 300,
-                          color: Colors.grey.shade300,
+                          color: AppColors.border,
                           child: const Icon(Icons.broken_image_outlined),
                         ),
                       )
                     else
-                      Container(height: 300, color: Colors.grey.shade300),
+                      Container(height: 300, color: AppColors.border),
                     Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
@@ -130,7 +131,7 @@ class ViewPostPage extends StatelessWidget {
                                 ? 'Recently posted'
                                 : 'Posted on ${post!.createdAt!.day}/${post!.createdAt!.month}/${post!.createdAt!.year}',
                             style: TextStyle(
-                              color: Colors.grey.shade600,
+                              color: AppColors.textSecondary,
                               fontSize: 12,
                             ),
                           ),
@@ -370,7 +371,7 @@ class _CommentsPanelState extends State<_CommentsPanel> {
             padding: const EdgeInsets.only(bottom: 16),
             child: Text(
               'No comments yet.',
-              style: TextStyle(color: Colors.grey.shade600),
+              style: TextStyle(color: AppColors.textSecondary),
             ),
           )
         else
@@ -389,7 +390,7 @@ class _CommentsPanelState extends State<_CommentsPanel> {
                   hintText: 'Write a comment...',
                   counterText: '',
                   filled: true,
-                  fillColor: Colors.grey.shade100,
+                  fillColor: AppColors.pageBg,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(24),
                     borderSide: BorderSide.none,
@@ -405,7 +406,7 @@ class _CommentsPanelState extends State<_CommentsPanel> {
                       height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.send, color: Colors.deepPurpleAccent),
+                  : const Icon(Icons.send, color: AppColors.primary),
             ),
           ],
         ),
@@ -425,7 +426,7 @@ class _CommentsPanelState extends State<_CommentsPanel> {
             onTap: () => _openProfile(comment.userId),
             child: CircleAvatar(
               radius: 15,
-              backgroundColor: const Color(0xFFE1D9FF),
+              backgroundColor: AppColors.primarySoft,
               backgroundImage: comment.author?.avatarUrl?.isNotEmpty == true
                   ? NetworkImage(comment.author!.avatarUrl!)
                   : null,
@@ -538,7 +539,7 @@ class _EditCommentDialogState extends State<_EditCommentDialog> {
         ElevatedButton(
           onPressed: _save,
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.deepPurpleAccent,
+            backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
           ),
           child: const Text('Save'),
@@ -630,8 +631,8 @@ class _FollowButtonState extends State<_FollowButton> {
       onPressed: _isLoading ? null : _toggleFollow,
       style: ElevatedButton.styleFrom(
         backgroundColor:
-            _isFollowing ? Colors.grey.shade200 : Colors.deepPurpleAccent,
-        foregroundColor: _isFollowing ? Colors.black87 : Colors.white,
+            _isFollowing ? AppColors.border : AppColors.primary,
+        foregroundColor: _isFollowing ? AppColors.textPrimary : Colors.white,
       ),
       child: Text(_isFollowing ? 'Following' : 'Follow'),
     );
@@ -734,7 +735,7 @@ class _PostLikeButtonState extends State<_PostLikeButton> {
           onPressed: _isSaving || _isLoading ? null : _toggleLike,
           icon: Icon(
             _isLiked ? Icons.favorite : Icons.favorite_border,
-            color: _isLiked ? Colors.red : Colors.grey,
+            color: _isLiked ? Colors.red : AppColors.textMuted,
           ),
         ),
         Text('$_likeCount'),

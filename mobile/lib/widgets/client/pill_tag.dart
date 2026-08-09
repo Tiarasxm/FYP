@@ -10,18 +10,18 @@ class PillTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.circular(AppSpacing.pillRadius),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: AppColors.border, width: 1.5),
       ),
       child: Text(
         label,
         style: const TextStyle(
           fontSize: 12,
           color: AppColors.textSecondary,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );

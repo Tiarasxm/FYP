@@ -9,6 +9,7 @@ import '../../widgets/professional/mobile_page_wrapper.dart';
 import 'plan_detail.dart';
 import 'report_customer_dialog.dart';
 import 'send_plan.dart';
+import '../../theme/app_theme.dart';
 
 class Chat extends StatefulWidget {
   final String roomId;
@@ -240,7 +241,7 @@ class _ChatState extends State<Chat> {
                       children: [
                         CircleAvatar(
                           radius: 28,
-                          backgroundColor: Colors.black,
+                          backgroundColor: AppColors.textPrimary,
                           child: Text(
                             fullName.isNotEmpty ? fullName[0].toUpperCase() : '?',
                             style: const TextStyle(
@@ -260,14 +261,14 @@ class _ChatState extends State<Chat> {
                                   padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                                   margin: const EdgeInsets.only(bottom: 6),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFECE9FF),
+                                    color: AppColors.primarySoft,
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: const Text(
                                     'PRIORITY',
                                     style: TextStyle(
                                       fontSize: 10,
-                                      color: Color(0xFF6C63FF),
+                                      color: AppColors.primary,
                                       fontWeight: FontWeight.w800,
                                     ),
                                   ),
@@ -279,14 +280,14 @@ class _ChatState extends State<Chat> {
                               const SizedBox(height: 3),
                               Text(
                                 'Gender: $gender',
-                                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
                               ),
                             ],
                           ),
                         ),
                         GestureDetector(
                           onTap: () => Navigator.pop(ctx),
-                          child: const Icon(Icons.close, size: 18, color: Colors.black54),
+                          child: const Icon(Icons.close, size: 18, color: AppColors.textMuted),
                         ),
                       ],
                     ),
@@ -307,21 +308,21 @@ class _ChatState extends State<Chat> {
                           ),
                           const SizedBox(height: 10),
                           if (age != null)
-                            Text('Age: $age', style: TextStyle(fontSize: 12, color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
+                            Text('Age: $age', style: TextStyle(fontSize: 12, color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
                           if (age != null) const SizedBox(height: 6),
-                          Text('Gender: $gender', style: TextStyle(fontSize: 12, color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
+                          Text('Gender: $gender', style: TextStyle(fontSize: 12, color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
                           const SizedBox(height: 6),
                           if (weight != null)
-                            Text('Weight: $weight kg', style: TextStyle(fontSize: 12, color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
+                            Text('Weight: $weight kg', style: TextStyle(fontSize: 12, color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
                           if (weight != null) const SizedBox(height: 6),
                           if (height != null)
-                            Text('Height: $height cm', style: TextStyle(fontSize: 12, color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
+                            Text('Height: $height cm', style: TextStyle(fontSize: 12, color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
                           if (height != null) const SizedBox(height: 6),
                           if (activityLevel != null)
-                            Text('Activity Level: $activityLevel', style: TextStyle(fontSize: 12, color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
+                            Text('Activity Level: $activityLevel', style: TextStyle(fontSize: 12, color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
                           if (activityLevel != null) const SizedBox(height: 6),
                           if (fitnessGoal != null)
-                            Text('Fitness Goal: $fitnessGoal', style: TextStyle(fontSize: 12, color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
+                            Text('Fitness Goal: $fitnessGoal', style: TextStyle(fontSize: 12, color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
                         ],
                       ),
                     ),
@@ -402,7 +403,7 @@ class _ChatState extends State<Chat> {
                             ),
                             Checkbox(
                               value: checked,
-                              activeColor: const Color(0xFF6C63FF),
+                              activeColor: AppColors.primary,
                               onChanged: (value) {
                                 setDialogState(() {
                                   if (value == true) {
@@ -426,7 +427,7 @@ class _ChatState extends State<Chat> {
                             await _saveTags(selectedTags.toList());
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF6C63FF),
+                            backgroundColor: AppColors.primary,
                             foregroundColor: Colors.white,
                             elevation: 0,
                             shape: RoundedRectangleBorder(
@@ -496,7 +497,7 @@ class _ChatState extends State<Chat> {
                     width: 44,
                     height: 44,
                     decoration: const BoxDecoration(
-                      color: Color(0xFFF3F2FA),
+                      color: AppColors.cardMuted,
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
@@ -504,7 +505,7 @@ class _ChatState extends State<Chat> {
                       icon: const Icon(
                         Icons.arrow_back_ios_new,
                         size: 18,
-                        color: Colors.black54,
+                        color: AppColors.textMuted,
                       ),
                     ),
                   ),
@@ -518,7 +519,7 @@ class _ChatState extends State<Chat> {
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w800,
-                            color: Colors.black,
+                            color: AppColors.textPrimary,
                           ),
                         ),
                       ),
@@ -530,12 +531,12 @@ class _ChatState extends State<Chat> {
                       width: 44,
                       height: 44,
                       decoration: const BoxDecoration(
-                        color: Color(0xFFF3F2FA),
+                        color: AppColors.cardMuted,
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
                         Icons.more_horiz,
-                        color: Colors.black,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                     shape: RoundedRectangleBorder(
@@ -615,11 +616,11 @@ class _ChatState extends State<Chat> {
                       decoration: InputDecoration(
                         hintText: 'Type a message...',
                         hintStyle: TextStyle(
-                          color: Colors.grey.shade500,
+                          color: AppColors.textMuted,
                           fontSize: 13,
                         ),
                         filled: true,
-                        fillColor: const Color(0xFFF3F2FA),
+                        fillColor: AppColors.cardMuted,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16,
                           vertical: 12,
@@ -678,7 +679,7 @@ class _TextMessageBubble extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           constraints: const BoxConstraints(maxWidth: 250),
           decoration: BoxDecoration(
-            color: const Color(0xFFF4F4F5),
+            color: AppColors.pageBg,
             borderRadius: BorderRadius.circular(14),
           ),
           child: Text(
@@ -699,7 +700,7 @@ class _TextMessageBubble extends StatelessWidget {
           onTap: onAvatarTap,
           child: CircleAvatar(
             radius: 15,
-            backgroundColor: Colors.black,
+            backgroundColor: AppColors.textPrimary,
             backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl!) : null,
             child: avatarUrl == null
                 ? Text(
@@ -722,7 +723,7 @@ class _TextMessageBubble extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             constraints: const BoxConstraints(maxWidth: 245),
             decoration: BoxDecoration(
-              color: const Color(0xFFF4F4F5),
+              color: AppColors.pageBg,
               borderRadius: BorderRadius.circular(14),
             ),
             child: Text(
@@ -808,7 +809,7 @@ class _PlanMessageBubble extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 14),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: const Color(0xFFF4F4F5),
+          color: AppColors.pageBg,
           borderRadius: BorderRadius.circular(14),
         ),
         child: Column(
@@ -828,7 +829,7 @@ class _PlanMessageBubble extends StatelessWidget {
                 '$days Days • $duration',
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey.shade600,
+                  color: AppColors.textSecondary,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -847,14 +848,14 @@ class _PlanMessageBubble extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      border: Border.all(color: Colors.grey.shade300),
+                      border: Border.all(color: AppColors.border),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       tag,
                       style: TextStyle(
                         fontSize: 10,
-                        color: Colors.grey.shade600,
+                        color: AppColors.textSecondary,
                       ),
                     ),
                   );
@@ -870,7 +871,7 @@ class _PlanMessageBubble extends StatelessWidget {
               child: ElevatedButton(
                 onPressed: () => _viewPlan(context),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6C63FF),
+                  backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(

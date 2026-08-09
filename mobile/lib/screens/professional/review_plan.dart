@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/professional/workout_plan.dart';
 import '../../widgets/professional/mobile_page_wrapper.dart';
 import 'professional_shell.dart';
+import '../../theme/app_theme.dart';
 
 class ReviewPlan extends StatefulWidget {
   final String? freePlanId;
@@ -362,7 +363,7 @@ class _ReviewPlanState extends State<ReviewPlan> {
                 '${days.length} days • $totalExerciseCount exercises',
                 style: TextStyle(
                   fontSize: 13,
-                  color: Colors.grey.shade600,
+                  color: AppColors.textSecondary,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -386,9 +387,9 @@ class _ReviewPlanState extends State<ReviewPlan> {
                 child: ElevatedButton(
                   onPressed: isSaving ? null : handleMainButton,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6C63FF),
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey.shade300,
+                    disabledBackgroundColor: AppColors.border,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -435,7 +436,7 @@ class _ReviewDayCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F4F5),
+        color: AppColors.pageBg,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -447,7 +448,7 @@ class _ReviewDayCard extends StatelessWidget {
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [
-                  Color(0xFF6C63FF),
+                  AppColors.primary,
                   Color(0xFFA49DED),
                 ],
               ),
@@ -486,7 +487,7 @@ class _ReviewDayCard extends StatelessWidget {
               'Rest Day',
               style: TextStyle(
                 fontSize: 13,
-                color: Colors.grey.shade600,
+                color: AppColors.textSecondary,
                 fontWeight: FontWeight.w700,
               ),
             )
@@ -531,11 +532,11 @@ class _ExerciseRow extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 16,
-            backgroundColor: const Color(0xFFECE9FF),
+            backgroundColor: AppColors.primarySoft,
             child: Text(
               '$number',
               style: const TextStyle(
-                color: Color(0xFF6C63FF),
+                color: AppColors.primary,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -548,14 +549,14 @@ class _ExerciseRow extends StatelessWidget {
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
-                  color: Colors.black,
+                  color: AppColors.textPrimary,
                 ),
                 children: [
                   TextSpan(
                     text: ' ${exercise.detail}',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.grey.shade600,
+                      color: AppColors.textSecondary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -584,14 +585,14 @@ class _InfoChip extends StatelessWidget {
         vertical: 7,
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFFECE9FF),
+        color: AppColors.primarySoft,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Text(
         text,
         style: const TextStyle(
           fontSize: 12,
-          color: Color(0xFF6C63FF),
+          color: AppColors.primary,
           fontWeight: FontWeight.w800,
         ),
       ),
@@ -612,7 +613,7 @@ class _BackButton extends StatelessWidget {
       width: 44,
       height: 44,
       decoration: const BoxDecoration(
-        color: Color(0xFFF3F2FA),
+        color: AppColors.cardMuted,
         shape: BoxShape.circle,
       ),
       child: IconButton(
@@ -620,7 +621,7 @@ class _BackButton extends StatelessWidget {
         icon: const Icon(
           Icons.arrow_back_ios_new,
           size: 18,
-          color: Colors.black54,
+          color: AppColors.textMuted,
         ),
       ),
     );

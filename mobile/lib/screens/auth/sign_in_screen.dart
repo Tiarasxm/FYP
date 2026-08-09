@@ -7,6 +7,7 @@ import '../../widgets/professional/required_label.dart';
 import '../client/client_shell.dart';
 import '../client/onboarding_screen.dart';
 import '../professional/professional_shell.dart';
+import '../../theme/app_theme.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -180,7 +181,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 width: 44,
                 height: 44,
                 decoration: const BoxDecoration(
-                  color: Color(0xFFF3F2FA),
+                  color: AppColors.cardMuted,
                   shape: BoxShape.circle,
                 ),
                 child: IconButton(
@@ -192,7 +193,7 @@ class _SignInScreenState extends State<SignInScreen> {
                   icon: const Icon(
                     Icons.arrow_back_ios_new,
                     size: 18,
-                    color: Colors.black54,
+                    color: AppColors.textMuted,
                   ),
                 ),
               ),
@@ -204,7 +205,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w800,
-                  color: Colors.black,
+                  color: AppColors.textPrimary,
                 ),
               ),
 
@@ -214,7 +215,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 'Let’s sign in to your ShapeRush account.',
                 style: TextStyle(
                   fontSize: 15,
-                  color: Colors.grey.shade600,
+                  color: AppColors.textSecondary,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -233,7 +234,7 @@ class _SignInScreenState extends State<SignInScreen> {
                   style: OutlinedButton.styleFrom(
                     backgroundColor: Colors.white,
                     side: BorderSide(
-                      color: Colors.grey.shade300,
+                      color: AppColors.border,
                       width: 1.2,
                     ),
                     shape: RoundedRectangleBorder(
@@ -257,7 +258,7 @@ class _SignInScreenState extends State<SignInScreen> {
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
-                          color: Colors.black,
+                          color: AppColors.textPrimary,
                         ),
                       ),
                     ],
@@ -271,7 +272,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 children: [
                   Expanded(
                     child: Divider(
-                      color: Colors.grey.shade300,
+                      color: AppColors.border,
                       thickness: 1,
                     ),
                   ),
@@ -281,13 +282,13 @@ class _SignInScreenState extends State<SignInScreen> {
                       'or',
                       style: TextStyle(
                         fontSize: 14,
-                        color: Colors.grey.shade600,
+                        color: AppColors.textSecondary,
                       ),
                     ),
                   ),
                   Expanded(
                     child: Divider(
-                      color: Colors.grey.shade300,
+                      color: AppColors.border,
                       thickness: 1,
                     ),
                   ),
@@ -307,15 +308,15 @@ class _SignInScreenState extends State<SignInScreen> {
                 decoration: InputDecoration(
                   hintText: 'Enter your email',
                   hintStyle: TextStyle(
-                    color: Colors.grey.shade500,
+                    color: AppColors.textMuted,
                     fontSize: 15,
                   ),
                   prefixIcon: Icon(
                     Icons.mail_outline,
-                    color: Colors.grey.shade600,
+                    color: AppColors.textSecondary,
                   ),
                   filled: true,
-                  fillColor: const Color(0xFFF3F2FA),
+                  fillColor: AppColors.cardMuted,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 18,
                     vertical: 18,
@@ -340,12 +341,12 @@ class _SignInScreenState extends State<SignInScreen> {
                 decoration: InputDecoration(
                   hintText: 'Enter password',
                   hintStyle: TextStyle(
-                    color: Colors.grey.shade500,
+                    color: AppColors.textMuted,
                     fontSize: 15,
                   ),
                   prefixIcon: Icon(
                     Icons.lock_outline,
-                    color: Colors.grey.shade600,
+                    color: AppColors.textSecondary,
                   ),
                   suffixIcon: IconButton(
                     onPressed: isLoading
@@ -359,11 +360,11 @@ class _SignInScreenState extends State<SignInScreen> {
                       hidePassword
                           ? Icons.visibility_off_outlined
                           : Icons.visibility_outlined,
-                      color: Colors.grey.shade700,
+                      color: AppColors.textSecondary,
                     ),
                   ),
                   filled: true,
-                  fillColor: const Color(0xFFF3F2FA),
+                  fillColor: AppColors.cardMuted,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 18,
                     vertical: 18,
@@ -383,9 +384,9 @@ class _SignInScreenState extends State<SignInScreen> {
                 child: ElevatedButton(
                   onPressed: isLoading ? null : signIn,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6C63FF),
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey.shade300,
+                    disabledBackgroundColor: AppColors.border,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
@@ -423,7 +424,7 @@ class _SignInScreenState extends State<SignInScreen> {
                     'Forgot Password?',
                     style: TextStyle(
                       fontSize: 15,
-                      color: Color(0xFF6C63FF),
+                      color: AppColors.primary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -439,7 +440,7 @@ class _SignInScreenState extends State<SignInScreen> {
                     'Don’t have an account? ',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.grey.shade700,
+                      color: AppColors.textSecondary,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -453,7 +454,7 @@ class _SignInScreenState extends State<SignInScreen> {
                       'Sign Up',
                       style: TextStyle(
                         fontSize: 14,
-                        color: Color(0xFF6C63FF),
+                        color: AppColors.primary,
                         fontWeight: FontWeight.w700,
                       ),
                     ),

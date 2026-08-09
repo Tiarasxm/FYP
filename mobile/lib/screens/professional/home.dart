@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/professional/workout_plan.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/professional/mobile_page_wrapper.dart';
 import '../../widgets/professional/plan_card.dart';
 
@@ -392,9 +393,9 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
                       children: [
                         Text(
                           getTodayText(),
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 14,
-                            color: Colors.grey.shade700,
+                            color: AppColors.textSecondary,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -404,14 +405,14 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
                           style: const TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.w800,
-                            color: Colors.black,
+                            color: AppColors.textPrimary,
                           ),
                         ),
                       ],
                     ),
                     CircleAvatar(
                       radius: 30,
-                      backgroundColor: Colors.black,
+                      backgroundColor: AppColors.primary,
                       backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl!) : null,
                       child: avatarUrl == null
                           ? Text(
@@ -434,7 +435,7 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
-                    color: Colors.black,
+                    color: AppColors.textPrimary,
                   ),
                 ),
 
@@ -443,7 +444,7 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF4F4F5),
+                    color: AppColors.pageBg,
                     borderRadius: BorderRadius.circular(30),
                   ),
                   child: Row(
@@ -452,7 +453,7 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
                         child: _PlanMenuCard(
                           icon: Icons.calendar_month,
                           iconColor: const Color(0xFFDFFF5F),
-                          title: 'All Plans',
+                          title: 'Plans',
                           onTap: () {
                             openAllPlans(context);
                           },
@@ -462,7 +463,7 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
                       Expanded(
                         child: _PlanMenuCard(
                           icon: Icons.fitness_center,
-                          iconColor: const Color(0xFFE1D9FF),
+                          iconColor: AppColors.primarySoft,
                           title: 'Exercise Library',
                           onTap: () {
                             Navigator.push(
@@ -498,14 +499,6 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6C63FF),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(22),
-                      ),
-                    ),
                   ),
                 ),
 
@@ -532,7 +525,7 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
                   )
                 else ...[
                   _PlanSection(
-                    title: 'My Public Plans',
+                    title: 'My Available Plans',
                     plans: filteredPublicPlans,
                     onView: (plan) {
                       openPlanDetail(context, plan);
@@ -599,18 +592,18 @@ class _TagFilterBar extends StatelessWidget {
             onSelected: (_) {
               onSelected(tag);
             },
-            selectedColor: const Color(0xFF6C63FF),
-            backgroundColor: Colors.white,
+            selectedColor: AppColors.primary,
+            backgroundColor: AppColors.card,
             side: BorderSide(
-              color: selected ? const Color(0xFF6C63FF) : Colors.grey.shade300,
+              color: selected ? AppColors.primary : AppColors.border,
             ),
             labelStyle: TextStyle(
-              color: selected ? Colors.white : Colors.grey.shade700,
+              color: selected ? Colors.white : AppColors.textSecondary,
               fontWeight: FontWeight.w700,
               fontSize: 12,
             ),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(AppSpacing.pillRadius),
             ),
           );
         },
@@ -656,7 +649,7 @@ class _PlanMenuCard extends StatelessWidget {
                   backgroundColor: iconColor,
                   child: Icon(
                     icon,
-                    color: const Color(0xFF6C63FF),
+                    color: AppColors.primary,
                     size: 21,
                   ),
                 ),
@@ -667,7 +660,7 @@ class _PlanMenuCard extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
-                    color: Colors.black,
+                    color: AppColors.textPrimary,
                   ),
                 ),
               ],
@@ -698,8 +691,8 @@ class _PlanSection extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 18, 14, 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F4F5),
-        borderRadius: BorderRadius.circular(18),
+        color: AppColors.pageBg,
+        borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -710,13 +703,13 @@ class _PlanSection extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w800,
-                color: Colors.black,
+                color: AppColors.textPrimary,
               ),
               children: [
                 TextSpan(
                   text: '(${plans.length})',
-                  style: TextStyle(
-                    color: Colors.grey.shade500,
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -730,8 +723,8 @@ class _PlanSection extends StatelessWidget {
               child: Center(
                 child: Text(
                   'No plans found.',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../theme/app_theme.dart';
 
 Future<bool> showReportCustomerDialog({
   required BuildContext context,
@@ -100,14 +101,14 @@ class _ReportCustomerDialogState extends State<_ReportCustomerDialog> {
                 ),
                 GestureDetector(
                   onTap: _isSubmitting ? null : () => Navigator.pop(context, false),
-                  child: const Icon(Icons.close, size: 20, color: Colors.black54),
+                  child: const Icon(Icons.close, size: 20, color: AppColors.textMuted),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             Text(
               'Let us know what happened. Reports are reviewed by our team.',
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
             ),
             const SizedBox(height: 20),
             const Text(
@@ -118,7 +119,7 @@ class _ReportCustomerDialogState extends State<_ReportCustomerDialog> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
-                color: const Color(0xFFF3F2FA),
+                color: AppColors.cardMuted,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: DropdownButtonHideUnderline(
@@ -127,7 +128,7 @@ class _ReportCustomerDialogState extends State<_ReportCustomerDialog> {
                   isExpanded: true,
                   hint: Text(
                     'Select a reason',
-                    style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+                    style: TextStyle(fontSize: 13, color: AppColors.textMuted),
                   ),
                   items: _reasons.map((reason) {
                     return DropdownMenuItem(
@@ -156,9 +157,9 @@ class _ReportCustomerDialogState extends State<_ReportCustomerDialog> {
               style: const TextStyle(fontSize: 13),
               decoration: InputDecoration(
                 hintText: 'Describe what happened...',
-                hintStyle: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                hintStyle: TextStyle(fontSize: 12, color: AppColors.textMuted),
                 filled: true,
-                fillColor: const Color(0xFFF3F2FA),
+                fillColor: AppColors.cardMuted,
                 counterText: '',
                 contentPadding: const EdgeInsets.all(12),
                 border: OutlineInputBorder(
@@ -176,7 +177,7 @@ class _ReportCustomerDialogState extends State<_ReportCustomerDialog> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.redAccent,
                   foregroundColor: Colors.white,
-                  disabledBackgroundColor: Colors.grey.shade300,
+                  disabledBackgroundColor: AppColors.border,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),

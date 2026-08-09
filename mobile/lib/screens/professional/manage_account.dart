@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/app_theme.dart';
 import '../../widgets/professional/mobile_page_wrapper.dart';
 import 'change_password.dart';
 import 'delete_account.dart';
@@ -39,7 +40,7 @@ class ManageAccount extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF4F4F5),
+                  color: AppColors.pageBg,
                   borderRadius: BorderRadius.circular(22),
                 ),
                 child: Column(
@@ -91,15 +92,6 @@ class ManageAccount extends StatelessWidget {
                       (route) => false,
                     );
                   },
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF6C63FF),
-                    side: const BorderSide(
-                      color: Color(0xFF6C63FF),
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
                   child: const Text(
                     'Logout',
                     style: TextStyle(
@@ -125,9 +117,9 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: TextStyle(
+      style: const TextStyle(
         fontSize: 10,
-        color: Colors.grey.shade600,
+        color: AppColors.textSecondary,
         fontWeight: FontWeight.w700,
       ),
     );
@@ -157,7 +149,7 @@ class _AccountRow extends StatelessWidget {
       ),
       trailing: const Icon(
         Icons.chevron_right,
-        color: Colors.black54,
+        color: AppColors.textMuted,
       ),
       onTap: onTap,
     );
@@ -177,7 +169,7 @@ class _BackButton extends StatelessWidget {
       width: 44,
       height: 44,
       decoration: const BoxDecoration(
-        color: Color(0xFFF3F2FA),
+        color: AppColors.cardMuted,
         shape: BoxShape.circle,
       ),
       child: IconButton(
@@ -185,7 +177,7 @@ class _BackButton extends StatelessWidget {
         icon: const Icon(
           Icons.arrow_back_ios_new,
           size: 18,
-          color: Colors.black54,
+          color: AppColors.textMuted,
         ),
       ),
     );

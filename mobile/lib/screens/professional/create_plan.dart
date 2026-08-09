@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../widgets/professional/mobile_page_wrapper.dart';
 import 'create_plan_schedule.dart';
+import '../../theme/app_theme.dart';
 
 class CreatePlan extends StatefulWidget {
   const CreatePlan({super.key});
@@ -102,7 +103,7 @@ class _CreatePlanState extends State<CreatePlan> {
                     width: 34,
                     height: 3,
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
+                      color: AppColors.border,
                       borderRadius: BorderRadius.circular(20),
                     ),
                   ),
@@ -122,7 +123,7 @@ class _CreatePlanState extends State<CreatePlan> {
                         'No more tags available.',
                         style: TextStyle(
                           fontSize: 13,
-                          color: Colors.grey.shade600,
+                          color: AppColors.textSecondary,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -213,7 +214,7 @@ class _CreatePlanState extends State<CreatePlan> {
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w900,
-                      color: Colors.black,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                 ],
@@ -240,13 +241,13 @@ class _CreatePlanState extends State<CreatePlan> {
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w800,
-                            color: Colors.black,
+                            color: AppColors.textPrimary,
                           ),
                           children: [
                             TextSpan(
                               text: '(max 3)',
                               style: TextStyle(
-                                color: Colors.grey.shade600,
+                                color: AppColors.textSecondary,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -281,14 +282,14 @@ class _CreatePlanState extends State<CreatePlan> {
                                 decoration: BoxDecoration(
                                   color: Colors.white,
                                   border: Border.all(
-                                    color: Colors.grey.shade300,
+                                    color: AppColors.border,
                                   ),
                                   borderRadius: BorderRadius.circular(18),
                                 ),
                                 child: const Text(
                                   '+ Add Tag',
                                   style: TextStyle(
-                                    color: Color(0xFF6C63FF),
+                                    color: AppColors.primary,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700,
                                   ),
@@ -364,7 +365,7 @@ class _CreatePlanState extends State<CreatePlan> {
                 child: ElevatedButton(
                   onPressed: goToSchedule,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6C63FF),
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
@@ -403,15 +404,15 @@ class _TagChip extends StatelessWidget {
       label: Text(
         text,
         style: const TextStyle(
-          color: Color(0xFF6C63FF),
+          color: AppColors.primary,
           fontWeight: FontWeight.w700,
         ),
       ),
-      backgroundColor: const Color(0xFFECE9FF),
+      backgroundColor: AppColors.primarySoft,
       deleteIcon: const Icon(
         Icons.close,
         size: 16,
-        color: Color(0xFF6C63FF),
+        color: AppColors.primary,
       ),
       onDeleted: onDeleted,
       shape: RoundedRectangleBorder(
@@ -474,7 +475,7 @@ class _DropdownField extends StatelessWidget {
           hintText,
           style: TextStyle(
             fontSize: 14,
-            color: Colors.grey.shade500,
+            color: AppColors.textMuted,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -530,12 +531,12 @@ InputDecoration _inputDecoration({
   return InputDecoration(
     hintText: hintText,
     hintStyle: TextStyle(
-      color: Colors.grey.shade500,
+      color: AppColors.textMuted,
       fontSize: 14,
       fontWeight: FontWeight.w500,
     ),
     filled: true,
-    fillColor: const Color(0xFFF3F2FA),
+    fillColor: AppColors.cardMuted,
     contentPadding: const EdgeInsets.symmetric(
       horizontal: 16,
       vertical: 15,
@@ -560,7 +561,7 @@ class _BackButton extends StatelessWidget {
       width: 44,
       height: 44,
       decoration: const BoxDecoration(
-        color: Color(0xFFF3F2FA),
+        color: AppColors.cardMuted,
         shape: BoxShape.circle,
       ),
       child: IconButton(
@@ -568,7 +569,7 @@ class _BackButton extends StatelessWidget {
         icon: const Icon(
           Icons.arrow_back_ios_new,
           size: 18,
-          color: Colors.black54,
+          color: AppColors.textMuted,
         ),
       ),
     );

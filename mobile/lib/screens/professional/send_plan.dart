@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/professional/workout_plan.dart';
 import '../../widgets/professional/mobile_page_wrapper.dart';
+import '../../theme/app_theme.dart';
 
 class SendPlan extends StatefulWidget {
   const SendPlan({super.key});
@@ -102,13 +103,13 @@ class _SendPlanState extends State<SendPlan> {
                       width: 44,
                       height: 44,
                       decoration: const BoxDecoration(
-                        color: Color(0xFFF3F2FA),
+                        color: AppColors.cardMuted,
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
                         Icons.close,
                         size: 18,
-                        color: Colors.black54,
+                        color: AppColors.textMuted,
                       ),
                     ),
                   ),
@@ -140,15 +141,15 @@ class _SendPlanState extends State<SendPlan> {
                 decoration: InputDecoration(
                   hintText: 'Search plan name',
                   hintStyle: TextStyle(
-                    color: Colors.grey.shade500,
+                    color: AppColors.textMuted,
                     fontSize: 14,
                   ),
                   suffixIcon: Icon(
                     Icons.search,
-                    color: Colors.grey.shade600,
+                    color: AppColors.textSecondary,
                   ),
                   filled: true,
-                  fillColor: const Color(0xFFF3F2FA),
+                  fillColor: AppColors.cardMuted,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 16,
@@ -170,7 +171,7 @@ class _SendPlanState extends State<SendPlan> {
                             child: Text(
                               'No plans found',
                               style: TextStyle(
-                                color: Colors.grey.shade500,
+                                color: AppColors.textMuted,
                                 fontSize: 14,
                               ),
                             ),
@@ -200,9 +201,9 @@ class _SendPlanState extends State<SendPlan> {
                 child: ElevatedButton(
                   onPressed: selectedPlan == null ? null : sendPlan,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6C63FF),
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey.shade300,
+                    disabledBackgroundColor: AppColors.border,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
@@ -240,10 +241,10 @@ class _SelectablePlanCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F4F5),
+        color: AppColors.pageBg,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: selected ? const Color(0xFF6C63FF) : Colors.transparent,
+          color: selected ? AppColors.primary : Colors.transparent,
           width: 1.3,
         ),
       ),
@@ -262,7 +263,7 @@ class _SelectablePlanCard extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
-                    color: Colors.black,
+                    color: AppColors.textPrimary,
                   ),
                 ),
 
@@ -272,7 +273,7 @@ class _SelectablePlanCard extends StatelessWidget {
                   '${plan.days} Days • ${plan.duration}',
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.grey.shade600,
+                    color: AppColors.textSecondary,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -292,14 +293,14 @@ class _SelectablePlanCard extends StatelessWidget {
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: Colors.grey.shade300,
+                          color: AppColors.border,
                         ),
                       ),
                       child: Text(
                         tag,
                         style: TextStyle(
                           fontSize: 10,
-                          color: Colors.grey.shade600,
+                          color: AppColors.textSecondary,
                           fontWeight: FontWeight.w500,
                         ),
                       ),

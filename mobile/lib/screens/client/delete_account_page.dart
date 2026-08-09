@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../auth/welcome_screen.dart';
+import '../../theme/app_theme.dart';
 
 class DeleteAccountPage extends StatefulWidget {
   const DeleteAccountPage({super.key});
@@ -149,7 +150,7 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
                 style: TextStyle(
                   fontSize: 12,
                   height: 1.5,
-                  color: Colors.grey.shade600,
+                  color: AppColors.textSecondary,
                 ),
               ),
 

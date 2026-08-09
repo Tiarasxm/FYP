@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../theme/app_theme.dart';
 
 class FeedbackPage extends StatefulWidget {
   const FeedbackPage({super.key});
@@ -251,7 +252,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                       "How would you rate ShapeRush?",
                       style: TextStyle(
                         fontSize: 10,
-                        color: Colors.grey.shade600,
+                        color: AppColors.textSecondary,
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -277,7 +278,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                               size: 30,
                               color: rating <= selectedRating
                                   ? Colors.amber
-                                  : Colors.black,
+                                  : AppColors.textPrimary,
                             ),
                           );
                         },
@@ -290,14 +291,14 @@ class _FeedbackPageState extends State<FeedbackPage> {
                           "Poor",
                           style: TextStyle(
                             fontSize: 9,
-                            color: Colors.grey.shade600,
+                            color: AppColors.textSecondary,
                           ),
                         ),
                         Text(
                           "Excellent",
                           style: TextStyle(
                             fontSize: 9,
-                            color: Colors.grey.shade600,
+                            color: AppColors.textSecondary,
                           ),
                         ),
                       ],
@@ -324,7 +325,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                       "What changed after using ShapeRush?",
                       style: TextStyle(
                         fontSize: 10,
-                        color: Colors.grey.shade600,
+                        color: AppColors.textSecondary,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -337,7 +338,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                             "Share your experience, results, and what you like about ShapeRush...",
                         hintStyle: TextStyle(
                           fontSize: 10,
-                          color: Colors.grey.shade500,
+                          color: AppColors.textMuted,
                         ),
                         filled: true,
                         fillColor: Colors.white,
@@ -369,7 +370,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                       "(optional)",
                       style: TextStyle(
                         fontSize: 10,
-                        color: Colors.grey.shade600,
+                        color: AppColors.textSecondary,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -396,7 +397,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                       "Help and inspire others by allowing us to share your review.",
                       style: TextStyle(
                         fontSize: 10,
-                        color: Colors.grey.shade600,
+                        color: AppColors.textSecondary,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -404,7 +405,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                       contentPadding: EdgeInsets.zero,
                       controlAffinity: ListTileControlAffinity.leading,
                       value: permissionToPublish,
-                      activeColor: Colors.deepPurpleAccent,
+                      activeColor: AppColors.primary,
                       title: const Text(
                         "I agree to publish my feedback as a public testimonial.",
                         style: TextStyle(fontSize: 10),
@@ -429,10 +430,10 @@ class _FeedbackPageState extends State<FeedbackPage> {
                 child: ElevatedButton(
                   onPressed: isSubmitting ? null : submitFeedback,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurpleAccent,
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     disabledBackgroundColor:
-                        Colors.deepPurpleAccent.withOpacity(0.5),
+                        AppColors.primary.withOpacity(0.5),
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
@@ -473,7 +474,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: Colors.grey.shade300,
+                color: AppColors.border,
               ),
             ),
             clipBehavior: Clip.antiAlias,
@@ -517,7 +518,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: Colors.grey.shade300,
+            color: AppColors.border,
           ),
         ),
         child: const Column(
@@ -525,7 +526,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
           children: [
             Icon(
               Icons.image_outlined,
-              color: Colors.grey,
+              color: AppColors.textMuted,
             ),
             SizedBox(height: 8),
             Text(

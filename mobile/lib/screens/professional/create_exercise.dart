@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../data/professional/mock_exercises.dart';
 import '../../widgets/professional/mobile_page_wrapper.dart';
+import '../../theme/app_theme.dart';
 
 class CreateExercise extends StatefulWidget {
   const CreateExercise({super.key});
@@ -152,7 +153,7 @@ class _CreateExerciseState extends State<CreateExercise> {
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w900,
-                      color: Colors.black,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                 ],
@@ -248,7 +249,7 @@ class _CreateExerciseState extends State<CreateExercise> {
                         decoration: BoxDecoration(
                           color: Colors.white,
                           border: Border.all(
-                            color: Colors.grey.shade300,
+                            color: AppColors.border,
                           ),
                           borderRadius: BorderRadius.circular(14),
                         ),
@@ -258,14 +259,14 @@ class _CreateExerciseState extends State<CreateExercise> {
                             children: [
                               Icon(
                                 Icons.image_outlined,
-                                color: Colors.grey.shade600,
+                                color: AppColors.textSecondary,
                                 size: 22,
                               ),
                               const SizedBox(width: 8),
                               Text(
                                 'Add demo image / video',
                                 style: TextStyle(
-                                  color: Colors.grey.shade600,
+                                  color: AppColors.textSecondary,
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -287,9 +288,9 @@ class _CreateExerciseState extends State<CreateExercise> {
                 child: ElevatedButton(
                   onPressed: isSaving ? null : saveExercise,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6C63FF),
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey.shade300,
+                    disabledBackgroundColor: AppColors.border,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -349,7 +350,7 @@ class _InputField extends StatelessWidget {
         decoration: _inputDecoration().copyWith(
           hintText: hintText,
           hintStyle: TextStyle(
-            color: Colors.grey.shade500,
+            color: AppColors.textMuted,
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
@@ -383,7 +384,7 @@ class _DropdownField extends StatelessWidget {
         hint: Text(
           hintText,
           style: TextStyle(
-            color: Colors.grey.shade500,
+            color: AppColors.textMuted,
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
@@ -438,7 +439,7 @@ class _FieldWrapper extends StatelessWidget {
 InputDecoration _inputDecoration() {
   return InputDecoration(
     filled: true,
-    fillColor: const Color(0xFFF3F2FA),
+    fillColor: AppColors.cardMuted,
     contentPadding: const EdgeInsets.symmetric(
       horizontal: 16,
       vertical: 15,
@@ -463,7 +464,7 @@ class _BackButton extends StatelessWidget {
       width: 44,
       height: 44,
       decoration: const BoxDecoration(
-        color: Color(0xFFF3F2FA),
+        color: AppColors.cardMuted,
         shape: BoxShape.circle,
       ),
       child: IconButton(
@@ -471,7 +472,7 @@ class _BackButton extends StatelessWidget {
         icon: const Icon(
           Icons.arrow_back_ios_new,
           size: 18,
-          color: Colors.black54,
+          color: AppColors.textMuted,
         ),
       ),
     );

@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../auth/welcome_screen.dart';
 import 'change_password_page.dart';
 import 'delete_account_page.dart';
+import '../../theme/app_theme.dart';
 
 class ManageAccountPage extends StatelessWidget {
   const ManageAccountPage({super.key});
@@ -109,7 +110,7 @@ class ManageAccountPage extends StatelessWidget {
                       "Security",
                       style: TextStyle(
                         fontSize: 10,
-                        color: Colors.grey.shade600,
+                        color: AppColors.textSecondary,
                       ),
                     ),
                     _AccountMenuItem(
@@ -126,7 +127,7 @@ class ManageAccountPage extends StatelessWidget {
                       "Account",
                       style: TextStyle(
                         fontSize: 10,
-                        color: Colors.grey.shade600,
+                        color: AppColors.textSecondary,
                       ),
                     ),
                     _AccountMenuItem(
@@ -151,9 +152,9 @@ class ManageAccountPage extends StatelessWidget {
                     _showLogoutDialog(context);
                   },
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.deepPurpleAccent,
+                    foregroundColor: AppColors.primary,
                     side: const BorderSide(
-                      color: Colors.deepPurpleAccent,
+                      color: AppColors.primary,
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),

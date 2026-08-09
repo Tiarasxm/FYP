@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/professional/workout_plan.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/professional/mobile_page_wrapper.dart';
 import '../../widgets/professional/plan_card.dart';
 
@@ -219,7 +220,7 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
                     width: 44,
                     height: 44,
                     decoration: const BoxDecoration(
-                      color: Color(0xFFF3F2FA),
+                      color: AppColors.cardMuted,
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
@@ -229,7 +230,7 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
                       icon: const Icon(
                         Icons.arrow_back_ios_new,
                         size: 18,
-                        color: Colors.black54,
+                        color: AppColors.textMuted,
                       ),
                     ),
                   ),
@@ -237,7 +238,7 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
                   const Expanded(
                     child: Center(
                       child: Text(
-                        'All Plans',
+                        'Plans',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
@@ -277,7 +278,7 @@ class _AllPlansScreenState extends State<AllPlansScreen> {
                         child: Column(
                           children: [
                             _PlanSection(
-                              title: 'My Public Plans',
+                              title: 'My Available Plans',
                               plans: filteredPublicPlans,
                               onView: (plan) {
                                 openPlanDetail(context, plan);
@@ -346,18 +347,18 @@ class _TagFilterBar extends StatelessWidget {
             onSelected: (_) {
               onSelected(tag);
             },
-            selectedColor: const Color(0xFF6C63FF),
-            backgroundColor: Colors.white,
+            selectedColor: AppColors.primary,
+            backgroundColor: AppColors.card,
             side: BorderSide(
-              color: selected ? const Color(0xFF6C63FF) : Colors.grey.shade300,
+              color: selected ? AppColors.primary : AppColors.border,
             ),
             labelStyle: TextStyle(
-              color: selected ? Colors.white : Colors.grey.shade700,
+              color: selected ? Colors.white : AppColors.textSecondary,
               fontWeight: FontWeight.w700,
               fontSize: 12,
             ),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(AppSpacing.pillRadius),
             ),
           );
         },
@@ -385,8 +386,8 @@ class _PlanSection extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 18, 14, 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F4F5),
-        borderRadius: BorderRadius.circular(18),
+        color: AppColors.pageBg,
+        borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -397,13 +398,13 @@ class _PlanSection extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w800,
-                color: Colors.black,
+                color: AppColors.textPrimary,
               ),
               children: [
                 TextSpan(
                   text: '(${plans.length})',
-                  style: TextStyle(
-                    color: Colors.grey.shade500,
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -419,8 +420,8 @@ class _PlanSection extends StatelessWidget {
               child: Center(
                 child: Text(
                   'No plans found.',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),

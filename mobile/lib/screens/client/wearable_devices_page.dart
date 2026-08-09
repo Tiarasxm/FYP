@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../theme/app_theme.dart';
 
 class WearableDevicesPage extends StatefulWidget {
   const WearableDevicesPage({super.key});
@@ -261,7 +262,7 @@ class _WearableDevicesPageState extends State<WearableDevicesPage> {
                       'Connect devices or fitness services to sync activity data.',
                       style: TextStyle(
                         fontSize: 11,
-                        color: Colors.grey.shade600,
+                        color: AppColors.textSecondary,
                         height: 1.4,
                       ),
                     ),
@@ -304,7 +305,7 @@ class _WearableDevicesPageState extends State<WearableDevicesPage> {
         style: TextStyle(
           fontSize: 11,
           height: 1.4,
-          color: Colors.grey.shade700,
+          color: AppColors.textSecondary,
         ),
       ),
     );
@@ -351,7 +352,7 @@ class _DeviceConnectionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: value
             ? Border.all(
-                color: Colors.deepPurpleAccent,
+                color: AppColors.primary,
                 width: 1,
               )
             : null,
@@ -368,7 +369,7 @@ class _DeviceConnectionCard extends StatelessWidget {
             child: Icon(
               device.icon,
               size: 20,
-              color: value ? Colors.deepPurpleAccent : Colors.grey.shade600,
+              color: value ? AppColors.primary : AppColors.textSecondary,
             ),
           ),
 
@@ -393,7 +394,7 @@ class _DeviceConnectionCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 10,
                     height: 1.3,
-                    color: Colors.grey.shade600,
+                    color: AppColors.textSecondary,
                   ),
                 ),
 
@@ -404,7 +405,7 @@ class _DeviceConnectionCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
-                    color: value ? Colors.green : Colors.grey.shade600,
+                    color: value ? Colors.green : AppColors.textSecondary,
                   ),
                 ),
               ],
@@ -423,7 +424,7 @@ class _DeviceConnectionCard extends StatelessWidget {
               child: Switch(
                 value: value,
                 activeThumbColor: Colors.white,
-                activeTrackColor: Colors.deepPurpleAccent,
+                activeTrackColor: AppColors.primary,
                 onChanged: onChanged,
               ),
             ),

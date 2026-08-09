@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -29,6 +31,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
   bool _isFinishing = false;
 
   final DateTime _startedAt = DateTime.now();
+  Timer? _ticker;
 
   List<Map<String, dynamic>> _exercises = [];
   late Map<int, List<ExerciseSet>> _sets;
@@ -38,6 +41,15 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
     super.initState();
     _sets = {};
     _loadExercises();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
   }
 
   int? _parseInt(dynamic value) {
@@ -199,6 +211,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
             'profile_id': userId,
             'free_plan_id': widget.planId,
             'personalized_plan_id': null,
+            'plan_day_id': widget.planDayId,
             'performed_at': DateTime.now().toIso8601String(),
             'duration_min': durationMin,
             'source': 'active_plan',
@@ -443,7 +456,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                 color: set.done ? AppColors.primary : Colors.transparent,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: set.done ? AppColors.primary : AppColors.border,
+                  color: set.done ? AppColors.primary : AppColors.textMuted,
                   width: 2,
                 ),
               ),

@@ -5,6 +5,7 @@ import '../../data/professional/mock_exercises.dart';
 import '../../widgets/professional/mobile_page_wrapper.dart';
 
 import 'create_exercise.dart';
+import '../../theme/app_theme.dart';
 
 class ExerciseLibrary extends StatefulWidget {
   const ExerciseLibrary({super.key});
@@ -372,7 +373,7 @@ class _ExerciseLibraryState extends State<ExerciseLibrary> {
                     width: 34,
                     height: 3,
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
+                      color: AppColors.border,
                       borderRadius: BorderRadius.circular(20),
                     ),
                   ),
@@ -382,13 +383,13 @@ class _ExerciseLibraryState extends State<ExerciseLibrary> {
                     style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
-                      color: Colors.black,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 12),
                   Divider(
                     height: 1,
-                    color: Colors.grey.shade200,
+                    color: AppColors.border,
                   ),
                   Flexible(
                     child: ListView.builder(
@@ -407,13 +408,13 @@ class _ExerciseLibraryState extends State<ExerciseLibrary> {
                               fontSize: 14,
                               fontWeight:
                                   isSelected ? FontWeight.w800 : FontWeight.w500,
-                              color: Colors.black,
+                              color: AppColors.textPrimary,
                             ),
                           ),
                           trailing: isSelected
                               ? const Icon(
                                   Icons.check,
-                                  color: Color(0xFF6C63FF),
+                                  color: AppColors.primary,
                                   size: 18,
                                 )
                               : null,
@@ -448,7 +449,7 @@ class _ExerciseLibraryState extends State<ExerciseLibrary> {
                     width: 44,
                     height: 44,
                     decoration: const BoxDecoration(
-                      color: Color(0xFFF3F2FA),
+                      color: AppColors.cardMuted,
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
@@ -458,7 +459,7 @@ class _ExerciseLibraryState extends State<ExerciseLibrary> {
                       icon: const Icon(
                         Icons.arrow_back_ios_new,
                         size: 18,
-                        color: Colors.black54,
+                        color: AppColors.textMuted,
                       ),
                     ),
                   ),
@@ -469,7 +470,7 @@ class _ExerciseLibraryState extends State<ExerciseLibrary> {
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
-                          color: Colors.black,
+                          color: AppColors.textPrimary,
                         ),
                       ),
                     ),
@@ -487,17 +488,17 @@ class _ExerciseLibraryState extends State<ExerciseLibrary> {
                 decoration: InputDecoration(
                   hintText: 'Search exercise',
                   hintStyle: TextStyle(
-                    color: Colors.grey.shade500,
+                    color: AppColors.textMuted,
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                   ),
                   suffixIcon: Icon(
                     Icons.search,
-                    color: Colors.grey.shade600,
+                    color: AppColors.textSecondary,
                     size: 22,
                   ),
                   filled: true,
-                  fillColor: const Color(0xFFF3F2FA),
+                  fillColor: AppColors.cardMuted,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 16,
@@ -563,7 +564,7 @@ class _ExerciseLibraryState extends State<ExerciseLibrary> {
                             child: Text(
                               'No exercises found',
                               style: TextStyle(
-                                color: Colors.grey.shade600,
+                                color: AppColors.textSecondary,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -609,7 +610,7 @@ class _ExerciseLibraryState extends State<ExerciseLibrary> {
                     ),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6C63FF),
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
@@ -869,7 +870,7 @@ class _EditExerciseSheetState extends State<_EditExerciseSheet> {
                     width: 34,
                     height: 3,
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
+                      color: AppColors.border,
                       borderRadius: BorderRadius.circular(20),
                     ),
                   ),
@@ -886,7 +887,7 @@ class _EditExerciseSheetState extends State<_EditExerciseSheet> {
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w900,
-                                color: Colors.black,
+                                color: AppColors.textPrimary,
                               ),
                             ),
                           ),
@@ -901,7 +902,7 @@ class _EditExerciseSheetState extends State<_EditExerciseSheet> {
                             icon: const Icon(
                               Icons.close,
                               size: 24,
-                              color: Colors.black54,
+                              color: AppColors.textMuted,
                             ),
                           ),
                         ),
@@ -911,7 +912,7 @@ class _EditExerciseSheetState extends State<_EditExerciseSheet> {
                   const SizedBox(height: 8),
                   Divider(
                     height: 1,
-                    color: Colors.grey.shade200,
+                    color: AppColors.border,
                   ),
                   Flexible(
                     child: SingleChildScrollView(
@@ -991,7 +992,7 @@ class _EditExerciseSheetState extends State<_EditExerciseSheet> {
                             child: ElevatedButton(
                               onPressed: _submit,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF6C63FF),
+                                backgroundColor: AppColors.primary,
                                 foregroundColor: Colors.white,
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
@@ -1016,9 +1017,9 @@ class _EditExerciseSheetState extends State<_EditExerciseSheet> {
                                 Navigator.of(context).pop();
                               },
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.black87,
+                                foregroundColor: AppColors.textPrimary,
                                 side: BorderSide(
-                                  color: Colors.grey.shade300,
+                                  color: AppColors.border,
                                   width: 1.2,
                                 ),
                                 shape: RoundedRectangleBorder(
@@ -1060,7 +1061,7 @@ class _FilterButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xFFF3F2FA),
+      color: AppColors.cardMuted,
       borderRadius: BorderRadius.circular(9),
       child: InkWell(
         onTap: onTap,
@@ -1078,14 +1079,14 @@ class _FilterButton extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: Colors.black,
+                    color: AppColors.textPrimary,
                   ),
                 ),
               ),
               const Icon(
                 Icons.keyboard_arrow_down,
                 size: 18,
-                color: Colors.black54,
+                color: AppColors.textMuted,
               ),
             ],
           ),
@@ -1115,7 +1116,7 @@ class _ExerciseCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F4F5),
+        color: AppColors.pageBg,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -1130,7 +1131,7 @@ class _ExerciseCard extends StatelessWidget {
             child: const Icon(
               Icons.fitness_center,
               size: 18,
-              color: Colors.black87,
+              color: AppColors.textPrimary,
             ),
           ),
           const SizedBox(width: 12),
@@ -1146,7 +1147,7 @@ class _ExerciseCard extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
-                    color: Colors.black,
+                    color: AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -1161,7 +1162,7 @@ class _ExerciseCard extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                     color: exercise.isUsed
                         ? Colors.orange.shade700
-                        : Colors.grey.shade600,
+                        : AppColors.textSecondary,
                   ),
                 ),
               ],
@@ -1173,8 +1174,8 @@ class _ExerciseCard extends StatelessWidget {
               Icons.edit_outlined,
               size: 20,
               color: exercise.isUsed
-                  ? Colors.grey.shade400
-                  : const Color(0xFF6C63FF),
+                  ? AppColors.border
+                  : AppColors.primary,
             ),
           ),
           IconButton(
@@ -1182,7 +1183,7 @@ class _ExerciseCard extends StatelessWidget {
             icon: Icon(
               Icons.delete_outline,
               size: 20,
-              color: exercise.isUsed ? Colors.grey.shade400 : Colors.redAccent,
+              color: exercise.isUsed ? AppColors.border : Colors.redAccent,
             ),
           ),
         ],
@@ -1217,7 +1218,7 @@ class _EditTextField extends StatelessWidget {
         decoration: _editInputDecoration().copyWith(
           hintText: hintText,
           hintStyle: TextStyle(
-            color: Colors.grey.shade500,
+            color: AppColors.textMuted,
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
@@ -1252,7 +1253,7 @@ class _EditDropdownField extends StatelessWidget {
         hint: Text(
           hintText,
           style: TextStyle(
-            color: Colors.grey.shade500,
+            color: AppColors.textMuted,
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
@@ -1294,7 +1295,7 @@ class _EditFieldWrapper extends StatelessWidget {
           style: const TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w800,
-            color: Colors.black,
+            color: AppColors.textPrimary,
           ),
         ),
         const SizedBox(height: 8),
@@ -1307,7 +1308,7 @@ class _EditFieldWrapper extends StatelessWidget {
 InputDecoration _editInputDecoration() {
   return InputDecoration(
     filled: true,
-    fillColor: const Color(0xFFF3F2FA),
+    fillColor: AppColors.cardMuted,
     contentPadding: const EdgeInsets.symmetric(
       horizontal: 16,
       vertical: 15,

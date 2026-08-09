@@ -36,12 +36,14 @@ class _HomeScreenState extends State<HomeScreen> {
   String _todayPlanTitle = 'No active plan';
   String _todayPlanMeta = 'Choose a plan from Workout tab';
   bool _hasActiveWorkoutDay = false;
+  bool _completedToday = false;
+  bool _isRestDayPending = false;
 
   int _steps = 0;
   int _heartRate = 0;
   int _kcalBurned = 0;
   int _kcalGoal = 500;
-  double _weeklyVolumeKg = 0;
+  double _todayVolumeKg = 0;
 
   final List<MenuItem> _homeMenu = const [
     MenuItem(label: 'Progress', icon: Icons.track_changes),
@@ -80,7 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       await _loadProfile(client, userId);
       await _loadActivePlan(client, userId);
-      await _loadWeeklyVolume(client, userId);
+      await _loadTodayVolume(client, userId);
     } catch (error) {
       if (!mounted) return;
 
@@ -282,14 +284,41 @@ class _HomeScreenState extends State<HomeScreen> {
         _todayPlanTitle = activePlanTitle;
         _todayPlanMeta = 'No days in this plan yet';
         _hasActiveWorkoutDay = false;
+        _completedToday = false;
+        _isRestDayPending = false;
       });
 
       return;
     }
 
+    final now = DateTime.now();
+    final startOfDay = DateTime(now.year, now.month, now.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1));
+
+    final todayLogsResponse = await client
+        .from('workout_logs')
+        .select('workout_log_id')
+        .eq('profile_id', userId)
+        .eq(isPersonalized ? 'personalized_plan_id' : 'free_plan_id', planId)
+        .gte('performed_at', startOfDay.toUtc().toIso8601String())
+        .lt('performed_at', endOfDay.toUtc().toIso8601String());
+
+    final completedToday = (todayLogsResponse as List).isNotEmpty;
+
+    final completedLogsResponse = await client
+        .from('workout_logs')
+        .select('plan_day_id')
+        .eq('profile_id', userId)
+        .eq(isPersonalized ? 'personalized_plan_id' : 'free_plan_id', planId)
+        .not('plan_day_id', 'is', null);
+
+    final completedDayIds = List<Map<String, dynamic>>.from(
+      completedLogsResponse as List,
+    ).map((row) => row['plan_day_id']?.toString()).whereType<String>().toSet();
+
     final selectedDay = dayRows.firstWhere(
-      (day) => day['is_rest_day'] != true,
-      orElse: () => dayRows.first,
+      (day) => !completedDayIds.contains(day['plan_day_id']?.toString()),
+      orElse: () => dayRows.last,
     );
 
     final planDayId = selectedDay['plan_day_id']?.toString();
@@ -331,24 +360,23 @@ class _HomeScreenState extends State<HomeScreen> {
       _todayPlanMeta = meta;
       _hasActiveWorkoutDay =
           planDayId != null && planDayId.isNotEmpty && !isRestDay;
+      _completedToday = completedToday;
+      _isRestDayPending = isRestDay;
     });
   }
 
-  Future<void> _loadWeeklyVolume(SupabaseClient client, String userId) async {
+  Future<void> _loadTodayVolume(SupabaseClient client, String userId) async {
     final now = DateTime.now();
 
-    final startOfWeek = DateTime(now.year, now.month, now.day).subtract(
-      Duration(days: now.weekday - 1),
-    );
-
-    final endOfWeek = startOfWeek.add(const Duration(days: 7));
+    final startOfDay = DateTime(now.year, now.month, now.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1));
 
     final logsResponse = await client
         .from('workout_logs')
         .select('workout_log_id')
         .eq('profile_id', userId)
-        .gte('performed_at', startOfWeek.toUtc().toIso8601String())
-        .lt('performed_at', endOfWeek.toUtc().toIso8601String());
+        .gte('performed_at', startOfDay.toUtc().toIso8601String())
+        .lt('performed_at', endOfDay.toUtc().toIso8601String());
 
     final logs = List<Map<String, dynamic>>.from(logsResponse as List);
 
@@ -362,7 +390,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
 
       setState(() {
-        _weeklyVolumeKg = 0;
+        _todayVolumeKg = 0;
       });
 
       return;
@@ -387,7 +415,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
 
     setState(() {
-      _weeklyVolumeKg = total;
+      _todayVolumeKg = total;
     });
   }
 
@@ -400,6 +428,8 @@ class _HomeScreenState extends State<HomeScreen> {
       _todayPlanTitle = 'No active plan';
       _todayPlanMeta = 'Choose a plan from Workout tab';
       _hasActiveWorkoutDay = false;
+      _completedToday = false;
+      _isRestDayPending = false;
     });
   }
 
@@ -417,12 +447,12 @@ class _HomeScreenState extends State<HomeScreen> {
     return double.tryParse(value.toString());
   }
 
-  String _weeklyVolumeText() {
-    if (_weeklyVolumeKg % 1 == 0) {
-      return _weeklyVolumeKg.toInt().toString();
+  String _todayVolumeText() {
+    if (_todayVolumeKg % 1 == 0) {
+      return _todayVolumeKg.toInt().toString();
     }
 
-    return _weeklyVolumeKg.toStringAsFixed(1);
+    return _todayVolumeKg.toStringAsFixed(1);
   }
 
   String _todayDateText() {
@@ -588,8 +618,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: Icons.fitness_center,
                       iconColor: Colors.white,
                       iconBg: AppColors.dark,
-                      label: 'Weekly Volume',
-                      value: _weeklyVolumeText(),
+                      label: "Today's Volume",
+                      value: _todayVolumeText(),
                       unit: 'kg',
                     ),
                   ],
@@ -681,21 +711,39 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _todaysPlan(BuildContext context) {
+    final hasPlan = _activePlanId != null;
+    final showCompleted = hasPlan && _completedToday;
+    final showRestDay = hasPlan && !_completedToday && _isRestDayPending;
+
+    final String headline = showCompleted
+        ? "Workout Complete! 🎉"
+        : showRestDay
+            ? 'Rest Day'
+            : "Today's Workout";
+
+    final String buttonLabel = (showCompleted || showRestDay) ? 'View Plan' : 'Start';
+
     return SectionCard(
       color: AppColors.primarySoft,
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: AppColors.card,
-              borderRadius: BorderRadius.circular(14),
+          if (!showCompleted) ...[
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                showRestDay ? Icons.self_improvement : Icons.calendar_month,
+                color: AppColors.primary,
+              ),
             ),
-            child: const Icon(Icons.calendar_month, color: AppColors.primary),
-          ),
 
-          const SizedBox(width: 14),
+            const SizedBox(width: 14),
+          ],
 
           Expanded(
             child: _isLoading
@@ -709,9 +757,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        "Today's Workout",
-                        style: TextStyle(
+                      Text(
+                        headline,
+                        style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
                         ),
@@ -720,7 +768,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 2),
 
                       Text(
-                        _todayPlanTitle,
+                        showCompleted ? 'Up next: $_todayPlanTitle' : _todayPlanTitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -733,7 +781,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
 
                       Text(
-                        _todayPlanMeta,
+                        showRestDay
+                            ? 'Recovery day • no workout scheduled'
+                            : _todayPlanMeta,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -749,24 +799,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
           ElevatedButton(
             onPressed: _isLoading ? null : _openFitnessPlan,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              disabledBackgroundColor: AppColors.textMuted,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  'Start',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                ),
-                Icon(Icons.chevron_right, size: 18),
+                Text(buttonLabel),
+                const SizedBox(width: 4),
+                const Icon(Icons.chevron_right, size: 18),
               ],
             ),
           ),

@@ -29,19 +29,20 @@ class FilterChips extends StatelessWidget {
             onTap: () => onSelected(option),
             child: Container(
               alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(horizontal: 18),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
               decoration: BoxDecoration(
                 color: isSelected ? AppColors.primary : AppColors.card,
                 borderRadius: BorderRadius.circular(AppSpacing.pillRadius),
                 border: Border.all(
                   color: isSelected ? AppColors.primary : AppColors.border,
+                  width: 1.5,
                 ),
               ),
               child: Text(
                 option,
                 style: TextStyle(
                   fontSize: 13,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
                   color: isSelected ? Colors.white : AppColors.textSecondary,
                 ),
               ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../widgets/professional/mobile_page_wrapper.dart';
 import 'sign_in_screen.dart';
+import '../../theme/app_theme.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -48,7 +49,7 @@ class WelcomeScreen extends StatelessWidget {
                       fontSize: 38,
                       height: 1.15,
                       fontWeight: FontWeight.w800,
-                      color: Colors.black,
+                      color: AppColors.textPrimary,
                     ),
                   ),
 
@@ -62,7 +63,7 @@ class WelcomeScreen extends StatelessWidget {
                         print('Sign up page will be added later');
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF6C63FF),
+                        backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
@@ -90,9 +91,9 @@ class WelcomeScreen extends StatelessWidget {
                       },
                       style: OutlinedButton.styleFrom(
                         backgroundColor: Colors.white,
-                        foregroundColor: Colors.black,
+                        foregroundColor: AppColors.textPrimary,
                         side: BorderSide(
-                          color: Colors.grey.shade300,
+                          color: AppColors.border,
                           width: 1.2,
                         ),
                         shape: RoundedRectangleBorder(
@@ -132,7 +133,7 @@ class WelcomeScreen extends StatelessWidget {
                         'Already have an account? ',
                         style: TextStyle(
                           fontSize: 15,
-                          color: Colors.grey.shade700,
+                          color: AppColors.textSecondary,
                         ),
                       ),
                       GestureDetector(
@@ -149,7 +150,7 @@ class WelcomeScreen extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF6C63FF),
+                            color: AppColors.primary,
                           ),
                         ),
                       ),

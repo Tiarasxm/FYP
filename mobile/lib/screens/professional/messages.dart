@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/chat_service.dart';
 import '../../widgets/professional/mobile_page_wrapper.dart';
 import 'chat.dart';
+import '../../theme/app_theme.dart';
 
 class ProfessionalMessages extends StatefulWidget {
   const ProfessionalMessages({super.key});
@@ -147,7 +148,7 @@ class _ProfessionalMessagesState extends State<ProfessionalMessages> {
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
-                  color: Colors.black,
+                  color: AppColors.textPrimary,
                 ),
               ),
 
@@ -162,15 +163,15 @@ class _ProfessionalMessagesState extends State<ProfessionalMessages> {
                 decoration: InputDecoration(
                   hintText: 'Search clients',
                   hintStyle: TextStyle(
-                    color: Colors.grey.shade500,
+                    color: AppColors.textMuted,
                     fontSize: 14,
                   ),
                   suffixIcon: Icon(
                     Icons.search,
-                    color: Colors.grey.shade600,
+                    color: AppColors.textSecondary,
                   ),
                   filled: true,
-                  fillColor: const Color(0xFFF3F2FA),
+                  fillColor: AppColors.cardMuted,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 16,
@@ -202,10 +203,10 @@ class _ProfessionalMessagesState extends State<ProfessionalMessages> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                         decoration: BoxDecoration(
-                          color: isSelected ? const Color(0xFF6C63FF) : Colors.white,
+                          color: isSelected ? AppColors.primary : Colors.white,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: isSelected ? const Color(0xFF6C63FF) : Colors.grey.shade300,
+                            color: isSelected ? AppColors.primary : AppColors.border,
                           ),
                         ),
                         child: Text(
@@ -213,7 +214,7 @@ class _ProfessionalMessagesState extends State<ProfessionalMessages> {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: isSelected ? Colors.white : Colors.grey.shade700,
+                            color: isSelected ? Colors.white : AppColors.textSecondary,
                           ),
                         ),
                       ),
@@ -232,7 +233,7 @@ class _ProfessionalMessagesState extends State<ProfessionalMessages> {
                             child: Text(
                               'No conversations yet',
                               style: TextStyle(
-                                color: Colors.grey.shade500,
+                                color: AppColors.textMuted,
                                 fontSize: 14,
                               ),
                             ),
@@ -302,7 +303,7 @@ class _ConversationItem extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 22,
-                backgroundColor: Colors.black,
+                backgroundColor: AppColors.textPrimary,
                 backgroundImage: room.otherUserAvatarUrl != null
                     ? NetworkImage(room.otherUserAvatarUrl!)
                     : null,
@@ -333,7 +334,7 @@ class _ConversationItem extends StatelessWidget {
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w800,
-                              color: Colors.black,
+                              color: AppColors.textPrimary,
                             ),
                           ),
                         ),
@@ -348,14 +349,14 @@ class _ConversationItem extends StatelessWidget {
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
-                                color: Colors.grey.shade400,
+                                color: AppColors.border,
                               ),
                             ),
                             child: Text(
                               tag,
                               style: TextStyle(
                                 fontSize: 9,
-                                color: Colors.grey.shade700,
+                                color: AppColors.textSecondary,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -372,7 +373,7 @@ class _ConversationItem extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.grey.shade600,
+                        color: AppColors.textSecondary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -389,7 +390,7 @@ class _ConversationItem extends StatelessWidget {
                     formattedTime,
                     style: TextStyle(
                       fontSize: 10,
-                      color: Colors.grey.shade500,
+                      color: AppColors.textMuted,
                     ),
                   ),
 
@@ -398,7 +399,7 @@ class _ConversationItem extends StatelessWidget {
                   if (room.unreadCount > 0)
                     CircleAvatar(
                       radius: 9,
-                      backgroundColor: const Color(0xFF6C63FF),
+                      backgroundColor: AppColors.primary,
                       child: Text(
                         '${room.unreadCount}',
                         style: const TextStyle(

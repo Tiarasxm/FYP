@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/professional/workout_plan.dart';
 import '../../widgets/professional/mobile_page_wrapper.dart';
 import 'edit_plan.dart';
+import '../../theme/app_theme.dart';
 
 class PlanDetailScreen extends StatefulWidget {
   final WorkoutPlan plan;
@@ -460,7 +461,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                           child: Text(
                             'No day data found.',
                             style: TextStyle(
-                              color: Colors.grey.shade600,
+                              color: AppColors.textSecondary,
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
                             ),
@@ -474,7 +475,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
                             colors: [
-                              Color(0xFF6C63FF),
+                              AppColors.primary,
                               Color(0xFFA49DED),
                             ],
                           ),
@@ -513,7 +514,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                             : '${currentDay.exercises.length} exercises • ${currentDay.duration}',
                         style: TextStyle(
                           fontSize: 13,
-                          color: Colors.grey.shade600,
+                          color: AppColors.textSecondary,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -526,7 +527,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                                 child: Text(
                                   'This day is marked as rest day.',
                                   style: TextStyle(
-                                    color: Colors.grey.shade600,
+                                    color: AppColors.textSecondary,
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -537,7 +538,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                                     child: Text(
                                       'No exercises for this day.',
                                       style: TextStyle(
-                                        color: Colors.grey.shade600,
+                                        color: AppColors.textSecondary,
                                         fontSize: 14,
                                         fontWeight: FontWeight.w600,
                                       ),
@@ -569,9 +570,9 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                               onPressed:
                                   isDeleting ? null : confirmDeletePlan,
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: const Color(0xFF6C63FF),
+                                foregroundColor: AppColors.primary,
                                 side: const BorderSide(
-                                  color: Color(0xFF6C63FF),
+                                  color: AppColors.primary,
                                 ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
@@ -604,7 +605,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                             child: ElevatedButton(
                               onPressed: isDeleting ? null : openEditPlan,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF6C63FF),
+                                backgroundColor: AppColors.primary,
                                 foregroundColor: Colors.white,
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
@@ -662,7 +663,7 @@ class _SmallBox extends StatelessWidget {
                 topText,
                 style: TextStyle(
                   fontSize: 9,
-                  color: selected ? Colors.white70 : Colors.grey,
+                  color: selected ? AppColors.textMuted : AppColors.textMuted,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -671,7 +672,7 @@ class _SmallBox extends StatelessWidget {
                 number,
                 style: TextStyle(
                   fontSize: 16,
-                  color: selected ? Colors.white : Colors.black,
+                  color: selected ? Colors.white : AppColors.textPrimary,
                   fontWeight: FontWeight.w900,
                 ),
               ),
@@ -701,18 +702,18 @@ class _ExerciseCard extends StatelessWidget {
         vertical: 13,
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F4F5),
+        color: AppColors.pageBg,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         children: [
           CircleAvatar(
             radius: 18,
-            backgroundColor: const Color(0xFFECE9FF),
+            backgroundColor: AppColors.primarySoft,
             child: Text(
               '$number',
               style: const TextStyle(
-                color: Color(0xFF6C63FF),
+                color: AppColors.primary,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -729,7 +730,7 @@ class _ExerciseCard extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
-                    color: Colors.black,
+                    color: AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 5),
@@ -738,7 +739,7 @@ class _ExerciseCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade600,
+                    color: AppColors.textSecondary,
                   ),
                 ),
               ],
@@ -763,7 +764,7 @@ class _BackButton extends StatelessWidget {
       width: 44,
       height: 44,
       decoration: const BoxDecoration(
-        color: Color(0xFFF3F2FA),
+        color: AppColors.cardMuted,
         shape: BoxShape.circle,
       ),
       child: IconButton(
@@ -771,7 +772,7 @@ class _BackButton extends StatelessWidget {
         icon: const Icon(
           Icons.arrow_back_ios_new,
           size: 18,
-          color: Colors.black54,
+          color: AppColors.textMuted,
         ),
       ),
     );

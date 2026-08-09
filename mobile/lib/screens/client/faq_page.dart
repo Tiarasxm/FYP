@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 
 class FaqPage extends StatelessWidget {
   const FaqPage({super.key});
@@ -9,7 +10,7 @@ class FaqPage extends StatelessWidget {
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        foregroundColor: AppColors.textPrimary,
         elevation: 0,
         centerTitle: true,
         title: const Text(
@@ -72,7 +73,7 @@ class FaqItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
+        color: AppColors.pageBg,
         borderRadius: BorderRadius.circular(14),
       ),
       child: ExpansionTile(
@@ -102,7 +103,7 @@ class FaqItem extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 height: 1.5,
-                color: Colors.grey.shade700,
+                color: AppColors.textSecondary,
               ),
             ),
           ),

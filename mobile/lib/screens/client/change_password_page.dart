@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../theme/app_theme.dart';
 
 class ChangePasswordPage extends StatefulWidget {
   const ChangePasswordPage({super.key});
@@ -208,10 +209,10 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                 child: ElevatedButton(
                   onPressed: isSubmitting ? null : _changePassword,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurpleAccent,
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     disabledBackgroundColor:
-                        Colors.deepPurpleAccent.withOpacity(0.5),
+                        AppColors.primary.withOpacity(0.5),
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -283,7 +284,7 @@ class PasswordInputField extends StatelessWidget {
               hintText: hintText,
               hintStyle: TextStyle(
                 fontSize: 11,
-                color: Colors.grey.shade500,
+                color: AppColors.textMuted,
               ),
               filled: true,
               fillColor: const Color(0xFFF5F3FC),

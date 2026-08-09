@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../theme/app_theme.dart';
 import '../../widgets/professional/mobile_page_wrapper.dart';
 
 class ChangePassword extends StatefulWidget {
@@ -169,15 +170,6 @@ class _ChangePasswordState extends State<ChangePassword> {
                 height: 52,
                 child: ElevatedButton(
                   onPressed: isLoading ? null : updatePassword,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6C63FF),
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey.shade300,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
                   child: isLoading
                       ? const SizedBox(
                           width: 22,
@@ -237,20 +229,6 @@ class _PasswordInput extends StatelessWidget {
           obscureText: true,
           decoration: InputDecoration(
             hintText: hintText,
-            hintStyle: TextStyle(
-              fontSize: 14,
-              color: Colors.grey.shade500,
-            ),
-            filled: true,
-            fillColor: const Color(0xFFF3F2FA),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 15,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
-            ),
           ),
         ),
       ],
@@ -271,7 +249,7 @@ class _BackButton extends StatelessWidget {
       width: 44,
       height: 44,
       decoration: const BoxDecoration(
-        color: Color(0xFFF3F2FA),
+        color: AppColors.cardMuted,
         shape: BoxShape.circle,
       ),
       child: IconButton(
@@ -279,7 +257,7 @@ class _BackButton extends StatelessWidget {
         icon: const Icon(
           Icons.arrow_back_ios_new,
           size: 18,
-          color: Colors.black54,
+          color: AppColors.textSecondary,
         ),
       ),
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/client/social_post.dart';
+import '../../theme/app_theme.dart';
 
 class PostCard extends StatelessWidget {
   final SocialPost? post;
@@ -44,7 +45,7 @@ class PostCard extends StatelessWidget {
                     children: [
                       CircleAvatar(
                         radius: 9,
-                        backgroundColor: const Color(0xFFE1D9FF),
+                        backgroundColor: AppColors.primarySoft,
                         backgroundImage: item?.author?.avatarUrl?.isNotEmpty == true
                             ? NetworkImage(item!.author!.avatarUrl!)
                             : null,
@@ -74,7 +75,7 @@ class PostCard extends StatelessWidget {
                       const Icon(
                         Icons.chat_bubble_outline,
                         size: 14,
-                        color: Colors.grey,
+                        color: AppColors.textMuted,
                       ),
                       const SizedBox(width: 2),
                       Text(
@@ -94,7 +95,7 @@ class PostCard extends StatelessWidget {
                             size: 16,
                             color: item?.isLiked == true
                                 ? Colors.red
-                                : Colors.grey.shade600,
+                                : AppColors.textSecondary,
                           ),
                         ),
                       ),
@@ -138,9 +139,9 @@ class _PostImage extends StatelessWidget {
 
   Widget _placeholder() {
     return ColoredBox(
-      color: Colors.grey.shade200,
+      color: AppColors.border,
       child: const Center(
-        child: Icon(Icons.image_outlined, color: Colors.grey),
+        child: Icon(Icons.image_outlined, color: AppColors.textMuted),
       ),
     );
   }

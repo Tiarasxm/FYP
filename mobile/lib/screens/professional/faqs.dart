@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../widgets/professional/mobile_page_wrapper.dart';
+import '../../theme/app_theme.dart';
 
 class FAQs extends StatelessWidget {
   const FAQs({super.key});
@@ -27,7 +28,7 @@ class FAQs extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
-                          color: Colors.black,
+                          color: AppColors.textPrimary,
                         ),
                       ),
                     ),
@@ -44,7 +45,7 @@ class FAQs extends StatelessWidget {
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF4F4F5),
+                  color: AppColors.pageBg,
                   borderRadius: BorderRadius.circular(18),
                 ),
                 child: const Column(
@@ -113,7 +114,7 @@ class _FAQItemState extends State<_FAQItem> {
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      color: Colors.black,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                 ),
@@ -122,7 +123,7 @@ class _FAQItemState extends State<_FAQItem> {
                       ? Icons.keyboard_arrow_up
                       : Icons.keyboard_arrow_down,
                   size: 20,
-                  color: Colors.black54,
+                  color: AppColors.textMuted,
                 ),
               ],
             ),
@@ -142,7 +143,7 @@ class _FAQItemState extends State<_FAQItem> {
                 style: TextStyle(
                   fontSize: 12,
                   height: 1.35,
-                  color: Colors.grey.shade700,
+                  color: AppColors.textSecondary,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -166,7 +167,7 @@ class _BackButton extends StatelessWidget {
       width: 44,
       height: 44,
       decoration: const BoxDecoration(
-        color: Color(0xFFF3F2FA),
+        color: AppColors.cardMuted,
         shape: BoxShape.circle,
       ),
       child: IconButton(
@@ -174,7 +175,7 @@ class _BackButton extends StatelessWidget {
         icon: const Icon(
           Icons.arrow_back_ios_new,
           size: 18,
-          color: Colors.black54,
+          color: AppColors.textMuted,
         ),
       ),
     );

@@ -6,6 +6,7 @@ import '../../models/professional/library_exercise.dart';
 import '../../models/professional/workout_plan.dart';
 import '../../widgets/professional/mobile_page_wrapper.dart';
 import 'create_exercise.dart';
+import '../../theme/app_theme.dart';
 
 class SelectExercise extends StatefulWidget {
   const SelectExercise({super.key});
@@ -136,7 +137,7 @@ class _SelectExerciseState extends State<SelectExercise> {
                     width: 34,
                     height: 3,
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
+                      color: AppColors.border,
                       borderRadius: BorderRadius.circular(20),
                     ),
                   ),
@@ -151,7 +152,7 @@ class _SelectExerciseState extends State<SelectExercise> {
                   const SizedBox(height: 12),
                   Divider(
                     height: 1,
-                    color: Colors.grey.shade200,
+                    color: AppColors.border,
                   ),
                   Flexible(
                     child: ListView.builder(
@@ -176,7 +177,7 @@ class _SelectExerciseState extends State<SelectExercise> {
                           trailing: isSelected
                               ? const Icon(
                                   Icons.check,
-                                  color: Color(0xFF6C63FF),
+                                  color: AppColors.primary,
                                   size: 18,
                                 )
                               : null,
@@ -232,7 +233,7 @@ class _SelectExerciseState extends State<SelectExercise> {
                     width: 44,
                     height: 44,
                     decoration: const BoxDecoration(
-                      color: Color(0xFFF3F2FA),
+                      color: AppColors.cardMuted,
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
@@ -242,7 +243,7 @@ class _SelectExerciseState extends State<SelectExercise> {
                       icon: const Icon(
                         Icons.arrow_back_ios_new,
                         size: 18,
-                        color: Colors.black54,
+                        color: AppColors.textMuted,
                       ),
                     ),
                   ),
@@ -272,15 +273,15 @@ class _SelectExerciseState extends State<SelectExercise> {
                 decoration: InputDecoration(
                   hintText: 'Search exercise',
                   hintStyle: TextStyle(
-                    color: Colors.grey.shade500,
+                    color: AppColors.textMuted,
                     fontSize: 14,
                   ),
                   suffixIcon: Icon(
                     Icons.search,
-                    color: Colors.grey.shade600,
+                    color: AppColors.textSecondary,
                   ),
                   filled: true,
-                  fillColor: const Color(0xFFF3F2FA),
+                  fillColor: AppColors.cardMuted,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 16,
@@ -385,7 +386,7 @@ class _SelectExerciseState extends State<SelectExercise> {
                                       : 'No exercises found.',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
-                                    color: Colors.grey.shade600,
+                                    color: AppColors.textSecondary,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -415,9 +416,9 @@ class _SelectExerciseState extends State<SelectExercise> {
                 child: ElevatedButton(
                   onPressed: selectedExercise == null ? null : confirmSelection,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6C63FF),
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey.shade300,
+                    disabledBackgroundColor: AppColors.border,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
@@ -451,7 +452,7 @@ class _FilterButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xFFF3F2FA),
+      color: AppColors.cardMuted,
       borderRadius: BorderRadius.circular(9),
       child: InkWell(
         onTap: onTap,
@@ -475,7 +476,7 @@ class _FilterButton extends StatelessWidget {
               const Icon(
                 Icons.keyboard_arrow_down,
                 size: 18,
-                color: Colors.black54,
+                color: AppColors.textMuted,
               ),
             ],
           ),
@@ -499,7 +500,7 @@ class _OwnerChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? const Color(0xFFE4E1FF) : const Color(0xFFF3F2FA),
+      color: selected ? const Color(0xFFE4E1FF) : AppColors.cardMuted,
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         onTap: onTap,
@@ -511,7 +512,7 @@ class _OwnerChip extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w800,
-              color: selected ? const Color(0xFF6C63FF) : Colors.black87,
+              color: selected ? AppColors.primary : AppColors.textPrimary,
             ),
           ),
         ),
@@ -539,7 +540,7 @@ class _CreateExerciseButton extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: Colors.grey.shade400,
+              color: AppColors.border,
               width: 1.2,
             ),
           ),
@@ -549,7 +550,7 @@ class _CreateExerciseButton extends StatelessWidget {
               Icon(
                 Icons.add,
                 size: 18,
-                color: Colors.grey.shade700,
+                color: AppColors.textSecondary,
               ),
               const SizedBox(width: 6),
               Text(
@@ -557,7 +558,7 @@ class _CreateExerciseButton extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: Colors.grey.shade700,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ],
@@ -585,10 +586,10 @@ class _SelectableExerciseCard extends StatelessWidget {
       height: 58,
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F4F5),
+        color: AppColors.pageBg,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: selected ? const Color(0xFF6C63FF) : Colors.transparent,
+          color: selected ? AppColors.primary : Colors.transparent,
           width: 1.3,
         ),
       ),
@@ -611,7 +612,7 @@ class _SelectableExerciseCard extends StatelessWidget {
                   child: const Icon(
                     Icons.fitness_center,
                     size: 18,
-                    color: Colors.black87,
+                    color: AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -643,7 +644,7 @@ class _SelectableExerciseCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 11,
-                          color: Colors.grey.shade600,
+                          color: AppColors.textSecondary,
                         ),
                       ),
                     ],

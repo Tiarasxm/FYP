@@ -707,6 +707,12 @@ create table if not exists public.workout_logs (
   constraint workout_logs_personalized_plan_id_fkey foreign key (personalized_plan_id) references public.personalized_plans(personalized_plan_id)
 );
 
+-- Tracks which specific plan day (free_plans -> plan_days, or personalized_plans ->
+-- personalized_plan_days) a workout log corresponds to, so the app can determine
+-- day-by-day progression through a plan.
+alter table public.workout_logs
+add column if not exists plan_day_id uuid;
+
 -- =========================================================
 -- 18. WORKOUT EXERCISES TABLE
 -- =========================================================

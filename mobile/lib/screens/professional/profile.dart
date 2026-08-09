@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../theme/app_theme.dart';
 import '../../widgets/professional/mobile_page_wrapper.dart';
 import '../auth/welcome_screen.dart';
 
@@ -257,7 +258,7 @@ class _ProfessionalProfileState extends State<ProfessionalProfile> {
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
-                  color: Colors.black,
+                  color: AppColors.textPrimary,
                 ),
               ),
 
@@ -266,7 +267,7 @@ class _ProfessionalProfileState extends State<ProfessionalProfile> {
               Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF4F4F5),
+                  color: AppColors.pageBg,
                   borderRadius: BorderRadius.circular(22),
                 ),
                 child: Column(
@@ -275,7 +276,7 @@ class _ProfessionalProfileState extends State<ProfessionalProfile> {
                       children: [
                         CircleAvatar(
                           radius: 38,
-                          backgroundColor: Colors.black,
+                          backgroundColor: AppColors.textPrimary,
                           backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl!) : null,
                           child: avatarUrl == null
                               ? Text(
@@ -301,14 +302,14 @@ class _ProfessionalProfileState extends State<ProfessionalProfile> {
                                   vertical: 5,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFECE9FF),
+                                  color: AppColors.primarySoft,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: const Text(
                                   'FITNESS PROFESSIONAL',
                                   style: TextStyle(
                                     fontSize: 10,
-                                    color: Color(0xFF6C63FF),
+                                    color: AppColors.primary,
                                     fontWeight: FontWeight.w800,
                                   ),
                                 ),
@@ -321,7 +322,7 @@ class _ProfessionalProfileState extends State<ProfessionalProfile> {
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w800,
-                                  color: Colors.black,
+                                  color: AppColors.textPrimary,
                                 ),
                               ),
 
@@ -331,9 +332,9 @@ class _ProfessionalProfileState extends State<ProfessionalProfile> {
                                 specialties.isNotEmpty
                                     ? specialties.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).join(' • ')
                                     : 'No specializations set',
-                                style: TextStyle(
+                                style: const TextStyle(
                                   fontSize: 12,
-                                  color: Colors.grey.shade600,
+                                  color: AppColors.textSecondary,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -438,15 +439,6 @@ class _ProfessionalProfileState extends State<ProfessionalProfile> {
                   onPressed: () {
                     logout(context);
                   },
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF6C63FF),
-                    side: const BorderSide(
-                      color: Color(0xFF6C63FF),
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
                   child: const Text(
                     'Logout',
                     style: TextStyle(
@@ -484,15 +476,15 @@ class _ProfileStat extends StatelessWidget {
           style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w900,
-            color: Colors.black,
+            color: AppColors.textPrimary,
           ),
         ),
         const SizedBox(height: 4),
         Text(
           label,
-          style: TextStyle(
-            fontSize: 8,
-            color: Colors.grey.shade600,
+          style: const TextStyle(
+            fontSize: 9,
+            color: AppColors.textSecondary,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -515,17 +507,17 @@ class _ProfileMenuGroup extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F4F5),
-        borderRadius: BorderRadius.circular(22),
+        color: AppColors.pageBg,
+        borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             title,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 10,
-              color: Colors.grey.shade600,
+              color: AppColors.textSecondary,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -558,13 +550,13 @@ class _ProfileMenuItem extends StatelessWidget {
         style: const TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w600,
-          color: Colors.black,
+          color: AppColors.textPrimary,
         ),
       ),
       trailing: const Icon(
         Icons.chevron_right,
         size: 22,
-        color: Colors.black54,
+        color: AppColors.textMuted,
       ),
       onTap: onTap,
     );

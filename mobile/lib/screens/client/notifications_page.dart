@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../theme/app_theme.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -380,7 +381,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                         "Choose the reminder type and time that fit your routine.",
                         style: TextStyle(
                           fontSize: 11,
-                          color: Colors.grey.shade600,
+                          color: AppColors.textSecondary,
                         ),
                       ),
                       const SizedBox(height: 18),
@@ -405,7 +406,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                   child: const Icon(
                                     Icons.notifications_none,
                                     size: 15,
-                                    color: Colors.deepPurpleAccent,
+                                    color: AppColors.primary,
                                   ),
                                 ),
                                 const SizedBox(width: 10),
@@ -422,7 +423,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                   scale: 0.85,
                                   child: Switch(
                                     value: dailyReminderEnabled,
-                                    activeTrackColor: Colors.deepPurpleAccent,
+                                    activeTrackColor: AppColors.primary,
                                     activeThumbColor: Colors.white,
                                     onChanged: isSaving
                                         ? null
@@ -448,10 +449,10 @@ class _NotificationsPageState extends State<NotificationsPage> {
                               child: ElevatedButton.icon(
                                 onPressed: isSaving ? null : addReminder,
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.deepPurpleAccent,
+                                  backgroundColor: AppColors.primary,
                                   foregroundColor: Colors.white,
                                   disabledBackgroundColor:
-                                      Colors.deepPurpleAccent.withOpacity(0.5),
+                                      AppColors.primary.withOpacity(0.5),
                                   elevation: 0,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
@@ -501,7 +502,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
         textAlign: TextAlign.center,
         style: TextStyle(
           fontSize: 11,
-          color: Colors.grey.shade600,
+          color: AppColors.textSecondary,
           height: 1.4,
         ),
       ),
@@ -525,7 +526,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
               scale: 0.75,
               child: Switch(
                 value: reminder.enabled,
-                activeTrackColor: Colors.deepPurpleAccent,
+                activeTrackColor: AppColors.primary,
                 activeThumbColor: Colors.white,
                 onChanged: (value) {
                   toggleReminderEnabled(index, value);
@@ -551,7 +552,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                     iconSize: 18,
                     style: const TextStyle(
                       fontSize: 10,
-                      color: Colors.black,
+                      color: AppColors.textPrimary,
                     ),
                     items: reminderTypes.map((type) {
                       return DropdownMenuItem(
@@ -590,7 +591,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                     _timeToDisplay(reminder.time),
                     style: const TextStyle(
                       fontSize: 10,
-                      color: Colors.deepPurpleAccent,
+                      color: AppColors.primary,
                     ),
                   ),
                 ),

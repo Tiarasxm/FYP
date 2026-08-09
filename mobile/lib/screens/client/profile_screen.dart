@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../theme/app_theme.dart';
 import '../auth/welcome_screen.dart';
 import 'my_profile_page.dart';
 import 'manage_account_page.dart';
@@ -341,8 +342,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(24),
+                    color: AppColors.card,
+                    borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                    border: Border.all(color: AppColors.border),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x14000000),
+                        blurRadius: 20,
+                        offset: Offset(0, 8),
+                      ),
+                    ],
                   ),
                   child: Column(
                     children: [
@@ -350,9 +359,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         children: [
                           CircleAvatar(
                             radius: 40,
-                            backgroundColor: Colors.grey,
+                            backgroundColor: AppColors.cardMuted,
                             backgroundImage: avatarUrl.isNotEmpty
                                 ? NetworkImage(avatarUrl)
+                                : null,
+                            child: avatarUrl.isEmpty
+                                ? const Icon(
+                                    Icons.person,
+                                    size: 32,
+                                    color: AppColors.textMuted,
+                                  )
                                 : null,
                           ),
                           const SizedBox(width: 18),
@@ -366,15 +382,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     vertical: 4,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: Colors.deepPurpleAccent.withOpacity(0.15),
+                                    color: AppColors.primarySoft,
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: Text(
                                     _membershipText,
                                     style: const TextStyle(
-                                      color: Colors.deepPurpleAccent,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.primary,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
                                     ),
                                   ),
                                 ),
@@ -393,8 +409,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   email,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: Colors.grey.shade600,
+                                  style: const TextStyle(
+                                    color: AppColors.textSecondary,
                                     fontSize: 12,
                                   ),
                                 ),
@@ -437,8 +453,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE9E5FF),
-                      borderRadius: BorderRadius.circular(20),
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
                     ),
                     child: Row(
                       children: [
@@ -449,16 +465,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               const Text(
                                 "Priority Plan",
                                 style: TextStyle(
-                                  fontWeight: FontWeight.bold,
+                                  fontWeight: FontWeight.w800,
                                   fontSize: 16,
+                                  color: AppColors.textPrimary,
                                 ),
                               ),
                               const SizedBox(height: 6),
                               Text(
                                 "Cancel Priority and return\nto the free plan.",
                                 style: TextStyle(
-                                  color: Colors.grey.shade700,
-                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                  fontSize: 13,
                                 ),
                               ),
                             ],
@@ -471,14 +488,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               const MembershipPage(),
                             );
                           },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.deepPurpleAccent,
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
                           child: const Text("Cancel"),
                         ),
                       ],
@@ -640,7 +649,7 @@ class ProfileStat extends StatelessWidget {
           label,
           style: TextStyle(
             fontSize: 9,
-            color: Colors.grey.shade600,
+            color: AppColors.textSecondary,
           ),
         ),
       ],
@@ -666,7 +675,7 @@ class ProfileMenuSection extends StatelessWidget {
         vertical: 18,
       ),
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
+        color: AppColors.pageBg,
         borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
@@ -676,7 +685,7 @@ class ProfileMenuSection extends StatelessWidget {
             title,
             style: TextStyle(
               fontSize: 10,
-              color: Colors.grey.shade600,
+              color: AppColors.textSecondary,
               fontWeight: FontWeight.bold,
             ),
           ),

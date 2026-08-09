@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'food_scan_result_screen.dart';
+import '../../theme/app_theme.dart';
 
 class FoodScanScreen extends StatelessWidget {
   const FoodScanScreen({super.key});
@@ -8,7 +9,7 @@ class FoodScanScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.textPrimary,
       body: SafeArea(
         child: Column(
           children: [
@@ -61,7 +62,7 @@ class FoodScanScreen extends StatelessWidget {
                   IconButton(
                     onPressed: () {},
                     icon: const Icon(Icons.photo_library_outlined,
-                        color: Colors.white70),
+                        color: AppColors.textMuted),
                   ),
                   const Spacer(),
                   GestureDetector(

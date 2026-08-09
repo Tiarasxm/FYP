@@ -5,6 +5,7 @@ import '../../widgets/professional/mobile_page_wrapper.dart';
 import 'create_exercise.dart';
 import 'review_plan.dart';
 import 'select_exercise.dart';
+import '../../theme/app_theme.dart';
 
 class CreatePlanSchedule extends StatefulWidget {
   final String planName;
@@ -185,7 +186,7 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                     width: 34,
                     height: 3,
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
+                      color: AppColors.border,
                       borderRadius: BorderRadius.circular(20),
                     ),
                   ),
@@ -268,7 +269,7 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                       width: 34,
                       height: 3,
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
+                        color: AppColors.border,
                         borderRadius: BorderRadius.circular(20),
                       ),
                     ),
@@ -376,7 +377,7 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                                 Navigator.pop(context);
                               },
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF6C63FF),
+                                backgroundColor: AppColors.primary,
                                 foregroundColor: Colors.white,
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
@@ -556,12 +557,12 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                 decoration: InputDecoration(
                   hintText: 'Enter day name',
                   hintStyle: TextStyle(
-                    color: Colors.grey.shade500,
+                    color: AppColors.textMuted,
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                   ),
                   filled: true,
-                  fillColor: const Color(0xFFF3F2FA),
+                  fillColor: AppColors.cardMuted,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 15,
@@ -581,7 +582,7 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                               ? 'This day is marked as rest day.'
                               : 'No exercises added yet.',
                           style: TextStyle(
-                            color: Colors.grey.shade600,
+                            color: AppColors.textSecondary,
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                           ),
@@ -613,11 +614,11 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                     ),
                   ),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF6C63FF),
-                    disabledForegroundColor: Colors.grey,
+                    foregroundColor: AppColors.primary,
+                    disabledForegroundColor: AppColors.textMuted,
                     side: BorderSide(
                       color:
-                          day.isRestDay ? Colors.grey : const Color(0xFF6C63FF),
+                          day.isRestDay ? AppColors.textMuted : AppColors.primary,
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(18),
@@ -630,7 +631,7 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                 children: [
                   Checkbox(
                     value: day.isRestDay,
-                    activeColor: const Color(0xFF6C63FF),
+                    activeColor: AppColors.primary,
                     onChanged: hasExercises
                         ? null
                         : (value) {
@@ -646,7 +647,7 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: hasExercises ? Colors.grey : Colors.black,
+                      color: hasExercises ? AppColors.textMuted : AppColors.textPrimary,
                     ),
                   ),
                 ],
@@ -658,7 +659,7 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
                 child: ElevatedButton(
                   onPressed: goToReview,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6C63FF),
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
@@ -702,7 +703,7 @@ class _ExerciseEditCard extends StatelessWidget {
         vertical: 12,
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F4F5),
+        color: AppColors.pageBg,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
@@ -722,7 +723,7 @@ class _ExerciseEditCard extends StatelessWidget {
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
-                  color: Colors.black,
+                  color: AppColors.textPrimary,
                 ),
                 children: [
                   TextSpan(
@@ -730,7 +731,7 @@ class _ExerciseEditCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade600,
+                      color: AppColors.textSecondary,
                     ),
                   ),
                 ],
@@ -742,7 +743,7 @@ class _ExerciseEditCard extends StatelessWidget {
             icon: Icon(
               Icons.edit,
               size: 16,
-              color: Colors.grey.shade600,
+              color: AppColors.textSecondary,
             ),
           ),
         ],
@@ -778,7 +779,7 @@ class _SmallBox extends StatelessWidget {
               number,
               style: TextStyle(
                 fontSize: 17,
-                color: selected ? Colors.white : Colors.black,
+                color: selected ? Colors.white : AppColors.textPrimary,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -809,13 +810,13 @@ class _AddSmallBox extends StatelessWidget {
           height: 58,
           decoration: BoxDecoration(
             border: Border.all(
-              color: Colors.grey.shade400,
+              color: AppColors.border,
             ),
             borderRadius: BorderRadius.circular(10),
           ),
           child: const Icon(
             Icons.add,
-            color: Colors.black54,
+            color: AppColors.textMuted,
           ),
         ),
       ),
@@ -837,7 +838,7 @@ class _SheetOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xFFF4F4F5),
+      color: AppColors.pageBg,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
@@ -849,7 +850,7 @@ class _SheetOption extends StatelessWidget {
             children: [
               Icon(
                 icon,
-                color: const Color(0xFF6C63FF),
+                color: AppColors.primary,
               ),
               const SizedBox(width: 12),
               Text(
@@ -907,7 +908,7 @@ class _SheetInput extends StatelessWidget {
         hintText: hint,
         suffixText: suffixText,
         filled: true,
-        fillColor: const Color(0xFFF4F4F5),
+        fillColor: AppColors.pageBg,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 14,
           vertical: 14,
@@ -934,7 +935,7 @@ class _BackButton extends StatelessWidget {
       width: 44,
       height: 44,
       decoration: const BoxDecoration(
-        color: Color(0xFFF3F2FA),
+        color: AppColors.cardMuted,
         shape: BoxShape.circle,
       ),
       child: IconButton(
@@ -942,7 +943,7 @@ class _BackButton extends StatelessWidget {
         icon: const Icon(
           Icons.arrow_back_ios_new,
           size: 18,
-          color: Colors.black54,
+          color: AppColors.textMuted,
         ),
       ),
     );

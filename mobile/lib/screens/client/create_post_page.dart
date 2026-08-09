@@ -4,6 +4,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../theme/app_theme.dart';
 
 class CreatePostPage extends StatefulWidget {
   const CreatePostPage({super.key});
@@ -335,7 +336,7 @@ class _CreatePostPageState extends State<CreatePostPage>
                       scrollPadding: const EdgeInsets.only(bottom: 100),
                       decoration: const InputDecoration(
                         hintText: 'Write caption with details',
-                        hintStyle: TextStyle(fontSize: 12, color: Colors.grey),
+                        hintStyle: TextStyle(fontSize: 12, color: AppColors.textMuted),
                         border: InputBorder.none,
                         counterText: '',
                       ),

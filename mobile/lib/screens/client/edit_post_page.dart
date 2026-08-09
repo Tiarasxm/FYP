@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/client/social_post.dart';
+import '../../theme/app_theme.dart';
 
 class EditPostPage extends StatefulWidget {
   final SocialPost post;
@@ -205,7 +206,7 @@ class _EditPostPageState extends State<EditPostPage> {
                       scrollPadding: const EdgeInsets.only(bottom: 100),
                       decoration: const InputDecoration(
                         hintText: 'Write caption with details',
-                        hintStyle: TextStyle(fontSize: 12, color: Colors.grey),
+                        hintStyle: TextStyle(fontSize: 12, color: AppColors.textMuted),
                         border: InputBorder.none,
                         counterText: '',
                       ),

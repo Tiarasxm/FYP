@@ -270,7 +270,7 @@ class _SavedPlansScreenState extends State<SavedPlansScreen> {
             const SizedBox(height: 6),
 
             const Text(
-              'Choose a public plan from the Workout tab.',
+              'Choose an available plan from the Workout tab.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,

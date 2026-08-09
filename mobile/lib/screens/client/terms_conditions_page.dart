@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 
 class TermsConditionsPage extends StatelessWidget {
   const TermsConditionsPage({super.key});
@@ -9,7 +10,7 @@ class TermsConditionsPage extends StatelessWidget {
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        foregroundColor: AppColors.textPrimary,
         elevation: 0,
         centerTitle: true,
         title: const Text(
@@ -118,7 +119,7 @@ class TermsSection extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               height: 1.55,
-              color: Colors.grey.shade800,
+              color: AppColors.textPrimary,
             ),
           ),
         ],

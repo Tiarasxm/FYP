@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 
 class RequiredLabel extends StatelessWidget {
   final String text;
@@ -16,7 +17,7 @@ class RequiredLabel extends StatelessWidget {
         style: const TextStyle(
           fontSize: 15,
           fontWeight: FontWeight.w700,
-          color: Colors.black,
+          color: AppColors.textPrimary,
         ),
         children: const [
           TextSpan(

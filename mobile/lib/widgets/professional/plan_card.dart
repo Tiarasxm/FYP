@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/professional/workout_plan.dart';
+import '../../theme/app_theme.dart';
 
 class PlanCard extends StatelessWidget {
   final WorkoutPlan plan;
@@ -24,8 +25,9 @@ class PlanCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+        border: Border.all(color: AppColors.border),
       ),
       child: Row(
         children: [
@@ -36,9 +38,9 @@ class PlanCard extends StatelessWidget {
                 Text(
                   plan.title,
                   style: const TextStyle(
-                    fontSize: 15.5,
+                    fontSize: 15,
                     fontWeight: FontWeight.w800,
-                    color: Colors.black,
+                    color: AppColors.textPrimary,
                   ),
                 ),
 
@@ -46,9 +48,9 @@ class PlanCard extends StatelessWidget {
 
                 Text(
                   '${plan.days} Days • ${plan.duration}',
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    color: Colors.grey.shade700,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -70,22 +72,22 @@ class PlanCard extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: isVisibility
-                            ? const Color(0xFFECE9FF)
-                            : Colors.white,
+                            ? AppColors.primarySoft
+                            : AppColors.card,
                         border: Border.all(
                           color: isVisibility
-                              ? const Color(0xFFECE9FF)
-                              : Colors.grey.shade300,
+                              ? AppColors.primarySoft
+                              : AppColors.border,
                         ),
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(AppSpacing.pillRadius),
                       ),
                       child: Text(
                         chip,
                         style: TextStyle(
-                          fontSize: 10.5,
+                          fontSize: 11,
                           color: isVisibility
-                              ? const Color(0xFF6C63FF)
-                              : Colors.grey.shade700,
+                              ? AppColors.primary
+                              : AppColors.textSecondary,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -106,11 +108,9 @@ class PlanCard extends StatelessWidget {
                 child: OutlinedButton(
                   onPressed: onEdit ?? () {},
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(
-                      color: Color(0xFF6C63FF),
-                    ),
+                    side: const BorderSide(color: AppColors.primary),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     padding: EdgeInsets.zero,
                   ),
@@ -118,7 +118,7 @@ class PlanCard extends StatelessWidget {
                     'Edit',
                     style: TextStyle(
                       fontSize: 13,
-                      color: Color(0xFF6C63FF),
+                      color: AppColors.primary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -133,11 +133,11 @@ class PlanCard extends StatelessWidget {
                 child: ElevatedButton(
                   onPressed: onView,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6C63FF),
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     padding: EdgeInsets.zero,
                   ),
