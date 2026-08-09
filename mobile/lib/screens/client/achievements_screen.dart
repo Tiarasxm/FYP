@@ -46,6 +46,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
 
       final workoutDates = _extractUniqueWorkoutDates(logs);
       final longestStreak = _calculateLongestStreak(workoutDates);
+      final totalWorkouts = logs.length;
 
       final completedFirstProgram = await _checkCompletedFirstProgram(
         client: client,
@@ -53,31 +54,93 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
         logs: logs,
       );
 
+      final totalVolumeKg = await _calculateLifetimeVolume(
+        client: client,
+        logs: logs,
+      );
+
+      final mealLogDays = await _calculateMealLogDays(
+        client: client,
+        userId: userId,
+      );
+
       final achievements = [
-        Achievement(
-          label: '3-Day Streak',
+        _streakAchievement(
+          days: 3,
+          longestStreak: longestStreak,
           icon: Icons.local_fire_department,
-          achieved: longestStreak >= 3,
+          color: AppColors.amber,
         ),
-        Achievement(
-          label: '7-Day Streak',
+        _streakAchievement(
+          days: 7,
+          longestStreak: longestStreak,
           icon: Icons.local_fire_department,
-          achieved: longestStreak >= 7,
+          color: AppColors.amber,
         ),
-        Achievement(
-          label: '30-Day Streak',
-          icon: Icons.local_fire_department,
-          achieved: longestStreak >= 30,
+        _streakAchievement(
+          days: 30,
+          longestStreak: longestStreak,
+          icon: Icons.whatshot,
+          color: const Color(0xFFF08A3C),
         ),
-        Achievement(
-          label: '100-Day Streak',
-          icon: Icons.local_fire_department,
-          achieved: longestStreak >= 100,
+        _streakAchievement(
+          days: 100,
+          longestStreak: longestStreak,
+          icon: Icons.whatshot,
+          color: const Color(0xFFF08A3C),
         ),
         Achievement(
           label: 'Completed First Program',
+          description: 'Finish every training day in an active plan.',
           icon: Icons.event_available,
+          color: AppColors.primary,
           achieved: completedFirstProgram,
+          progressValue: completedFirstProgram ? 1 : 0,
+        ),
+        _countAchievement(
+          label: 'Getting Started',
+          description: 'Log 10 completed workouts.',
+          target: 10,
+          current: totalWorkouts,
+          unit: 'workouts',
+          icon: Icons.fitness_center,
+          color: AppColors.blue,
+        ),
+        _countAchievement(
+          label: 'Iron Regular',
+          description: 'Log 50 completed workouts.',
+          target: 50,
+          current: totalWorkouts,
+          unit: 'workouts',
+          icon: Icons.fitness_center,
+          color: AppColors.blue,
+        ),
+        _countAchievement(
+          label: 'Volume Titan',
+          description: 'Lift a combined 5,000 kg across all workouts.',
+          target: 5000,
+          current: totalVolumeKg.round(),
+          unit: 'kg',
+          icon: Icons.bolt,
+          color: const Color(0xFF9B6BFF),
+        ),
+        _countAchievement(
+          label: 'Volume Legend',
+          description: 'Lift a combined 25,000 kg across all workouts.',
+          target: 25000,
+          current: totalVolumeKg.round(),
+          unit: 'kg',
+          icon: Icons.bolt,
+          color: const Color(0xFF9B6BFF),
+        ),
+        _countAchievement(
+          label: 'Nutrition Tracker',
+          description: 'Log a meal on 7 different days.',
+          target: 7,
+          current: mealLogDays,
+          unit: 'days',
+          icon: Icons.restaurant,
+          color: AppColors.green,
         ),
       ];
 
@@ -99,6 +162,131 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
         });
       }
     }
+  }
+
+  Achievement _streakAchievement({
+    required int days,
+    required int longestStreak,
+    required IconData icon,
+    required Color color,
+  }) {
+    final achieved = longestStreak >= days;
+
+    return Achievement(
+      label: '$days-Day Streak',
+      description: 'Complete workouts on $days days in a row.',
+      icon: icon,
+      color: color,
+      achieved: achieved,
+      progressLabel: achieved ? null : 'Best streak: $longestStreak/$days days',
+      progressValue: (longestStreak / days).clamp(0, 1).toDouble(),
+    );
+  }
+
+  Achievement _countAchievement({
+    required String label,
+    required String description,
+    required int target,
+    required int current,
+    required String unit,
+    required IconData icon,
+    required Color color,
+  }) {
+    final achieved = current >= target;
+
+    return Achievement(
+      label: label,
+      description: description,
+      icon: icon,
+      color: color,
+      achieved: achieved,
+      progressLabel: achieved
+          ? null
+          : '${_formatNumber(current)}/${_formatNumber(target)} $unit',
+      progressValue: (current / target).clamp(0, 1).toDouble(),
+    );
+  }
+
+  String _formatNumber(int value) {
+    if (value < 1000) return '$value';
+
+    final thousands = value / 1000;
+    final rounded = thousands == thousands.roundToDouble()
+        ? thousands.toInt().toString()
+        : thousands.toStringAsFixed(1);
+
+    return '${rounded}k';
+  }
+
+  Future<double> _calculateLifetimeVolume({
+    required SupabaseClient client,
+    required List<Map<String, dynamic>> logs,
+  }) async {
+    final workoutLogIds = logs
+        .map((log) => log['workout_log_id']?.toString())
+        .where((id) => id != null && id.isNotEmpty)
+        .cast<String>()
+        .toList();
+
+    if (workoutLogIds.isEmpty) return 0;
+
+    final exercisesResponse = await client
+        .from('workout_exercises')
+        .select('reps, weight_kg')
+        .inFilter('workout_log_id', workoutLogIds);
+
+    final rows = List<Map<String, dynamic>>.from(exercisesResponse as List);
+
+    double total = 0;
+
+    for (final row in rows) {
+      final reps = _parseInt(row['reps']) ?? 0;
+      final weight = _parseDouble(row['weight_kg']) ?? 0;
+
+      total += reps * weight;
+    }
+
+    return total;
+  }
+
+  Future<int> _calculateMealLogDays({
+    required SupabaseClient client,
+    required String userId,
+  }) async {
+    final response = await client
+        .from('meal_logs')
+        .select('logged_at')
+        .eq('profile_id', userId);
+
+    final rows = List<Map<String, dynamic>>.from(response as List);
+
+    final uniqueDays = <String>{};
+
+    for (final row in rows) {
+      final raw = row['logged_at']?.toString();
+
+      if (raw == null || raw.isEmpty) continue;
+
+      final parsed = DateTime.tryParse(raw);
+
+      if (parsed == null) continue;
+
+      uniqueDays.add(_dateKey(parsed.toLocal()));
+    }
+
+    return uniqueDays.length;
+  }
+
+  int? _parseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    return int.tryParse(value.toString());
+  }
+
+  double? _parseDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString());
   }
 
   List<DateTime> _extractUniqueWorkoutDates(List<Map<String, dynamic>> logs) {
@@ -229,76 +417,182 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
             ),
           )
         else ...[
-          const Text(
-            'Achieved',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          Row(
+            children: [
+              const Text(
+                'Achieved',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.primarySoft,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '${achieved.length}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           if (achieved.isEmpty)
-            const Text(
-              'No achievements yet.',
-              style: TextStyle(
-                fontSize: 13,
-                color: AppColors.textSecondary,
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              decoration: BoxDecoration(
+                color: AppColors.cardMuted,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Center(
+                child: Text(
+                  'Complete a workout to earn your first badge.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             )
           else
-            _badgeGrid(achieved, achieved: true),
+            Column(
+              children: [
+                for (final item in achieved) ...[
+                  _achievementTile(item),
+                  const SizedBox(height: 10),
+                ],
+              ],
+            ),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 26),
 
           const Text(
-            'Unachieved',
+            'Unachieved Challenges',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
           ),
+          const SizedBox(height: 2),
+          const Text(
+            'Keep going — here\'s what\'s next.',
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
           const SizedBox(height: 12),
-          _badgeGrid(unachieved, achieved: false),
+          Column(
+            children: [
+              for (final item in unachieved) ...[
+                _achievementTile(item),
+                const SizedBox(height: 10),
+              ],
+            ],
+          ),
         ],
       ],
     );
   }
 
-  Widget _badgeGrid(List<Achievement> items, {required bool achieved}) {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        for (final item in items) _badge(item, achieved),
-      ],
-    );
-  }
-
-  Widget _badge(Achievement item, bool achieved) {
-    final isStreak = item.label.contains('Streak');
+  Widget _achievementTile(Achievement item) {
+    final achieved = item.achieved;
 
     return Container(
-      width: 96,
-      height: 96,
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.cardMuted,
+        color: AppColors.card,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: achieved ? item.color.withOpacity(0.25) : AppColors.border,
+        ),
       ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            item.icon,
-            size: 30,
-            color: achieved
-                ? AppColors.amber
-                : AppColors.textMuted.withOpacity(0.55),
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: achieved
+                  ? item.color.withOpacity(0.14)
+                  : AppColors.cardMuted,
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Icon(
+              item.icon,
+              size: 22,
+              color: achieved ? item.color : AppColors.textMuted,
+            ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            item.label,
-            textAlign: TextAlign.center,
-            maxLines: isStreak ? 1 : 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: achieved ? AppColors.textPrimary : AppColors.textMuted,
+
+          const SizedBox(width: 12),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.label,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: achieved
+                              ? AppColors.textPrimary
+                              : AppColors.textPrimary.withOpacity(0.85),
+                        ),
+                      ),
+                    ),
+                    if (achieved)
+                      const Icon(
+                        Icons.check_circle,
+                        size: 18,
+                        color: AppColors.green,
+                      )
+                    else
+                      const Icon(
+                        Icons.lock_outline,
+                        size: 16,
+                        color: AppColors.textMuted,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  item.description,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                if (!achieved && item.progressValue != null) ...[
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      value: item.progressValue,
+                      minHeight: 6,
+                      backgroundColor: AppColors.cardMuted,
+                      valueColor: AlwaysStoppedAnimation(item.color),
+                    ),
+                  ),
+                  if (item.progressLabel != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      item.progressLabel!,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ],
+              ],
             ),
           ),
         ],

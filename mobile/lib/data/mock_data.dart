@@ -148,11 +148,37 @@ class MockData {
 
   // Achievements
   static const List<Achievement> achievements = [
-    Achievement(label: '3-Day Streak', icon: Icons.local_fire_department, achieved: true),
-    Achievement(label: '7-Day Streak', icon: Icons.local_fire_department),
-    Achievement(label: '30-Day Streak', icon: Icons.whatshot),
-    Achievement(label: '100-Day Streak', icon: Icons.ac_unit),
-    Achievement(label: 'Completed First Program', icon: Icons.emoji_events),
+    Achievement(
+      label: '3-Day Streak',
+      description: 'Complete workouts on 3 days in a row.',
+      icon: Icons.local_fire_department,
+      color: AppColors.amber,
+      achieved: true,
+    ),
+    Achievement(
+      label: '7-Day Streak',
+      description: 'Complete workouts on 7 days in a row.',
+      icon: Icons.local_fire_department,
+      color: AppColors.amber,
+    ),
+    Achievement(
+      label: '30-Day Streak',
+      description: 'Complete workouts on 30 days in a row.',
+      icon: Icons.whatshot,
+      color: AppColors.amber,
+    ),
+    Achievement(
+      label: '100-Day Streak',
+      description: 'Complete workouts on 100 days in a row.',
+      icon: Icons.ac_unit,
+      color: AppColors.blue,
+    ),
+    Achievement(
+      label: 'Completed First Program',
+      description: 'Finish every training day in an active plan.',
+      icon: Icons.emoji_events,
+      color: AppColors.primary,
+    ),
   ];
 
   // Workout history
