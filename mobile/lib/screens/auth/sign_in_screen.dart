@@ -432,37 +432,6 @@ class _SignInScreenState extends State<SignInScreen> {
               ),
 
               const SizedBox(height: 40),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'Don’t have an account? ',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: isLoading
-                        ? null
-                        : () {
-                            print('Sign up page will be added later');
-                          },
-                    child: const Text(
-                      'Sign Up',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 26),
             ],
           ),
         ),

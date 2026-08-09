@@ -21,8 +21,31 @@ dev_dependencies:
   flutter_lints: ^3.0.0
   flutter_test:
     sdk: flutter
+  flutter_launcher_icons: ^0.14.3
+  flutter_native_splash: ^2.4.4
 
 flutter:
   uses-material-design: true
   assets:
     - assets/images/shaperush_bg.png
+    - assets/images/shaperush_logo.png
+    - assets/images/shaperush_logo_padded.png
+
+flutter_launcher_icons:
+  android: true
+  web:
+    generate: true
+    background_color: "#FFFFFF"
+    theme_color: "#8350F6"
+  image_path: "assets/images/shaperush_logo_padded.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/shaperush_logo_padded.png"
+
+flutter_native_splash:
+  color: "#FFFFFF"
+  image: assets/images/shaperush_logo_padded.png
+  android_12:
+    color: "#FFFFFF"
+    image: assets/images/shaperush_logo_padded.png
+  web: true
