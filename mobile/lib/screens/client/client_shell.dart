@@ -27,9 +27,13 @@ class _ClientShellState extends State<ClientShell> {
       ];
 
   void _selectTab(int index) {
+    if (index == _index) return;
+
     setState(() {
       _index = index;
-      _refreshVersions[index]++;
+      if (index != 4) {
+        _refreshVersions[index]++;
+      }
     });
   }
 
