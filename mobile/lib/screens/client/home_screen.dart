@@ -148,6 +148,7 @@ class _HomeScreenState extends State<HomeScreen> {
             final avatarUrl = record['avatar_url']?.toString().trim();
 
             String name = _userName;
+
             if (fullName != null && fullName.isNotEmpty) {
               name = fullName;
             } else if (email != null && email.isNotEmpty) {
@@ -155,10 +156,12 @@ class _HomeScreenState extends State<HomeScreen> {
             }
 
             if (!mounted) return;
+
             setState(() {
               _userName = name;
               _avatarLetter = name.isEmpty ? 'U' : name[0].toUpperCase();
-              _avatarUrl = (avatarUrl != null && avatarUrl.isNotEmpty) ? avatarUrl : null;
+              _avatarUrl =
+                  (avatarUrl != null && avatarUrl.isNotEmpty) ? avatarUrl : null;
             });
           },
         )
@@ -624,6 +627,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _todaysPlan(BuildContext context) {
+    final String planName =
+        _activePlanTitle == null || _activePlanTitle!.trim().isEmpty
+            ? 'No active plan'
+            : _activePlanTitle!;
+
     return SectionCard(
       color: AppColors.primarySoft,
       child: Row(
@@ -637,7 +645,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             child: const Icon(Icons.calendar_month, color: AppColors.primary),
           ),
+
           const SizedBox(width: 14),
+
           Expanded(
             child: _isLoading
                 ? const Text(
@@ -651,25 +661,58 @@ class _HomeScreenState extends State<HomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        "Today's Plan",
+                        "Current Plan",
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
+
                       const SizedBox(height: 2),
+
                       Text(
-                        _todayPlanTitle,
+                        planName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: _activePlanTitle == null
+                              ? AppColors.textSecondary
+                              : AppColors.primary,
+                        ),
+                      ),
+
+                      const SizedBox(height: 6),
+
+                      const Text(
+                        "Today's Workout",
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+
+                      const SizedBox(height: 2),
+
+                      Text(
+                        _todayPlanTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: _hasActiveWorkoutDay
-                              ? AppColors.primary
+                              ? AppColors.textPrimary
                               : AppColors.textSecondary,
                         ),
                       ),
+
                       Text(
                         _todayPlanMeta,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 12,
                           color: AppColors.textSecondary,
@@ -678,6 +721,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
           ),
+
+          const SizedBox(width: 10),
+
           ElevatedButton(
             onPressed: _isLoading ? null : _openFitnessPlan,
             style: ElevatedButton.styleFrom(
@@ -685,7 +731,7 @@ class _HomeScreenState extends State<HomeScreen> {
               foregroundColor: Colors.white,
               disabledBackgroundColor: AppColors.textMuted,
               elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
@@ -694,7 +740,7 @@ class _HomeScreenState extends State<HomeScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Start Now',
+                  'Start',
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
                 ),
                 Icon(Icons.chevron_right, size: 18),
