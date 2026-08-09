@@ -17,7 +17,9 @@ class _MyProfilePageState extends State<MyProfilePage> {
   bool isLoading = true;
   bool isSaving = false;
   bool isUploadingAvatar = false;
+  bool isPrivacySaving = false;
   bool hasSavedChanges = false;
+  bool isPrivate = false;
 
   String avatarUrl = '';
 
@@ -102,7 +104,7 @@ class _MyProfilePageState extends State<MyProfilePage> {
       final response = await client
           .from('profiles')
           .select(
-            'full_name, email, gender, date_of_birth, weight_kg, height_cm, activity_level, fitness_goal, avatar_url',
+            'full_name, email, gender, date_of_birth, weight_kg, height_cm, activity_level, fitness_goal, avatar_url, is_private',
           )
           .eq('id', user.id)
           .maybeSingle();
@@ -129,6 +131,7 @@ class _MyProfilePageState extends State<MyProfilePage> {
           fitnessGoalOptions,
         );
         avatarUrl = data['avatar_url']?.toString() ?? '';
+        isPrivate = data['is_private'] == true;
 
         _updateBmiText();
       });
@@ -140,6 +143,40 @@ class _MyProfilePageState extends State<MyProfilePage> {
           isLoading = false;
         });
       }
+    }
+  }
+
+  Future<void> _setAccountPrivacy(bool value) async {
+    if (isPrivacySaving) return;
+
+    final previous = isPrivate;
+    setState(() {
+      isPrivate = value;
+      isPrivacySaving = true;
+    });
+
+    try {
+      final client = Supabase.instance.client;
+      final userId = client.auth.currentUser?.id;
+      if (userId == null) throw Exception('User is not signed in.');
+
+      await client
+          .from('profiles')
+          .update({'is_private': value}).eq('id', userId);
+
+      if (!mounted) return;
+      setState(() => hasSavedChanges = true);
+      _showMessage(
+        value
+            ? 'Your account is now private.'
+            : 'Your account is now public.',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => isPrivate = previous);
+      _showMessage('Unable to update account privacy: $error');
+    } finally {
+      if (mounted) setState(() => isPrivacySaving = false);
     }
   }
 
@@ -531,6 +568,30 @@ class _MyProfilePageState extends State<MyProfilePage> {
               ),
 
               const SizedBox(height: 24),
+
+              Container(
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.cardMuted,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: SwitchListTile.adaptive(
+                  value: isPrivate,
+                  onChanged: isPrivacySaving ? null : _setAccountPrivacy,
+                  secondary: Icon(
+                    isPrivate ? Icons.lock_outline : Icons.public,
+                    color: AppColors.primary,
+                  ),
+                  title: const Text(
+                    'Private account',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: const Text(
+                    'Only your followers can see your posts.',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                ),
+              ),
 
               ProfileInputField(
                 label: "Name",
