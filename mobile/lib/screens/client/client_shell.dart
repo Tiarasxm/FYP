@@ -16,14 +16,22 @@ class ClientShell extends StatefulWidget {
 
 class _ClientShellState extends State<ClientShell> {
   int _index = 0;
+  final List<int> _refreshVersions = List<int>.filled(5, 0);
 
-  static const List<Widget> _screens = [
-    HomeScreen(),
-    WorkoutScreen(),
-    NutritionScreen(),
-    SocialScreen(),
-    ProfileScreen(),
-  ];
+  List<Widget> get _screens => [
+        HomeScreen(key: ValueKey('home-${_refreshVersions[0]}')),
+        WorkoutScreen(key: ValueKey('workout-${_refreshVersions[1]}')),
+        NutritionScreen(key: ValueKey('nutrition-${_refreshVersions[2]}')),
+        SocialScreen(key: ValueKey('social-${_refreshVersions[3]}')),
+        ProfileScreen(key: ValueKey('profile-${_refreshVersions[4]}')),
+      ];
+
+  void _selectTab(int index) {
+    setState(() {
+      _index = index;
+      _refreshVersions[index]++;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,11 +53,7 @@ class _ClientShellState extends State<ClientShell> {
         top: false,
         child: BottomNavigationBar(
           currentIndex: _index,
-          onTap: (index) {
-            setState(() {
-              _index = index;
-            });
-          },
+          onTap: _selectTab,
           backgroundColor: AppColors.navBar,
           type: BottomNavigationBarType.fixed,
           selectedItemColor: Colors.white,
