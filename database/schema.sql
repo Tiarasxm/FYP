@@ -48,6 +48,9 @@ add column if not exists fitness_goal text;
 alter table public.profiles
 add column if not exists has_completed_onboarding boolean default false;
 
+alter table public.profiles
+add column if not exists is_private boolean not null default false;
+
 -- PROFILE AVATAR STORAGE
 
 insert into storage.buckets (
@@ -324,12 +327,6 @@ on public.free_plans
 for select
 to authenticated
 using (visibility = 'public' or professional_id = auth.uid() or public.is_admin());
-
-alter table public.free_plans
-add column if not exists target_activity_level text;
-
-alter table public.free_plans
-add column if not exists target_fitness_goal text;
 
 -- =========================================================
 -- 6. PERSONALIZED PLANS TABLE
@@ -1223,9 +1220,17 @@ create table if not exists public.posts (
   visibility text not null default 'public',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  constraint posts_visibility_check
+    check (visibility in ('public', 'followers')),
   constraint posts_user_id_fkey
     foreign key (user_id) references public.profiles(id) on delete cascade
 );
+
+-- Post visibility is controlled by profiles.is_private and follow relationships.
+-- Normalize values left by the older per-post audience implementation.
+update public.posts
+set visibility = 'public'
+where visibility is distinct from 'public';
 
 do $$
 begin
@@ -1254,7 +1259,15 @@ create policy "Authenticated users can read posts"
 on public.posts
 for select
 to authenticated
-using (true);
+using (
+  user_id = auth.uid()
+  or exists (
+    select 1
+    from public.profiles
+    where profiles.id = posts.user_id
+      and profiles.is_private = false
+  )
+);
 
 create policy "Users can create own posts"
 on public.posts
@@ -1409,6 +1422,31 @@ on public.follows
 for delete
 to authenticated
 using (auth.uid() = follower_id);
+
+-- Replace the temporary post-read policy now that follows exists.
+drop policy if exists "Authenticated users can read posts" on public.posts;
+
+create policy "Authenticated users can read posts"
+on public.posts
+for select
+to authenticated
+using (
+  user_id = auth.uid()
+  or exists (
+    select 1
+    from public.profiles
+    where profiles.id = posts.user_id
+      and profiles.is_private = false
+  )
+  or (
+    exists (
+      select 1
+      from public.follows
+      where follows.follower_id = auth.uid()
+        and follows.following_id = posts.user_id
+    )
+  )
+);
 
 -- =========================================================
 -- 36. SOCIAL POST IMAGE STORAGE
