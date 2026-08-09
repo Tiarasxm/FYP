@@ -13,6 +13,8 @@ class EditPlanSchedule extends StatefulWidget {
   final List<String> tags;
   final String duration;
   final String visibility;
+  final String targetActivityLevel;
+  final String targetFitnessGoal;
 
   const EditPlanSchedule({
     super.key,
@@ -21,6 +23,8 @@ class EditPlanSchedule extends StatefulWidget {
     required this.tags,
     required this.duration,
     required this.visibility,
+    required this.targetActivityLevel,
+    required this.targetFitnessGoal,
   });
 
   @override
@@ -626,6 +630,8 @@ class _EditPlanScheduleState extends State<EditPlanSchedule> {
           tags: widget.tags,
           visibility: widget.visibility,
           duration: widget.duration,
+          targetActivityLevel: widget.targetActivityLevel,
+          targetFitnessGoal: widget.targetFitnessGoal,
           planDays: allPlanDays,
           buttonText: 'Update Changes',
         ),

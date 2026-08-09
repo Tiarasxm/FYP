@@ -325,6 +325,12 @@ for select
 to authenticated
 using (visibility = 'public' or professional_id = auth.uid() or public.is_admin());
 
+alter table public.free_plans
+add column if not exists target_activity_level text;
+
+alter table public.free_plans
+add column if not exists target_fitness_goal text;
+
 -- =========================================================
 -- 6. PERSONALIZED PLANS TABLE
 -- =========================================================

@@ -11,6 +11,8 @@ class CreatePlanSchedule extends StatefulWidget {
   final List<String> tags;
   final String duration;
   final String visibility;
+  final String targetActivityLevel;
+  final String targetFitnessGoal;
 
   const CreatePlanSchedule({
     super.key,
@@ -18,6 +20,8 @@ class CreatePlanSchedule extends StatefulWidget {
     required this.tags,
     required this.duration,
     required this.visibility,
+    required this.targetActivityLevel,
+    required this.targetFitnessGoal,
   });
 
   @override
@@ -432,6 +436,8 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
           tags: widget.tags,
           visibility: widget.visibility,
           duration: widget.duration,
+          targetActivityLevel: widget.targetActivityLevel,
+          targetFitnessGoal: widget.targetFitnessGoal,
           planDays: allPlanDays,
           buttonText: 'Publish Plan',
         ),

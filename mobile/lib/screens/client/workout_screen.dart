@@ -30,6 +30,9 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   bool _isLoadingPlans = true;
   bool _isLoadingPros = true;
 
+  String? _userActivityLevel;
+  String? _userFitnessGoal;
+
   List<Map<String, dynamic>> _availablePlans = [];
   Map<String, dynamic>? _activePlan;
   String? _activePlanId;
@@ -37,113 +40,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   List<Professional> _professionals = [];
   String _proSearchText = '';
 
-  RealtimeChannel? _reviewsChannel;
-  RealtimeChannel? _professionalsChannel;
-
   @override
   void initState() {
     super.initState();
     _loadWorkoutData();
-    _subscribeToReviews();
-    _subscribeToProfessionalUpdates();
-  }
-
-  @override
-  void dispose() {
-    if (_reviewsChannel != null) {
-      Supabase.instance.client.removeChannel(_reviewsChannel!);
-    }
-    if (_professionalsChannel != null) {
-      Supabase.instance.client.removeChannel(_professionalsChannel!);
-    }
-    super.dispose();
-  }
-
-  void _subscribeToProfessionalUpdates() {
-    final client = Supabase.instance.client;
-
-    _professionalsChannel = client
-        .channel('public:professionals:workout')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.update,
-          schema: 'public',
-          table: 'fitness_professional',
-          callback: (payload) {
-            _loadProfessionals(client);
-          },
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.update,
-          schema: 'public',
-          table: 'profiles',
-          callback: (payload) {
-            final changedId = payload.newRecord['id']?.toString();
-            if (changedId == null) return;
-            final isRelevant = _professionals.any((p) => p.profileId == changedId);
-            if (isRelevant) {
-              _loadProfessionals(client);
-            }
-          },
-        )
-        .subscribe();
-  }
-
-  void _subscribeToReviews() {
-    _reviewsChannel = Supabase.instance.client
-        .channel('public:reviews:workout')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'reviews',
-          callback: (payload) {
-            final professionalId = (payload.newRecord['professional_id'] ??
-                    payload.oldRecord['professional_id'])
-                ?.toString();
-            if (professionalId != null) {
-              _refreshProfessionalRating(professionalId);
-            }
-          },
-        )
-        .subscribe();
-  }
-
-  Future<void> _refreshProfessionalRating(String professionalId) async {
-    try {
-      final client = Supabase.instance.client;
-      final reviewData = await client
-          .from('reviews')
-          .select('rating')
-          .eq('professional_id', professionalId);
-
-      final reviewRows = List<Map<String, dynamic>>.from(reviewData as List);
-      final reviewCount = reviewRows.length;
-      double avgRating = 0;
-      if (reviewCount > 0) {
-        final total = reviewRows.fold<double>(
-            0, (sum, r) => sum + ((r['rating'] as num?)?.toDouble() ?? 0));
-        avgRating = total / reviewCount;
-      }
-
-      if (!mounted) return;
-
-      final index = _professionals.indexWhere((p) => p.profileId == professionalId);
-      if (index == -1) return;
-
-      final old = _professionals[index];
-      setState(() {
-        _professionals[index] = Professional(
-          profileId: old.profileId,
-          name: old.name,
-          specialties: old.specialties,
-          rating: avgRating,
-          reviewCount: reviewCount,
-          yearsExp: old.yearsExp,
-          bio: old.bio,
-        );
-      });
-    } catch (e) {
-      debugPrint('Error refreshing professional rating: $e');
-    }
   }
 
   Future<void> _loadWorkoutData() async {
@@ -159,7 +59,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         throw Exception('User is not signed in.');
       }
 
-      await _loadMembershipStatus(client, userId);
+      await _loadUserProfileForRecommendation(client, userId);
       await _loadActivePlan(client, userId);
       await _loadAvailablePlans(client);
 
@@ -200,13 +100,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     }
   }
 
-  Future<void> _loadMembershipStatus(
+  Future<void> _loadUserProfileForRecommendation(
     SupabaseClient client,
     String userId,
   ) async {
     final profile = await client
         .from('profiles')
-        .select('user_type')
+        .select('user_type, activity_level, fitness_goal')
         .eq('id', userId)
         .maybeSingle();
 
@@ -219,6 +119,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     setState(() {
       _isPriority = isPriority;
       _isLoadingPros = isPriority;
+      _userActivityLevel = profile?['activity_level']?.toString().trim();
+      _userFitnessGoal = profile?['fitness_goal']?.toString().trim();
     });
   }
 
@@ -259,7 +161,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final activePlan = await client
         .from('free_plans')
         .select(
-          'free_plan_id, professional_id, plan_name, category, tag1, tag2, tag3, visibility, duration_weeks, status, created_at',
+          'free_plan_id, professional_id, plan_name, category, tag1, tag2, tag3, visibility, duration_weeks, status, created_at, target_activity_level, target_fitness_goal',
         )
         .eq('free_plan_id', activePlanId)
         .or('status.is.null,status.neq.archived')
@@ -270,8 +172,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final visibility =
         activePlan?['visibility']?.toString().trim().toLowerCase() ?? 'public';
 
-    // A downgraded Free user must not keep access to a previously saved
-    // private plan. We leave the saved row untouched, but hide the plan here.
     if (!_isPriority && visibility != 'public') {
       setState(() {
         _activePlanId = null;
@@ -289,20 +189,19 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   Future<void> _loadAvailablePlans(SupabaseClient client) async {
     dynamic response;
 
+    const selectFields =
+        'free_plan_id, professional_id, plan_name, category, tag1, tag2, tag3, visibility, duration_weeks, status, created_at, target_activity_level, target_fitness_goal';
+
     if (_isPriority) {
       response = await client
           .from('free_plans')
-          .select(
-            'free_plan_id, professional_id, plan_name, category, tag1, tag2, tag3, visibility, duration_weeks, status, created_at',
-          )
+          .select(selectFields)
           .or('status.is.null,status.neq.archived')
           .order('created_at', ascending: false);
     } else {
       response = await client
           .from('free_plans')
-          .select(
-            'free_plan_id, professional_id, plan_name, category, tag1, tag2, tag3, visibility, duration_weeks, status, created_at',
-          )
+          .select(selectFields)
           .ilike('visibility', 'public')
           .or('status.is.null,status.neq.archived')
           .order('created_at', ascending: false);
@@ -310,8 +209,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     final plans = List<Map<String, dynamic>>.from(response as List);
 
-    // Priority can see both public and private plans. Ignore any unexpected
-    // visibility values so they are not accidentally exposed.
     if (_isPriority) {
       plans.removeWhere((plan) {
         final visibility =
@@ -320,11 +217,127 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       });
     }
 
+    plans.sort((a, b) {
+      final scoreA = _recommendationScore(a);
+      final scoreB = _recommendationScore(b);
+
+      if (scoreA != scoreB) {
+        return scoreB.compareTo(scoreA);
+      }
+
+      final createdA = DateTime.tryParse(a['created_at']?.toString() ?? '');
+      final createdB = DateTime.tryParse(b['created_at']?.toString() ?? '');
+
+      if (createdA == null || createdB == null) return 0;
+      return createdB.compareTo(createdA);
+    });
+
     if (!mounted) return;
 
     setState(() {
       _availablePlans = plans;
     });
+  }
+
+  int _recommendationScore(Map<String, dynamic> plan) {
+    int score = 0;
+
+    final userGoal = _normalize(_userFitnessGoal);
+    final userActivity = _normalize(_userActivityLevel);
+
+    final planGoal = _normalize(plan['target_fitness_goal']);
+    final planActivity = _normalize(plan['target_activity_level']);
+
+    final planName = _normalize(plan['plan_name']);
+    final category = _normalize(plan['category']);
+    final tag1 = _normalize(plan['tag1']);
+    final tag2 = _normalize(plan['tag2']);
+    final tag3 = _normalize(plan['tag3']);
+
+    final textPool = '$planName $category $tag1 $tag2 $tag3';
+
+    if (userGoal.isNotEmpty) {
+      if (planGoal == userGoal) {
+        score += 60;
+      } else if (_textContainsGoal(textPool, userGoal)) {
+        score += 40;
+      }
+    }
+
+    if (userActivity.isNotEmpty && planActivity == userActivity) {
+      score += 25;
+    }
+
+    return score;
+  }
+
+  bool _textContainsGoal(String textPool, String userGoal) {
+    final keywords = _goalKeywords(userGoal);
+
+    return keywords.any((keyword) {
+      return textPool.contains(keyword);
+    });
+  }
+
+  List<String> _goalKeywords(String goal) {
+    switch (goal) {
+      case 'lose weight':
+        return [
+          'lose weight',
+          'weight loss',
+          'fat loss',
+          'fat burn',
+          'burn fat',
+          'slim',
+        ];
+
+      case 'build muscles':
+        return [
+          'build muscles',
+          'build muscle',
+          'muscle gain',
+          'strength',
+          'hypertrophy',
+          'bodybuilding',
+        ];
+
+      case 'gain weight':
+        return [
+          'gain weight',
+          'weight gain',
+          'bulk',
+          'bulking',
+          'mass gain',
+          'muscle gain',
+        ];
+
+      case 'improve endurance':
+        return [
+          'improve endurance',
+          'endurance',
+          'cardio',
+          'stamina',
+          'running',
+          'conditioning',
+        ];
+
+      case 'get fitter':
+        return [
+          'get fitter',
+          'fitness',
+          'general',
+          'full body',
+          'conditioning',
+          'active',
+        ];
+
+      default:
+        return [goal];
+    }
+  }
+
+  String _normalize(dynamic value) {
+    return value?.toString().trim().toLowerCase() ?? '';
   }
 
   List<String> get _workoutFilters {
@@ -349,16 +362,43 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   }
 
   List<Map<String, dynamic>> get _visiblePlans {
-    if (_filter == 'All') {
-      return _availablePlans;
-    }
+    final plans = _filter == 'All'
+        ? List<Map<String, dynamic>>.from(_availablePlans)
+        : _availablePlans.where((plan) {
+            final tags = _planTags(plan);
 
-    return _availablePlans.where((plan) {
-      final tags = _planTags(plan);
+            return tags.any(
+              (tag) => tag.toLowerCase() == _filter.toLowerCase(),
+            );
+          }).toList();
 
-      return tags.any(
-        (tag) => tag.toLowerCase() == _filter.toLowerCase(),
-      );
+    plans.sort((a, b) {
+      final scoreA = _recommendationScore(a);
+      final scoreB = _recommendationScore(b);
+
+      if (scoreA != scoreB) {
+        return scoreB.compareTo(scoreA);
+      }
+
+      final createdA = DateTime.tryParse(a['created_at']?.toString() ?? '');
+      final createdB = DateTime.tryParse(b['created_at']?.toString() ?? '');
+
+      if (createdA == null || createdB == null) return 0;
+      return createdB.compareTo(createdA);
+    });
+
+    return plans;
+  }
+
+  List<Map<String, dynamic>> get _recommendedPlans {
+    return _visiblePlans.where((plan) {
+      return _recommendationScore(plan) > 0;
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> get _otherPlans {
+    return _visiblePlans.where((plan) {
+      return _recommendationScore(plan) <= 0;
     }).toList();
   }
 
@@ -394,24 +434,29 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   Future<void> _loadProfessionals(SupabaseClient client) async {
     final data = await client
         .from('fitness_professional')
-        .select('profile_id, display_name, bio, experience, specializations, approved, profiles!inner(full_name, avatar_url)')
+        .select(
+          'profile_id, display_name, bio, experience, specializations, approved, profiles!inner(full_name)',
+        )
         .eq('approved', true);
 
     final rows = List<Map<String, dynamic>>.from(data as List);
 
-    // For each professional, fetch avg rating and review count
     final pros = <Professional>[];
     for (final row in rows) {
       final profileId = row['profile_id'];
       final reviewData = await client
           .from('reviews')
           .select('rating')
-          .eq('professional_id', profileId);
+          .eq('reviewer_id', profileId);
       final reviewRows = List<Map<String, dynamic>>.from(reviewData as List);
       final reviewCount = reviewRows.length;
       double avgRating = 0;
+
       if (reviewCount > 0) {
-        final total = reviewRows.fold<double>(0, (sum, r) => sum + ((r['rating'] as num?)?.toDouble() ?? 0));
+        final total = reviewRows.fold<double>(
+          0,
+          (sum, r) => sum + ((r['rating'] as num?)?.toDouble() ?? 0),
+        );
         avgRating = total / reviewCount;
       }
 
@@ -442,10 +487,18 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   List<Professional> get _filteredProfessionals {
     var list = _professionals;
     if (_proSearchText.isNotEmpty) {
-      list = list.where((p) => p.name.toLowerCase().contains(_proSearchText.toLowerCase())).toList();
+      list = list
+          .where(
+            (p) => p.name.toLowerCase().contains(_proSearchText.toLowerCase()),
+          )
+          .toList();
     }
     if (_proFilter != 'All') {
-      list = list.where((p) => p.specialties.toLowerCase().contains(_proFilter.toLowerCase())).toList();
+      list = list
+          .where(
+            (p) => p.specialties.toLowerCase().contains(_proFilter.toLowerCase()),
+          )
+          .toList();
     }
     return list;
   }
@@ -627,6 +680,9 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   }
 
   List<Widget> _workoutTab() {
+    final recommendedPlans = _recommendedPlans;
+    final otherPlans = _otherPlans;
+
     return [
       const SectionHeader('Active Plan'),
 
@@ -656,6 +712,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         _planCard(
           plan: _activePlan!,
           active: true,
+          showRecommendation: _recommendationScore(_activePlan!) > 0,
           onTap: () {
             _openPlan(_activePlan!);
           },
@@ -664,6 +721,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       const SizedBox(height: 24),
 
       SectionHeader(_isPriority ? 'Available Plans' : 'Public Plans'),
+
+      const SizedBox(height: 8),
+
+      _recommendationHint(),
 
       const SizedBox(height: 12),
 
@@ -692,7 +753,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               _isPriority
                   ? 'No plans in this category yet.'
                   : 'No public plans in this category yet.',
-              style: TextStyle(
+              style: const TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -700,24 +761,77 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             ),
           ),
         )
-      else
-        for (final plan in _visiblePlans) ...[
-          _planCard(
-            plan: plan,
-            active: _isActivePlan(plan),
-            onTap: () {
-              _openPlan(plan);
-            },
-          ),
-          const SizedBox(height: 14),
+      else ...[
+        if (recommendedPlans.isNotEmpty) ...[
+          const SectionHeader('Recommended for You'),
+          const SizedBox(height: 12),
+          for (final plan in recommendedPlans) ...[
+            _planCard(
+              plan: plan,
+              active: _isActivePlan(plan),
+              showRecommendation: true,
+              onTap: () {
+                _openPlan(plan);
+              },
+            ),
+            const SizedBox(height: 14),
+          ],
+          if (otherPlans.isNotEmpty) const SizedBox(height: 10),
         ],
+        if (otherPlans.isNotEmpty) ...[
+          SectionHeader(recommendedPlans.isEmpty ? 'All Plans' : 'Other Plans'),
+          const SizedBox(height: 12),
+          for (final plan in otherPlans) ...[
+            _planCard(
+              plan: plan,
+              active: _isActivePlan(plan),
+              showRecommendation: false,
+              onTap: () {
+                _openPlan(plan);
+              },
+            ),
+            const SizedBox(height: 14),
+          ],
+        ],
+      ],
     ];
+  }
+
+  Widget _recommendationHint() {
+    final activity = _userActivityLevel?.trim();
+    final goal = _userFitnessGoal?.trim();
+
+    final hasActivity = activity != null && activity.isNotEmpty;
+    final hasGoal = goal != null && goal.isNotEmpty;
+
+    if (!hasActivity && !hasGoal) {
+      return Text(
+        'Complete your profile to get better workout recommendations.',
+        style: TextStyle(
+          fontSize: 11,
+          height: 1.35,
+          color: Colors.grey.shade600,
+          fontWeight: FontWeight.w600,
+        ),
+      );
+    }
+
+    return Text(
+      'Recommended based on ${hasActivity ? activity : 'your activity level'} and ${hasGoal ? goal : 'your fitness goal'}.',
+      style: TextStyle(
+        fontSize: 11,
+        height: 1.35,
+        color: Colors.grey.shade600,
+        fontWeight: FontWeight.w600,
+      ),
+    );
   }
 
   Widget _planCard({
     required Map<String, dynamic> plan,
     required bool active,
     required VoidCallback onTap,
+    bool showRecommendation = false,
   }) {
     final title = _planTitle(plan);
     final duration = _durationText(plan);
@@ -725,7 +839,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final tags = _planTags(plan);
     final visibility =
         plan['visibility']?.toString().trim().toLowerCase() ?? 'public';
-
     return GestureDetector(
       onTap: onTap,
       child: SectionCard(
@@ -783,6 +896,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               ),
             ),
 
+
             const SizedBox(height: 12),
 
             Wrap(
@@ -790,6 +904,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               runSpacing: 8,
               children: [
                 PillTag(visibility == 'private' ? 'Private' : 'Public'),
+                if (showRecommendation) const PillTag('Recommended'),
                 for (final tag in tags) PillTag(tag),
               ],
             ),
@@ -851,20 +966,27 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       const SizedBox(height: 16),
 
       if (_isLoadingPros)
-        const Center(child: Padding(
-          padding: EdgeInsets.all(20),
-          child: CircularProgressIndicator(),
-        ))
+        const Center(
+          child: Padding(
+            padding: EdgeInsets.all(20),
+            child: CircularProgressIndicator(),
+          ),
+        )
       else if (_filteredProfessionals.isEmpty)
         const Padding(
           padding: EdgeInsets.all(20),
-          child: Center(child: Text('No professionals found', style: TextStyle(color: AppColors.textMuted))),
+          child: Center(
+            child: Text(
+              'No professionals found',
+              style: TextStyle(color: AppColors.textMuted),
+            ),
+          ),
         )
       else
-      for (final professional in _filteredProfessionals) ...[
-        _professionalCard(professional),
-        const SizedBox(height: 12),
-      ],
+        for (final professional in _filteredProfessionals) ...[
+          _professionalCard(professional),
+          const SizedBox(height: 12),
+        ],
     ];
   }
 
@@ -887,18 +1009,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         ),
         child: Row(
           children: [
-            CircleAvatar(
+            const CircleAvatar(
               radius: 24,
               backgroundColor: AppColors.primarySoft,
-              backgroundImage: professional.avatarUrl != null
-                  ? NetworkImage(professional.avatarUrl!)
-                  : null,
-              child: professional.avatarUrl == null
-                  ? const Icon(
-                      Icons.person,
-                      color: AppColors.primary,
-                    )
-                  : null,
+              child: Icon(
+                Icons.person,
+                color: AppColors.primary,
+              ),
             ),
 
             const SizedBox(width: 12),

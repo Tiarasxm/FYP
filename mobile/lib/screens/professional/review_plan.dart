@@ -12,6 +12,8 @@ class ReviewPlan extends StatefulWidget {
   final List<String> tags;
   final String visibility;
   final String duration;
+  final String targetActivityLevel;
+  final String targetFitnessGoal;
   final List<PlanDayDraft>? planDays;
 
   final int? weekNumber;
@@ -29,6 +31,8 @@ class ReviewPlan extends StatefulWidget {
     required this.tags,
     required this.visibility,
     required this.duration,
+    this.targetActivityLevel = 'Lightly Active',
+    this.targetFitnessGoal = 'Get Fitter',
     this.planDays,
     this.weekNumber,
     this.dayNumber,
@@ -137,6 +141,8 @@ class _ReviewPlanState extends State<ReviewPlan> {
             'tag3': widget.tags.length > 2 ? widget.tags[2] : null,
             'visibility': widget.visibility,
             'duration_weeks': durationWeeks,
+            'target_activity_level': widget.targetActivityLevel,
+            'target_fitness_goal': widget.targetFitnessGoal,
           })
           .select('free_plan_id')
           .single();
@@ -194,6 +200,8 @@ class _ReviewPlanState extends State<ReviewPlan> {
             'tag3': widget.tags.length > 2 ? widget.tags[2] : null,
             'visibility': widget.visibility,
             'duration_weeks': durationWeeks,
+            'target_activity_level': widget.targetActivityLevel,
+            'target_fitness_goal': widget.targetFitnessGoal,
           })
           .eq('free_plan_id', planId)
           .eq('professional_id', userId);
@@ -343,6 +351,8 @@ class _ReviewPlanState extends State<ReviewPlan> {
                   }),
                   _InfoChip(text: widget.visibility),
                   _InfoChip(text: widget.duration),
+                  _InfoChip(text: widget.targetActivityLevel),
+                  _InfoChip(text: widget.targetFitnessGoal),
                 ],
               ),
 

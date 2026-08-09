@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/professional/workout_plan.dart';
 import '../../widgets/professional/mobile_page_wrapper.dart';
@@ -17,15 +18,19 @@ class EditPlan extends StatefulWidget {
 }
 
 class _EditPlanState extends State<EditPlan> {
-  late final TextEditingController planNameController;
+  late TextEditingController planNameController;
 
-  late List<String> selectedTags;
-  late String duration;
-  late String visibility;
+  late String tagOne;
+  late String tagTwo;
+  late String tagThree;
+  String visibility = 'Public';
+  String targetActivityLevel = 'Lightly Active';
+  String targetFitnessGoal = 'Get Fitter';
+  bool isLoadingMetadata = true;
 
   final List<String> tagOptions = [
-    'Fat Loss',
     'Full Body',
+    'Fat Loss',
     'Strength',
     'Upper Body',
     'Lower Body',
@@ -34,33 +39,40 @@ class _EditPlanState extends State<EditPlan> {
     'Beginner',
   ];
 
-  final List<String> durationOptions = [
-    '1 week',
-    '2 weeks',
-    '4 weeks',
-    '8 weeks',
-    '12 weeks',
-  ];
-
   final List<String> visibilityOptions = [
     'Public',
     'Private',
+  ];
+
+  final List<String> activityLevelOptions = [
+    'Sedentary',
+    'Lightly Active',
+    'Moderately Active',
+    'Very Active',
+  ];
+
+  final List<String> fitnessGoalOptions = [
+    'Get Fitter',
+    'Gain Weight',
+    'Lose Weight',
+    'Improve Endurance',
+    'Build Muscles',
   ];
 
   @override
   void initState() {
     super.initState();
 
-    planNameController = TextEditingController(text: widget.plan.title);
+    planNameController = TextEditingController(
+      text: widget.plan.title,
+    );
 
-    selectedTags = widget.plan.tags
-        .where((tag) =>
-            tag.toLowerCase() != 'public' && tag.toLowerCase() != 'private')
-        .take(3)
-        .toList();
+    tagOne = widget.plan.tags.isNotEmpty ? widget.plan.tags[0] : 'Full Body';
+    tagTwo = widget.plan.tags.length > 1 ? widget.plan.tags[1] : 'Fat Loss';
+    tagThree = widget.plan.tags.length > 2 ? widget.plan.tags[2] : 'Strength';
+    visibility = widget.plan.visibility.isEmpty ? 'Public' : widget.plan.visibility;
 
-    visibility = normalizeVisibility(widget.plan.visibility);
-    duration = getDurationText();
+    _loadPlanRecommendationFields();
   }
 
   @override
@@ -69,156 +81,83 @@ class _EditPlanState extends State<EditPlan> {
     super.dispose();
   }
 
-  String normalizeVisibility(String value) {
-    final lower = value.trim().toLowerCase();
+  Future<void> _loadPlanRecommendationFields() async {
+    final freePlanId = widget.plan.freePlanId;
 
-    if (lower == 'private') {
-      return 'Private';
-    }
-
-    return 'Public';
-  }
-
-  String getDurationText() {
-    if (widget.plan.durationWeeks != null) {
-      return '${widget.plan.durationWeeks} weeks';
-    }
-
-    if (widget.plan.days > 0 && widget.plan.days % 7 == 0) {
-      return '${widget.plan.days ~/ 7} weeks';
-    }
-
-    return '4 weeks';
-  }
-
-  List<String> get allDurationOptions {
-    final options = [...durationOptions];
-
-    if (!options.contains(duration)) {
-      options.insert(0, duration);
-    }
-
-    return options;
-  }
-
-  void addTag() {
-    if (selectedTags.length >= 3) {
+    if (freePlanId == null || freePlanId.isEmpty) {
+      setState(() {
+        isLoadingMetadata = false;
+      });
       return;
     }
 
-    final availableTags =
-        tagOptions.where((tag) => !selectedTags.contains(tag)).toList();
+    try {
+      final data = await Supabase.instance.client
+          .from('free_plans')
+          .select('visibility, target_activity_level, target_fitness_goal')
+          .eq('free_plan_id', freePlanId)
+          .maybeSingle();
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) {
-        return SafeArea(
-          child: Container(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.65,
-            ),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(
-                top: Radius.circular(28),
-              ),
-            ),
-            child: Column(
-              children: [
-                const SizedBox(height: 10),
+      if (!mounted) return;
 
-                Container(
-                  width: 34,
-                  height: 3,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                ),
+      setState(() {
+        final loadedVisibility = data?['visibility']?.toString().trim();
+        if (loadedVisibility != null && visibilityOptions.contains(loadedVisibility)) {
+          visibility = loadedVisibility;
+        }
 
-                const SizedBox(height: 16),
+        final loadedActivity = data?['target_activity_level']?.toString().trim();
+        if (loadedActivity != null && activityLevelOptions.contains(loadedActivity)) {
+          targetActivityLevel = loadedActivity;
+        }
 
-                const Text(
-                  'Select Tag',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
+        final loadedGoal = data?['target_fitness_goal']?.toString().trim();
+        if (loadedGoal != null && fitnessGoalOptions.contains(loadedGoal)) {
+          targetFitnessGoal = loadedGoal;
+        }
+      });
+    } catch (error) {
+      if (!mounted) return;
 
-                const SizedBox(height: 10),
-
-                Expanded(
-                  child: availableTags.isEmpty
-                      ? Center(
-                          child: Text(
-                            'No more tags available.',
-                            style: TextStyle(
-                              color: Colors.grey.shade600,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(18, 0, 18, 20),
-                          itemCount: availableTags.length,
-                          itemBuilder: (context, index) {
-                            final tag = availableTags[index];
-
-                            return ListTile(
-                              title: Text(
-                                tag,
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              onTap: () {
-                                setState(() {
-                                  selectedTags.add(tag);
-                                });
-
-                                Navigator.pop(context);
-                              },
-                            );
-                          },
-                        ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load plan settings: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoadingMetadata = false;
+        });
+      }
+    }
   }
 
-  void goToSchedule() {
-    final planName = planNameController.text.trim();
 
-    if (planName.isEmpty) {
-      showMessage('Please enter a plan name.');
-      return;
+  String _durationTextForSchedule() {
+    final weeks = widget.plan.durationWeeks;
+
+    if (weeks != null && weeks > 0) {
+      return weeks == 1 ? '1 week' : '$weeks weeks';
     }
 
+    return widget.plan.duration;
+  }
+
+  void _goToSchedule() {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => EditPlanSchedule(
           plan: widget.plan,
-          planName: planName,
-          tags: selectedTags,
-          duration: duration,
+          planName: planNameController.text.trim().isEmpty
+              ? 'Untitled Plan'
+              : planNameController.text.trim(),
+          tags: [tagOne, tagTwo, tagThree],
+          duration: _durationTextForSchedule(),
           visibility: visibility,
+          targetActivityLevel: targetActivityLevel,
+          targetFitnessGoal: targetFitnessGoal,
         ),
       ),
-    );
-  }
-
-  void showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
     );
   }
 
@@ -227,26 +166,41 @@ class _EditPlanState extends State<EditPlan> {
     return MobilePageWrapper(
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 18, 24, 26),
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 26),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  _BackButton(
-                    onTap: () {
-                      Navigator.pop(context);
-                    },
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFF3F2FA),
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                      },
+                      icon: const Icon(
+                        Icons.arrow_back_ios_new,
+                        size: 18,
+                        color: Colors.black54,
+                      ),
+                    ),
                   ),
-                  const SizedBox(width: 16),
+
+                  const SizedBox(width: 18),
+
                   Expanded(
                     child: Text(
                       'Edit: ${widget.plan.title}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
                         color: Colors.black,
                       ),
                     ),
@@ -254,123 +208,149 @@ class _EditPlanState extends State<EditPlan> {
                 ],
               ),
 
-              const SizedBox(height: 34),
+              const SizedBox(height: 28),
 
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _InputField(
-                        label: 'Plan Name',
-                        controller: planNameController,
-                        hintText: 'Enter plan name',
-                      ),
-
-                      const SizedBox(height: 26),
-
-                      RichText(
-                        text: TextSpan(
-                          text: 'Tags ',
-                          style: const TextStyle(
+              if (isLoadingMetadata)
+                const Expanded(
+                  child: Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              else
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Plan Name',
+                          style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w800,
                             color: Colors.black,
                           ),
-                          children: [
-                            TextSpan(
-                              text: '(max 3)',
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
                         ),
-                      ),
 
-                      const SizedBox(height: 10),
+                        const SizedBox(height: 10),
 
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          ...selectedTags.map((tag) {
-                            return _TagChip(
-                              text: tag,
-                              onDeleted: () {
-                                setState(() {
-                                  selectedTags.remove(tag);
-                                });
-                              },
-                            );
-                          }),
-                          if (selectedTags.length < 3)
-                            GestureDetector(
-                              onTap: addTag,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  border: Border.all(
-                                    color: Colors.grey.shade300,
-                                  ),
-                                  borderRadius: BorderRadius.circular(18),
-                                ),
-                                child: const Text(
-                                  '+ Add Tag',
-                                  style: TextStyle(
-                                    color: Color(0xFF6C63FF),
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                        TextField(
+                          controller: planNameController,
+                          decoration: _editInputDecoration(),
+                        ),
+
+                        const SizedBox(height: 30),
+
+                        RichText(
+                          text: TextSpan(
+                            text: 'Tags ',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.black,
+                            ),
+                            children: [
+                              TextSpan(
+                                text: '(max 3)',
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
-                            ),
-                        ],
-                      ),
+                            ],
+                          ),
+                        ),
 
-                      const SizedBox(height: 26),
+                        const SizedBox(height: 10),
 
-                      _DropdownField(
-                        label: 'Duration',
-                        value: duration,
-                        items: allDurationOptions,
-                        onChanged: (value) {
-                          setState(() {
-                            duration = value;
-                          });
-                        },
-                      ),
+                        _EditDropdown(
+                          value: tagOne,
+                          items: tagOptions,
+                          onChanged: (value) {
+                            setState(() {
+                              tagOne = value;
+                            });
+                          },
+                        ),
 
-                      const SizedBox(height: 26),
+                        const SizedBox(height: 8),
 
-                      _DropdownField(
-                        label: 'Visibility',
-                        value: visibility,
-                        items: visibilityOptions,
-                        onChanged: (value) {
-                          setState(() {
-                            visibility = value;
-                          });
-                        },
-                      ),
-                    ],
+                        _EditDropdown(
+                          value: tagTwo,
+                          items: tagOptions,
+                          onChanged: (value) {
+                            setState(() {
+                              tagTwo = value;
+                            });
+                          },
+                        ),
+
+                        const SizedBox(height: 8),
+
+                        _EditDropdown(
+                          value: tagThree,
+                          items: tagOptions,
+                          onChanged: (value) {
+                            setState(() {
+                              tagThree = value;
+                            });
+                          },
+                        ),
+
+                        const SizedBox(height: 30),
+
+                        const _FieldLabel('Visibility'),
+                        const SizedBox(height: 10),
+                        _EditDropdown(
+                          value: visibility,
+                          items: visibilityOptions,
+                          onChanged: (value) {
+                            setState(() {
+                              visibility = value;
+                            });
+                          },
+                        ),
+
+                        const SizedBox(height: 30),
+
+                        const _FieldLabel('Target Activity Level'),
+                        const SizedBox(height: 10),
+                        _EditDropdown(
+                          value: targetActivityLevel,
+                          items: activityLevelOptions,
+                          onChanged: (value) {
+                            setState(() {
+                              targetActivityLevel = value;
+                            });
+                          },
+                        ),
+
+                        const SizedBox(height: 30),
+
+                        const _FieldLabel('Target Fitness Goal'),
+                        const SizedBox(height: 10),
+                        _EditDropdown(
+                          value: targetFitnessGoal,
+                          items: fitnessGoalOptions,
+                          onChanged: (value) {
+                            setState(() {
+                              targetFitnessGoal = value;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
 
               SizedBox(
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: goToSchedule,
+                  onPressed: isLoadingMetadata ? null : _goToSchedule,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF6C63FF),
                     foregroundColor: Colors.white,
+                    disabledBackgroundColor: Colors.grey.shade300,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -379,7 +359,7 @@ class _EditPlanState extends State<EditPlan> {
                   child: const Text(
                     'Next',
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -393,78 +373,30 @@ class _EditPlanState extends State<EditPlan> {
   }
 }
 
-class _TagChip extends StatelessWidget {
+class _FieldLabel extends StatelessWidget {
   final String text;
-  final VoidCallback onDeleted;
 
-  const _TagChip({
-    required this.text,
-    required this.onDeleted,
-  });
+  const _FieldLabel(this.text);
 
   @override
   Widget build(BuildContext context) {
-    return Chip(
-      label: Text(
-        text,
-        style: const TextStyle(
-          color: Color(0xFF6C63FF),
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-      backgroundColor: const Color(0xFFECE9FF),
-      deleteIcon: const Icon(
-        Icons.close,
-        size: 16,
-        color: Color(0xFF6C63FF),
-      ),
-      onDeleted: onDeleted,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide.none,
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w800,
+        color: Colors.black,
       ),
     );
   }
 }
 
-class _InputField extends StatelessWidget {
-  final String label;
-  final TextEditingController controller;
-  final String hintText;
-
-  const _InputField({
-    required this.label,
-    required this.controller,
-    required this.hintText,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return _FieldWrapper(
-      label: label,
-      child: TextField(
-        controller: controller,
-        decoration: _inputDecoration().copyWith(
-          hintText: hintText,
-          hintStyle: TextStyle(
-            color: Colors.grey.shade500,
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DropdownField extends StatelessWidget {
-  final String label;
+class _EditDropdown extends StatelessWidget {
   final String value;
   final List<String> items;
   final void Function(String value) onChanged;
 
-  const _DropdownField({
-    required this.label,
+  const _EditDropdown({
     required this.value,
     required this.items,
     required this.onChanged,
@@ -472,95 +404,47 @@ class _DropdownField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _FieldWrapper(
-      label: label,
-      child: DropdownButtonFormField<String>(
-        value: value,
-        icon: const Icon(Icons.keyboard_arrow_down),
-        decoration: _inputDecoration(),
-        items: items.map((item) {
-          return DropdownMenuItem(
-            value: item,
-            child: Text(item),
-          );
-        }).toList(),
-        onChanged: (value) {
-          if (value != null) {
-            onChanged(value);
-          }
-        },
+    final safeValue = items.contains(value) ? value : items.first;
+
+    return DropdownButtonFormField<String>(
+      value: safeValue,
+      icon: const Icon(
+        Icons.keyboard_arrow_down,
+        color: Colors.black54,
       ),
+      decoration: _editInputDecoration(),
+      dropdownColor: Colors.white,
+      style: const TextStyle(
+        fontSize: 13,
+        color: Colors.black,
+        fontWeight: FontWeight.w500,
+      ),
+      items: items.map((item) {
+        return DropdownMenuItem<String>(
+          value: item,
+          child: Text(item),
+        );
+      }).toList(),
+      onChanged: (value) {
+        if (value != null) {
+          onChanged(value);
+        }
+      },
     );
   }
 }
 
-class _FieldWrapper extends StatelessWidget {
-  final String label;
-  final Widget child;
-
-  const _FieldWrapper({
-    required this.label,
-    required this.child,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 8),
-        child,
-      ],
-    );
-  }
-}
-
-InputDecoration _inputDecoration() {
+InputDecoration _editInputDecoration() {
   return InputDecoration(
     filled: true,
     fillColor: const Color(0xFFF3F2FA),
     contentPadding: const EdgeInsets.symmetric(
-      horizontal: 16,
-      vertical: 15,
+      horizontal: 14,
+      vertical: 14,
     ),
     border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(9),
       borderSide: BorderSide.none,
     ),
   );
-}
-
-class _BackButton extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _BackButton({
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: const BoxDecoration(
-        color: Color(0xFFF3F2FA),
-        shape: BoxShape.circle,
-      ),
-      child: IconButton(
-        onPressed: onTap,
-        icon: const Icon(
-          Icons.arrow_back_ios_new,
-          size: 18,
-          color: Colors.black54,
-        ),
-      ),
-    );
-  }
 }

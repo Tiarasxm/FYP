@@ -16,7 +16,9 @@ class _CreatePlanState extends State<CreatePlan> {
   final List<String> selectedTags = [];
 
   String? duration;
-  String visibility = 'Public';
+  String? visibility;
+  String? targetActivityLevel;
+  String? targetFitnessGoal;
 
   final List<String> tagOptions = [
     'Fat Loss',
@@ -42,98 +44,103 @@ class _CreatePlanState extends State<CreatePlan> {
     'Private',
   ];
 
+  final List<String> activityLevelOptions = [
+    'Sedentary',
+    'Lightly Active',
+    'Moderately Active',
+    'Very Active',
+  ];
+
+  final List<String> fitnessGoalOptions = [
+    'Get Fitter',
+    'Gain Weight',
+    'Lose Weight',
+    'Improve Endurance',
+    'Build Muscles',
+  ];
+
   @override
   void dispose() {
     planNameController.dispose();
     super.dispose();
   }
 
+  void showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
   void addTag() {
+    final availableTags =
+        tagOptions.where((tag) => !selectedTags.contains(tag)).toList();
+
     if (selectedTags.length >= 3) {
       return;
     }
 
-    final availableTags =
-        tagOptions.where((tag) => !selectedTags.contains(tag)).toList();
-
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      isScrollControlled: true,
       builder: (context) {
-        return SafeArea(
+        return Center(
           child: Container(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.65,
-            ),
+            width: 430,
+            padding: const EdgeInsets.fromLTRB(18, 10, 18, 24),
             decoration: const BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.vertical(
                 top: Radius.circular(28),
               ),
             ),
-            child: Column(
-              children: [
-                const SizedBox(height: 10),
-
-                Container(
-                  width: 34,
-                  height: 3,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(20),
+            child: SafeArea(
+              top: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 34,
+                    height: 3,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                   ),
-                ),
-
-                const SizedBox(height: 16),
-
-                const Text(
-                  'Select Tag',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Select Tag',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                ),
-
-                const SizedBox(height: 10),
-
-                Expanded(
-                  child: availableTags.isEmpty
-                      ? Center(
-                          child: Text(
-                            'No more tags available.',
-                            style: TextStyle(
-                              color: Colors.grey.shade600,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(18, 0, 18, 20),
-                          itemCount: availableTags.length,
-                          itemBuilder: (context, index) {
-                            final tag = availableTags[index];
-
-                            return ListTile(
-                              title: Text(
-                                tag,
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              onTap: () {
-                                setState(() {
-                                  selectedTags.add(tag);
-                                });
-
-                                Navigator.pop(context);
-                              },
-                            );
-                          },
+                  const SizedBox(height: 14),
+                  if (availableTags.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      child: Text(
+                        'No more tags available.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w600,
                         ),
-                ),
-              ],
+                      ),
+                    )
+                  else
+                    ...availableTags.map((tag) {
+                      return ListTile(
+                        title: Text(tag),
+                        onTap: () {
+                          setState(() {
+                            selectedTags.add(tag);
+                          });
+                          Navigator.pop(context);
+                        },
+                      );
+                    }),
+                ],
+              ),
             ),
           ),
         );
@@ -145,12 +152,27 @@ class _CreatePlanState extends State<CreatePlan> {
     final planName = planNameController.text.trim();
 
     if (planName.isEmpty) {
-      showMessage('Please enter a plan name.');
+      showMessage('Please enter plan name.');
       return;
     }
 
     if (duration == null) {
       showMessage('Please select duration.');
+      return;
+    }
+
+    if (visibility == null) {
+      showMessage('Please select visibility.');
+      return;
+    }
+
+    if (targetActivityLevel == null) {
+      showMessage('Please select target activity level.');
+      return;
+    }
+
+    if (targetFitnessGoal == null) {
+      showMessage('Please select target fitness goal.');
       return;
     }
 
@@ -161,15 +183,11 @@ class _CreatePlanState extends State<CreatePlan> {
           planName: planName,
           tags: selectedTags,
           duration: duration!,
-          visibility: visibility,
+          visibility: visibility!,
+          targetActivityLevel: targetActivityLevel!,
+          targetFitnessGoal: targetFitnessGoal!,
         ),
       ),
-    );
-  }
-
-  void showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
     );
   }
 
@@ -252,7 +270,6 @@ class _CreatePlanState extends State<CreatePlan> {
                               },
                             );
                           }),
-
                           if (selectedTags.length < 3)
                             GestureDetector(
                               onTap: addTag,
@@ -305,6 +322,34 @@ class _CreatePlanState extends State<CreatePlan> {
                         onChanged: (value) {
                           setState(() {
                             visibility = value;
+                          });
+                        },
+                      ),
+
+                      const SizedBox(height: 22),
+
+                      _DropdownField(
+                        label: 'Target Activity Level',
+                        value: targetActivityLevel,
+                        hintText: 'Select activity level',
+                        items: activityLevelOptions,
+                        onChanged: (value) {
+                          setState(() {
+                            targetActivityLevel = value;
+                          });
+                        },
+                      ),
+
+                      const SizedBox(height: 22),
+
+                      _DropdownField(
+                        label: 'Target Fitness Goal',
+                        value: targetFitnessGoal,
+                        hintText: 'Select fitness goal',
+                        items: fitnessGoalOptions,
+                        onChanged: (value) {
+                          setState(() {
+                            targetFitnessGoal = value;
                           });
                         },
                       ),
@@ -380,12 +425,12 @@ class _TagChip extends StatelessWidget {
 class _InputField extends StatelessWidget {
   final String label;
   final TextEditingController controller;
-  final String hintText;
+  final String? hintText;
 
   const _InputField({
     required this.label,
     required this.controller,
-    required this.hintText,
+    this.hintText,
   });
 
   @override
@@ -394,13 +439,8 @@ class _InputField extends StatelessWidget {
       label: label,
       child: TextField(
         controller: controller,
-        decoration: _inputDecoration().copyWith(
+        decoration: _inputDecoration(
           hintText: hintText,
-          hintStyle: TextStyle(
-            color: Colors.grey.shade500,
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-          ),
         ),
       ),
     );
@@ -424,15 +464,17 @@ class _DropdownField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final safeValue = items.contains(value) ? value : null;
+
     return _FieldWrapper(
       label: label,
       child: DropdownButtonFormField<String>(
-        value: value,
+        value: safeValue,
         hint: Text(
           hintText,
           style: TextStyle(
-            color: Colors.grey.shade500,
             fontSize: 14,
+            color: Colors.grey.shade500,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -482,8 +524,16 @@ class _FieldWrapper extends StatelessWidget {
   }
 }
 
-InputDecoration _inputDecoration() {
+InputDecoration _inputDecoration({
+  String? hintText,
+}) {
   return InputDecoration(
+    hintText: hintText,
+    hintStyle: TextStyle(
+      color: Colors.grey.shade500,
+      fontSize: 14,
+      fontWeight: FontWeight.w500,
+    ),
     filled: true,
     fillColor: const Color(0xFFF3F2FA),
     contentPadding: const EdgeInsets.symmetric(
