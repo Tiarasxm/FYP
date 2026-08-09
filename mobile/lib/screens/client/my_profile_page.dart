@@ -21,6 +21,9 @@ class _MyProfilePageState extends State<MyProfilePage> {
 
   String avatarUrl = '';
 
+  String? selectedActivityLevel;
+  String? selectedFitnessGoal;
+
   Uint8List? selectedAvatarBytes;
   XFile? selectedAvatarFile;
 
@@ -32,6 +35,22 @@ class _MyProfilePageState extends State<MyProfilePage> {
   final TextEditingController dateOfBirthController = TextEditingController();
   final TextEditingController weightController = TextEditingController();
   final TextEditingController heightController = TextEditingController();
+  final TextEditingController bmiController = TextEditingController();
+
+  static const List<String> activityOptions = [
+    'Sedentary',
+    'Lightly Active',
+    'Moderately Active',
+    'Very Active',
+  ];
+
+  static const List<String> fitnessGoalOptions = [
+    'Get Fitter',
+    'Gain Weight',
+    'Lose Weight',
+    'Improve Endurance',
+    'Build Muscles',
+  ];
 
   @override
   void initState() {
@@ -47,6 +66,7 @@ class _MyProfilePageState extends State<MyProfilePage> {
     dateOfBirthController.dispose();
     weightController.dispose();
     heightController.dispose();
+    bmiController.dispose();
     super.dispose();
   }
 
@@ -56,6 +76,14 @@ class _MyProfilePageState extends State<MyProfilePage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
+  }
+
+  String? _validOption(dynamic value, List<String> options) {
+    final text = value?.toString().trim();
+
+    if (text == null || text.isEmpty) return null;
+
+    return options.contains(text) ? text : null;
   }
 
   Future<void> _loadProfile() async {
@@ -74,7 +102,7 @@ class _MyProfilePageState extends State<MyProfilePage> {
       final response = await client
           .from('profiles')
           .select(
-            'full_name, email, gender, date_of_birth, weight_kg, height_cm, avatar_url',
+            'full_name, email, gender, date_of_birth, weight_kg, height_cm, activity_level, fitness_goal, avatar_url',
           )
           .eq('id', user.id)
           .maybeSingle();
@@ -92,7 +120,17 @@ class _MyProfilePageState extends State<MyProfilePage> {
         );
         weightController.text = _formatNumber(data['weight_kg']);
         heightController.text = _formatNumber(data['height_cm']);
+        selectedActivityLevel = _validOption(
+          data['activity_level'],
+          activityOptions,
+        );
+        selectedFitnessGoal = _validOption(
+          data['fitness_goal'],
+          fitnessGoalOptions,
+        );
         avatarUrl = data['avatar_url']?.toString() ?? '';
+
+        _updateBmiText();
       });
     } catch (e) {
       _showMessage('Failed to load profile: $e');
@@ -181,6 +219,21 @@ class _MyProfilePageState extends State<MyProfilePage> {
     if (text.isEmpty) return null;
 
     return double.tryParse(text);
+  }
+
+  void _updateBmiText() {
+    final weight = _parseNumberInput(weightController.text);
+    final heightCm = _parseNumberInput(heightController.text);
+
+    if (weight == null || heightCm == null || heightCm <= 0) {
+      bmiController.text = '';
+      return;
+    }
+
+    final heightM = heightCm / 100;
+    final bmi = weight / (heightM * heightM);
+
+    bmiController.text = bmi.toStringAsFixed(1);
   }
 
   String _safeImageExtension(XFile image) {
@@ -353,12 +406,15 @@ class _MyProfilePageState extends State<MyProfilePage> {
         'date_of_birth': _dateToDatabase(dateOfBirth),
         'weight_kg': weight,
         'height_cm': height,
+        'activity_level': selectedActivityLevel,
+        'fitness_goal': selectedFitnessGoal,
       }).eq('id', user.id);
 
       if (!mounted) return;
 
       setState(() {
         hasSavedChanges = true;
+        _updateBmiText();
       });
 
       _showMessage('Profile updated successfully.');
@@ -500,11 +556,53 @@ class _MyProfilePageState extends State<MyProfilePage> {
                 label: "Weight (kg)",
                 controller: weightController,
                 keyboardType: TextInputType.number,
+                onChanged: (_) {
+                  setState(() {
+                    _updateBmiText();
+                  });
+                },
               ),
               ProfileInputField(
                 label: "Height (cm)",
                 controller: heightController,
                 keyboardType: TextInputType.number,
+                onChanged: (_) {
+                  setState(() {
+                    _updateBmiText();
+                  });
+                },
+              ),
+              ProfileInputField(
+                label: "BMI",
+                controller: bmiController,
+                enabled: false,
+                hintText: 'Calculated from weight and height',
+              ),
+              ProfileDropdownField(
+                label: "Activity Level",
+                value: selectedActivityLevel,
+                items: activityOptions,
+                hintText: "Select activity level",
+                onChanged: isSaving
+                    ? null
+                    : (value) {
+                        setState(() {
+                          selectedActivityLevel = value;
+                        });
+                      },
+              ),
+              ProfileDropdownField(
+                label: "Fitness Goal",
+                value: selectedFitnessGoal,
+                items: fitnessGoalOptions,
+                hintText: "Select fitness goal",
+                onChanged: isSaving
+                    ? null
+                    : (value) {
+                        setState(() {
+                          selectedFitnessGoal = value;
+                        });
+                      },
               ),
 
               const SizedBox(height: 4),
@@ -545,6 +643,7 @@ class ProfileInputField extends StatelessWidget {
   final bool enabled;
   final TextInputType? keyboardType;
   final String? hintText;
+  final ValueChanged<String>? onChanged;
 
   const ProfileInputField({
     super.key,
@@ -553,6 +652,7 @@ class ProfileInputField extends StatelessWidget {
     this.enabled = true,
     this.keyboardType,
     this.hintText,
+    this.onChanged,
   });
 
   @override
@@ -574,6 +674,7 @@ class ProfileInputField extends StatelessWidget {
             controller: controller,
             enabled: enabled,
             keyboardType: keyboardType,
+            onChanged: onChanged,
             decoration: InputDecoration(
               hintText: hintText,
               filled: true,
@@ -589,6 +690,83 @@ class ProfileInputField extends StatelessWidget {
               disabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
                 borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ProfileDropdownField extends StatelessWidget {
+  final String label;
+  final String? value;
+  final List<String> items;
+  final String hintText;
+  final ValueChanged<String?>? onChanged;
+
+  const ProfileDropdownField({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.hintText,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final String? safeValue = items.contains(value) ? value : null;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: AppColors.cardMuted,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: safeValue,
+                hint: Text(
+                  hintText,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+                isExpanded: true,
+                icon: const Icon(
+                  Icons.keyboard_arrow_down,
+                  color: AppColors.textSecondary,
+                ),
+                items: items.map((item) {
+                  return DropdownMenuItem<String>(
+                    value: item,
+                    child: Text(
+                      item,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  );
+                }).toList(),
+                onChanged: onChanged,
               ),
             ),
           ),

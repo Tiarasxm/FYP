@@ -15,19 +15,12 @@ class _WearableDevicesPageState extends State<WearableDevicesPage> {
   final SupabaseClient supabase = Supabase.instance.client;
 
   final Map<String, bool> connections = {
-    'apple_health': false,
     'motion_fitness': false,
     'google_fit': false,
     'fitbit': false,
   };
 
   final List<_DeviceConfig> devices = const [
-    _DeviceConfig(
-      provider: 'apple_health',
-      title: 'Apple Health',
-      subtitle: 'Connect health data from your iPhone.',
-      icon: Icons.favorite_border,
-    ),
     _DeviceConfig(
       provider: 'motion_fitness',
       title: 'Motion & Fitness Activity',
@@ -74,7 +67,6 @@ class _WearableDevicesPageState extends State<WearableDevicesPage> {
       final rows = List<Map<String, dynamic>>.from(response as List);
 
       final loaded = <String, bool>{
-        'apple_health': false,
         'motion_fitness': false,
         'google_fit': false,
         'fitbit': false,
@@ -262,7 +254,9 @@ class _WearableDevicesPageState extends State<WearableDevicesPage> {
                         const SizedBox(width: 38),
                       ],
                     ),
+
                     const SizedBox(height: 24),
+
                     Text(
                       'Connect devices or fitness services to sync activity data.',
                       style: TextStyle(
@@ -271,7 +265,9 @@ class _WearableDevicesPageState extends State<WearableDevicesPage> {
                         height: 1.4,
                       ),
                     ),
+
                     const SizedBox(height: 18),
+
                     for (final device in devices) ...[
                       _DeviceConnectionCard(
                         device: device,
@@ -283,7 +279,9 @@ class _WearableDevicesPageState extends State<WearableDevicesPage> {
                       ),
                       const SizedBox(height: 12),
                     ],
+
                     const SizedBox(height: 8),
+
                     _infoCard(),
                   ],
                 ),
@@ -373,7 +371,9 @@ class _DeviceConnectionCard extends StatelessWidget {
               color: value ? Colors.deepPurpleAccent : Colors.grey.shade600,
             ),
           ),
+
           const SizedBox(width: 12),
+
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -385,7 +385,9 @@ class _DeviceConnectionCard extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+
                 const SizedBox(height: 4),
+
                 Text(
                   device.subtitle,
                   style: TextStyle(
@@ -394,7 +396,9 @@ class _DeviceConnectionCard extends StatelessWidget {
                     color: Colors.grey.shade600,
                   ),
                 ),
+
                 const SizedBox(height: 6),
+
                 Text(
                   value ? 'Connected' : 'Not connected',
                   style: TextStyle(
@@ -406,6 +410,7 @@ class _DeviceConnectionCard extends StatelessWidget {
               ],
             ),
           ),
+
           if (isUpdating)
             const SizedBox(
               width: 22,
