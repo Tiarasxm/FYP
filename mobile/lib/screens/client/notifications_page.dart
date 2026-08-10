@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/notification_service.dart';
 import '../../theme/app_theme.dart';
 
 class NotificationsPage extends StatefulWidget {
@@ -28,6 +29,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
   @override
   void initState() {
     super.initState();
+    NotificationService.instance.requestPermissions();
     _loadNotificationSettings();
   }
 
@@ -78,6 +80,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
             }),
           );
       });
+
+      await _syncScheduledNotifications();
     } catch (error) {
       _showMessage('Failed to load notifications: $error', isError: true);
     } finally {
@@ -119,6 +123,25 @@ class _NotificationsPageState extends State<NotificationsPage> {
     return '$hour:$minute $period';
   }
 
+  Future<void> _syncScheduledNotifications() async {
+    if (!dailyReminderEnabled) {
+      await NotificationService.instance.cancelAll();
+      return;
+    }
+
+    for (final reminder in reminders) {
+      if (reminder.enabled) {
+        await NotificationService.instance.scheduleReminder(
+          reminderId: reminder.id,
+          type: reminder.type,
+          time: reminder.time,
+        );
+      } else {
+        await NotificationService.instance.cancelReminder(reminder.id);
+      }
+    }
+  }
+
   void _showMessage(String message, {bool isError = false}) {
     if (!mounted) return;
 
@@ -155,6 +178,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
         },
         onConflict: 'profile_id',
       );
+
+      await _syncScheduledNotifications();
 
       _showMessage('Notification setting saved.');
     } catch (error) {
@@ -204,16 +229,24 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
       if (!mounted) return;
 
+      final newReminder = ReminderItem(
+        id: response['reminder_id']?.toString() ?? '',
+        type: response['reminder_type']?.toString() ?? defaultType,
+        time: _parseTimeFromDb(response['reminder_time']),
+        enabled: response['enabled'] == false ? false : true,
+      );
+
       setState(() {
-        reminders.add(
-          ReminderItem(
-            id: response['reminder_id']?.toString() ?? '',
-            type: response['reminder_type']?.toString() ?? defaultType,
-            time: _parseTimeFromDb(response['reminder_time']),
-            enabled: response['enabled'] == false ? false : true,
-          ),
-        );
+        reminders.add(newReminder);
       });
+
+      if (dailyReminderEnabled && newReminder.enabled) {
+        await NotificationService.instance.scheduleReminder(
+          reminderId: newReminder.id,
+          type: newReminder.type,
+          time: newReminder.time,
+        );
+      }
 
       _showMessage('Reminder added.');
     } catch (error) {
@@ -241,6 +274,14 @@ class _NotificationsPageState extends State<NotificationsPage> {
         'reminder_type': type,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('reminder_id', reminder.id);
+
+      if (dailyReminderEnabled && reminder.enabled) {
+        await NotificationService.instance.scheduleReminder(
+          reminderId: reminder.id,
+          type: type,
+          time: reminder.time,
+        );
+      }
 
       _showMessage('Reminder updated.');
     } catch (error) {
@@ -276,6 +317,14 @@ class _NotificationsPageState extends State<NotificationsPage> {
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('reminder_id', reminder.id);
 
+      if (dailyReminderEnabled && reminder.enabled) {
+        await NotificationService.instance.scheduleReminder(
+          reminderId: reminder.id,
+          type: reminder.type,
+          time: selectedTime,
+        );
+      }
+
       _showMessage('Reminder time updated.');
     } catch (error) {
       if (!mounted) return;
@@ -303,6 +352,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
           .delete()
           .eq('reminder_id', reminder.id);
 
+      await NotificationService.instance.cancelReminder(reminder.id);
+
       _showMessage('Reminder deleted.');
     } catch (error) {
       if (!mounted) return;
@@ -329,6 +380,16 @@ class _NotificationsPageState extends State<NotificationsPage> {
         'enabled': value,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('reminder_id', reminder.id);
+
+      if (dailyReminderEnabled && value) {
+        await NotificationService.instance.scheduleReminder(
+          reminderId: reminder.id,
+          type: reminder.type,
+          time: reminder.time,
+        );
+      } else {
+        await NotificationService.instance.cancelReminder(reminder.id);
+      }
 
       _showMessage('Reminder setting saved.');
     } catch (error) {

@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/auth/welcome_screen.dart';
 import 'screens/client/client_shell.dart';
 import 'screens/professional/professional_shell.dart';
+import 'services/notification_service.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
@@ -13,6 +14,8 @@ Future<void> main() async {
     url: 'https://tltbtwctxaxsevcxwwco.supabase.co',
     publishableKey: 'sb_publishable_7Wige7bkmk3CgHxcch1N6w_aZcBVR7i',
   );
+
+  await NotificationService.instance.init();
 
   runApp(const ShapeRushApp());
 }
