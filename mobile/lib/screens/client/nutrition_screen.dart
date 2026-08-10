@@ -140,6 +140,13 @@ class _NutritionScreenState extends State<NutritionScreen> {
         fat += _parseDouble(meal['fat_g']) ?? 0;
       }
 
+      final imageUrl = meals
+          .map((meal) => meal['image_url']?.toString().trim())
+          .firstWhere(
+            (url) => url != null && url.isNotEmpty,
+            orElse: () => null,
+          );
+
       result.add(
         Meal(
           name: type,
@@ -148,6 +155,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
           carbs: carbs.round(),
           fat: fat.round(),
           icon: _mealIcon(type),
+          imageUrl: imageUrl,
         ),
       );
     }
@@ -917,10 +925,22 @@ class _NutritionScreenState extends State<NutritionScreen> {
                 color: AppColors.cardMuted,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(
-                meal.icon,
-                color: AppColors.textSecondary,
-              ),
+              clipBehavior: Clip.antiAlias,
+              child: meal.imageUrl != null && meal.imageUrl!.isNotEmpty
+                  ? Image.network(
+                      meal.imageUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(
+                          meal.icon,
+                          color: AppColors.textSecondary,
+                        );
+                      },
+                    )
+                  : Icon(
+                      meal.icon,
+                      color: AppColors.textSecondary,
+                    ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -1351,6 +1371,18 @@ class MealDetailScreen extends StatelessWidget {
     }
   }
 
+  Future<void> _openEditMeal(BuildContext context, Map<String, dynamic> meal) async {
+    final updated = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => LogMealScreen(existingMeal: meal),
+      ),
+    );
+
+    if (updated == true && context.mounted) {
+      Navigator.of(context).pop(true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1417,7 +1449,10 @@ class MealDetailScreen extends StatelessWidget {
                     _emptyDetailCard(context)
                   else
                     for (final meal in meals) ...[
-                      _foodCard(meal),
+                      GestureDetector(
+                        onTap: () => _openEditMeal(context, meal),
+                        child: _foodCard(meal),
+                      ),
                       const SizedBox(height: 12),
                     ],
                 ],

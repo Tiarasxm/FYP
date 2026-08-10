@@ -23,6 +23,7 @@ class Meal {
   final int carbs;
   final int fat;
   final IconData icon;
+  final String? imageUrl;
 
   const Meal({
     required this.name,
@@ -31,5 +32,6 @@ class Meal {
     required this.carbs,
     required this.fat,
     this.icon = Icons.restaurant,
+    this.imageUrl,
   });
 }

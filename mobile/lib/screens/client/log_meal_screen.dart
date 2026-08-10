@@ -9,10 +9,12 @@ import '../../widgets/client/sub_screen_scaffold.dart';
 
 class LogMealScreen extends StatefulWidget {
   final String initialMealType;
+  final Map<String, dynamic>? existingMeal;
 
   const LogMealScreen({
     super.key,
     this.initialMealType = 'Breakfast',
+    this.existingMeal,
   });
 
   @override
@@ -28,6 +30,7 @@ class _LogMealScreenState extends State<LogMealScreen> {
 
   XFile? _selectedImage;
   Uint8List? _selectedImageBytes;
+  String? _existingImageUrl;
 
   final TextEditingController _foodNameController = TextEditingController();
   final TextEditingController _ingredientsController = TextEditingController();
@@ -47,11 +50,28 @@ class _LogMealScreenState extends State<LogMealScreen> {
   void initState() {
     super.initState();
 
-    if (_mealTypes.contains(widget.initialMealType)) {
+    final existing = widget.existingMeal;
+
+    if (existing != null) {
+      _mealType = existing['meal_type']?.toString() ?? 'Breakfast';
+      _foodNameController.text = existing['food_name']?.toString() ?? '';
+      _ingredientsController.text = existing['ingredients']?.toString() ?? '';
+      _caloriesController.text = _numberToString(existing['calories']);
+      _proteinController.text = _numberToString(existing['protein_g']);
+      _carbsController.text = _numberToString(existing['carbs_g']);
+      _fatController.text = _numberToString(existing['fat_g']);
+      _existingImageUrl = existing['image_url']?.toString();
+    } else if (_mealTypes.contains(widget.initialMealType)) {
       _mealType = widget.initialMealType;
     } else {
       _mealType = 'Breakfast';
     }
+  }
+
+  String _numberToString(dynamic value) {
+    if (value == null) return '0';
+    if (value is num) return value.round().toString();
+    return int.tryParse(value.toString())?.toString() ?? '0';
   }
 
   @override
@@ -157,7 +177,9 @@ class _LogMealScreenState extends State<LogMealScreen> {
     return imageUrl;
   }
 
-  Future<void> _logMeal() async {
+  bool get _isEditing => widget.existingMeal != null;
+
+  Future<void> _saveMeal() async {
     final foodName = _foodNameController.text.trim();
     final ingredients = _ingredientsController.text.trim();
 
@@ -183,32 +205,56 @@ class _LogMealScreenState extends State<LogMealScreen> {
         throw Exception('User is not signed in.');
       }
 
-      final imageUrl = await _uploadMealImage(userId);
+      final newImageUrl = await _uploadMealImage(userId);
+      final imageUrl = newImageUrl ?? _existingImageUrl;
 
-      await client.from('meal_logs').insert({
-        'profile_id': userId,
-        'meal_type': _mealType,
-        'food_name': foodName,
-        'ingredients': ingredients.isEmpty ? null : ingredients,
-        'calories': calories,
-        'protein_g': protein,
-        'carbs_g': carbs,
-        'fat_g': fat,
-        'image_url': imageUrl,
-        'logged_at': DateTime.now().toUtc().toIso8601String(),
-      });
+      if (_isEditing) {
+        final mealLogId = widget.existingMeal!['meal_log_id'];
 
-      if (!mounted) return;
+        await client.from('meal_logs').update({
+          'meal_type': _mealType,
+          'food_name': foodName,
+          'ingredients': ingredients.isEmpty ? null : ingredients,
+          'calories': calories,
+          'protein_g': protein,
+          'carbs_g': carbs,
+          'fat_g': fat,
+          'image_url': imageUrl,
+        }).eq('meal_log_id', mealLogId);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Meal logged successfully.'),
-        ),
-      );
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Meal updated successfully.'),
+          ),
+        );
+      } else {
+        await client.from('meal_logs').insert({
+          'profile_id': userId,
+          'meal_type': _mealType,
+          'food_name': foodName,
+          'ingredients': ingredients.isEmpty ? null : ingredients,
+          'calories': calories,
+          'protein_g': protein,
+          'carbs_g': carbs,
+          'fat_g': fat,
+          'image_url': imageUrl,
+          'logged_at': DateTime.now().toUtc().toIso8601String(),
+        });
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Meal logged successfully.'),
+          ),
+        );
+      }
 
       Navigator.of(context).pop(true);
     } catch (error) {
-      _showMessage('Failed to log meal: $error');
+      _showMessage('Failed to ${_isEditing ? 'update' : 'log'} meal: $error');
     } finally {
       if (mounted) {
         setState(() {
@@ -221,10 +267,12 @@ class _LogMealScreenState extends State<LogMealScreen> {
   @override
   Widget build(BuildContext context) {
     return SubScreenScaffold(
-      title: 'Log Meal',
+      title: _isEditing ? 'Edit Meal' : 'Log Meal',
       bottomButton: PrimaryButton(
-        label: _isSaving ? 'Saving...' : 'Log Meal',
-        onPressed: _isSaving ? null : _logMeal,
+        label: _isSaving
+            ? 'Saving...'
+            : (_isEditing ? 'Save Changes' : 'Log Meal'),
+        onPressed: _isSaving ? null : _saveMeal,
       ),
       children: [
         Align(
@@ -427,6 +475,95 @@ class _LogMealScreenState extends State<LogMealScreen> {
 
   Widget _imagePicker() {
     final imageBytes = _selectedImageBytes;
+    final existingImageUrl = _existingImageUrl;
+
+    final bool hasImage = imageBytes != null ||
+        (existingImageUrl != null && existingImageUrl.isNotEmpty);
+
+    Widget preview;
+    if (imageBytes != null) {
+      preview = Container(
+        width: double.infinity,
+        height: 220,
+        decoration: BoxDecoration(
+          color: AppColors.cardMuted,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Image.memory(
+          imageBytes,
+          fit: BoxFit.contain,
+        ),
+      );
+    } else if (existingImageUrl != null && existingImageUrl.isNotEmpty) {
+      preview = Container(
+        width: double.infinity,
+        height: 220,
+        decoration: BoxDecoration(
+          color: AppColors.cardMuted,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Image.network(
+          existingImageUrl,
+          fit: BoxFit.contain,
+          loadingBuilder: (context, child, progress) {
+            if (progress == null) return child;
+            return const Center(
+              child: CircularProgressIndicator(strokeWidth: 2),
+            );
+          },
+          errorBuilder: (context, error, stackTrace) {
+            return const Center(
+              child: Icon(
+                Icons.broken_image_outlined,
+                color: AppColors.textMuted,
+              ),
+            );
+          },
+        ),
+      );
+    } else {
+      preview = Column(
+        children: [
+          const Icon(
+            Icons.image_outlined,
+            size: 32,
+            color: AppColors.textMuted,
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Choose an image to upload (optional)',
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton(
+            onPressed: _isSaving ? null : _pickImage,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: const BorderSide(color: AppColors.primary),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 10,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+            child: const Text(
+              'Add image',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
 
     return Container(
       width: double.infinity,
@@ -441,61 +578,10 @@ class _LogMealScreenState extends State<LogMealScreen> {
           width: 1.5,
         ),
       ),
-      child: imageBytes == null
+      child: hasImage
           ? Column(
               children: [
-                const Icon(
-                  Icons.image_outlined,
-                  size: 32,
-                  color: AppColors.textMuted,
-                ),
-                const SizedBox(height: 10),
-                const Text(
-                  'Choose an image to upload (optional)',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton(
-                  onPressed: _isSaving ? null : _pickImage,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.primary,
-                    side: const BorderSide(color: AppColors.primary),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 10,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                  ),
-                  child: const Text(
-                    'Add image',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            )
-          : Column(
-              children: [
-                Container(
-                  width: double.infinity,
-                  height: 220,
-                  decoration: BoxDecoration(
-                    color: AppColors.cardMuted,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Image.memory(
-                    imageBytes,
-                    fit: BoxFit.contain,
-                  ),
-                ),
+                preview,
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -528,6 +614,7 @@ class _LogMealScreenState extends State<LogMealScreen> {
                                 setState(() {
                                   _selectedImage = null;
                                   _selectedImageBytes = null;
+                                  _existingImageUrl = null;
                                 });
                               },
                         style: OutlinedButton.styleFrom(
@@ -550,7 +637,8 @@ class _LogMealScreenState extends State<LogMealScreen> {
                   ],
                 ),
               ],
-            ),
+            )
+          : preview,
     );
   }
 }
