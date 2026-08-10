@@ -64,19 +64,6 @@ export default function AdminWebsitePage() {
   const [featuredReviews, setFeaturedReviews] = useState([]);
   const [availableReviews, setAvailableReviews] = useState([]);
 
-  useEffect(() => {
-    const isAdminLoggedIn = localStorage.getItem("adminLoggedIn");
-
-    if (isAdminLoggedIn !== "true") {
-      router.replace("/admin/login");
-      return;
-    }
-
-    setAllowed(true);
-    fetchWebsiteContent();
-    fetchReviews();
-  }, [router]);
-
   async function fetchWebsiteContent() {
     setLoading(true);
 
@@ -108,7 +95,7 @@ export default function AdminWebsitePage() {
     const { data, error } = await supabase
       .from("reviews")
       .select(
-        "review_id, rating, feedback, media_path, submitted_at, ai_analysis, featured_on_website, profiles(full_name)"
+        "review_id, rating, feedback, media_path, submitted_at, ai_analysis, featured_on_website, profiles!reviews_reviewer_id_fkey(full_name)"
       )
       .order("submitted_at", { ascending: false });
 
@@ -138,6 +125,20 @@ export default function AdminWebsitePage() {
     setFeaturedReviews(formattedReviews.filter((review) => review.featured_on_website));
     setAvailableReviews(positiveReviews);
   }
+
+  useEffect(() => {
+    const isAdminLoggedIn = localStorage.getItem("adminLoggedIn");
+
+    if (isAdminLoggedIn !== "true") {
+      router.replace("/admin/login");
+      return;
+    }
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous local admin-auth gate check, not fetched data
+    setAllowed(true);
+    fetchWebsiteContent();
+    fetchReviews();
+  }, [router]);
 
   async function saveSection(sectionKey, content) {
     const { error } = await supabase.from("website_content").upsert({

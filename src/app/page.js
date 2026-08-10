@@ -145,7 +145,7 @@ export default function HomePage() {
     const { data, error } = await supabase
       .from("reviews")
       .select(
-        "review_id, rating, feedback, submitted_at, featured_on_website, profiles(full_name)"
+        "review_id, rating, feedback, submitted_at, featured_on_website, profiles!reviews_reviewer_id_fkey(full_name)"
       )
       .eq("featured_on_website", true)
       .order("submitted_at", { ascending: false })

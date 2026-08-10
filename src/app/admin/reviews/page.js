@@ -21,25 +21,13 @@ export default function AdminReviewsPage() {
 
   const [selectedReview, setSelectedReview] = useState(null);
 
-  useEffect(() => {
-    const isAdminLoggedIn = localStorage.getItem("adminLoggedIn");
-
-    if (isAdminLoggedIn !== "true") {
-      router.replace("/admin/login");
-      return;
-    }
-
-    setAllowed(true);
-    fetchReviews();
-  }, [router]);
-
   async function fetchReviews() {
     setLoading(true);
 
     const { data, error } = await supabase
       .from("reviews")
       .select(
-        "review_id, reviewer_id, rating, feedback, media_path, ai_analysis, submitted_at, profiles(full_name, email, user_type)"
+        "review_id, reviewer_id, rating, feedback, media_path, ai_analysis, submitted_at, profiles!reviews_reviewer_id_fkey(full_name, email, user_type)"
       )
       .order("submitted_at", { ascending: false });
 
@@ -66,6 +54,19 @@ export default function AdminReviewsPage() {
     setReviews(formattedReviews);
     setLoading(false);
   }
+
+  useEffect(() => {
+    const isAdminLoggedIn = localStorage.getItem("adminLoggedIn");
+
+    if (isAdminLoggedIn !== "true") {
+      router.replace("/admin/login");
+      return;
+    }
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous local admin-auth gate check, not fetched data
+    setAllowed(true);
+    fetchReviews();
+  }, [router]);
 
   function handleViewMedia(review) {
     if (!review.media_path) {
