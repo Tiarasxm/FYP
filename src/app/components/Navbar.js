@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 export default function Navbar() {
   const router = useRouter();
+  const pathname = usePathname();
   const menuRef = useRef(null);
+  const isHome = pathname === "/";
 
   const [loggedIn, setLoggedIn] = useState(false);
   const [fullName, setFullName] = useState("");
@@ -82,11 +84,11 @@ export default function Navbar() {
       </Link>
 
       <div className="hidden md:flex items-center gap-9 text-[13px] font-medium">
-        <Link href="/#home">Home</Link>
-        <Link href="/#features">Features</Link>
-        <Link href="/#plans">Plans</Link>
-        <Link href="/#reviews">Reviews</Link>
-        <Link href="/#faq">FAQ</Link>
+        <Link href={isHome ? "#home" : "/#home"}>Home</Link>
+        <Link href={isHome ? "#features" : "/#features"}>Features</Link>
+        <Link href={isHome ? "#plans" : "/#plans"}>Plans</Link>
+        <Link href={isHome ? "#reviews" : "/#reviews"}>Reviews</Link>
+        <Link href={isHome ? "#faq" : "/#faq"}>FAQ</Link>
       </div>
 
       <div className="flex items-center gap-3">

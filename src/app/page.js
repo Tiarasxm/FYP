@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import Navbar from "@/app/components/Navbar";
 
 const defaultHero = {
   titleLine1: "Train smarter.",
@@ -117,7 +118,6 @@ export default function HomePage() {
   const [faq, setFaq] = useState(defaultFaq);
   const [featuredReviews, setFeaturedReviews] = useState([]);
   const [currentReviewIndex, setCurrentReviewIndex] = useState(0);
-  const [loggedIn, setLoggedIn] = useState(false);
 
   async function fetchWebsiteContent() {
     const { data, error } = await supabase
@@ -172,16 +172,6 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- setState calls happen after network awaits, not synchronously
     fetchWebsiteContent();
     fetchFeaturedReviews();
-
-    supabase.auth.getSession().then(({ data }) => {
-      setLoggedIn(!!data.session);
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setLoggedIn(!!session);
-    });
-
-    return () => listener.subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -223,55 +213,7 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-[#f7f7ff] text-black">
-      {/* Navbar */}
-      <nav className="sticky top-0 z-50 h-[72px] bg-white flex items-center justify-between px-10 shadow-sm">
-        <h1 className="text-[22px] font-bold tracking-tight">ShapeRush</h1>
-
-        <div className="hidden md:flex items-center gap-9 text-[13px] font-medium">
-          <a href="#home">Home</a>
-          <a href="#features">Features</a>
-          <a href="#plans">Plans</a>
-          <a href="#reviews">Reviews</a>
-          <a href="#faq">FAQ</a>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {loggedIn ? (
-            <>
-              <Link
-                href="/welcome"
-                className="text-[13px] font-semibold text-[#6c5cff] px-5 py-3"
-              >
-                Download
-              </Link>
-              <button
-                onClick={async () => {
-                  await supabase.auth.signOut();
-                  setLoggedIn(false);
-                }}
-                className="bg-[#6c5cff] text-white px-8 py-3 rounded-xl text-[13px] font-semibold"
-              >
-                Logout
-              </button>
-            </>
-          ) : (
-            <>
-              <Link
-                href="/login"
-                className="text-[13px] font-semibold text-[#6c5cff] px-5 py-3"
-              >
-                Login
-              </Link>
-              <Link
-                href="/register"
-                className="bg-[#6c5cff] text-white px-8 py-3 rounded-xl text-[13px] font-semibold"
-              >
-                Register
-              </Link>
-            </>
-          )}
-        </div>
-      </nav>
+      <Navbar />
 
       {/* Hero */}
       <section
