@@ -118,6 +118,9 @@ export default function HomePage() {
   const [faq, setFaq] = useState(defaultFaq);
   const [featuredReviews, setFeaturedReviews] = useState([]);
   const [currentReviewIndex, setCurrentReviewIndex] = useState(0);
+  const [viewerLoading, setViewerLoading] = useState(true);
+  const [viewerLoggedIn, setViewerLoggedIn] = useState(false);
+  const [viewerUserType, setViewerUserType] = useState(null);
 
   async function fetchWebsiteContent() {
     const { data, error } = await supabase
@@ -168,10 +171,33 @@ export default function HomePage() {
     setFeaturedReviews(formattedReviews);
   }
 
+  async function fetchViewer() {
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !userData?.user) {
+      setViewerLoggedIn(false);
+      setViewerUserType(null);
+      setViewerLoading(false);
+      return;
+    }
+
+    setViewerLoggedIn(true);
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("user_type")
+      .eq("id", userData.user.id)
+      .single();
+
+    setViewerUserType(profile?.user_type || null);
+    setViewerLoading(false);
+  }
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- setState calls happen after network awaits, not synchronously
     fetchWebsiteContent();
     fetchFeaturedReviews();
+    fetchViewer();
   }, []);
 
   useEffect(() => {
@@ -329,16 +355,27 @@ export default function HomePage() {
 
           <div className="mt-12 flex flex-col md:flex-row justify-center gap-8">
             {(subscription.plans || defaultSubscription.plans).map(
-              (plan, index) => (
-                <PlanCard
-                  key={index}
-                  title={plan.title}
-                  price={plan.price}
-                  description={plan.description}
-                  features={plan.features}
-                  premium={index === 1}
-                />
-              )
+              (plan, index) => {
+                const planKind = getPlanKind(plan.title);
+                const cta = getPlanCta(
+                  planKind,
+                  viewerLoading,
+                  viewerLoggedIn,
+                  viewerUserType
+                );
+
+                return (
+                  <PlanCard
+                    key={index}
+                    title={plan.title}
+                    price={plan.price}
+                    description={plan.description}
+                    features={plan.features}
+                    premium={index === 1}
+                    cta={cta}
+                  />
+                );
+              }
             )}
           </div>
         </div>
@@ -488,10 +525,10 @@ function Feature({ icon, title, text }) {
   );
 }
 
-function PlanCard({ title, price, description, features, premium }) {
+function PlanCard({ title, price, description, features, premium, cta }) {
   return (
     <div
-      className={`w-[310px] min-h-[390px] bg-white rounded-[22px] p-8 text-left ${
+      className={`w-[310px] min-h-[390px] bg-white rounded-[22px] p-8 text-left flex flex-col ${
         premium ? "border-2 border-[#6c5cff]" : ""
       }`}
     >
@@ -513,7 +550,36 @@ function PlanCard({ title, price, description, features, premium }) {
           <PlanItem key={index} text={feature} />
         ))}
       </ul>
+
+      {cta && (
+        <div className="mt-auto pt-8">
+          <PlanCtaButton cta={cta} />
+        </div>
+      )}
     </div>
+  );
+}
+
+function PlanCtaButton({ cta }) {
+  if (cta.disabled) {
+    return (
+      <button
+        type="button"
+        disabled
+        className="w-full h-[48px] bg-gray-200 text-gray-500 rounded-[22px] text-[13px] font-semibold cursor-not-allowed"
+      >
+        {cta.label}
+      </button>
+    );
+  }
+
+  return (
+    <Link
+      href={cta.href}
+      className="block w-full h-[48px] leading-[48px] text-center bg-[#6c5cff] text-white rounded-[22px] text-[13px] font-semibold hover:bg-[#5b4bea]"
+    >
+      {cta.label}
+    </Link>
   );
 }
 
@@ -573,4 +639,46 @@ function renderStars(rating) {
   const value = Math.max(0, Math.min(5, Number(rating || 0)));
 
   return "★ ".repeat(value) + "☆ ".repeat(5 - value);
+}
+
+function getPlanKind(title) {
+  const normalized = (title || "").trim().toLowerCase();
+
+  if (normalized === "free") {
+    return "free";
+  }
+
+  if (normalized === "priority") {
+    return "priority";
+  }
+
+  return null;
+}
+
+function getPlanCta(planKind, viewerLoading, viewerLoggedIn, viewerUserType) {
+  if (!planKind) {
+    return null;
+  }
+
+  if (viewerLoading || !viewerLoggedIn) {
+    return planKind === "free"
+      ? { label: "Get Started Free", href: "/register" }
+      : { label: "Get Priority", href: "/register" };
+  }
+
+  const normalizedType = (viewerUserType || "").trim().toLowerCase();
+
+  if (normalizedType === "free") {
+    return planKind === "free"
+      ? { label: "Current Plan", disabled: true }
+      : { label: "Upgrade to Priority", href: "/choose-plan" };
+  }
+
+  if (normalizedType === "priority") {
+    return planKind === "free"
+      ? { label: "Switch to Free", href: "/choose-plan" }
+      : { label: "Current Plan", disabled: true };
+  }
+
+  return null;
 }
