@@ -172,8 +172,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadActivePlan(SupabaseClient client, String userId) async {
     final savedResponse = await client
         .from('saved_plans')
-        .select('saved_plan_id, free_plan_id, personalized_plan_id, saved_at')
+        .select(
+          'saved_plan_id, free_plan_id, personalized_plan_id, saved_at, is_active',
+        )
         .eq('profile_id', userId)
+        .eq('is_active', true)
         .order('saved_at', ascending: false)
         .limit(1);
 

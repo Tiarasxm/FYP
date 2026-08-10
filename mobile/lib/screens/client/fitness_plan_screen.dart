@@ -71,8 +71,9 @@ class _FitnessPlanScreenState extends State<FitnessPlanScreen> {
 
       final savedResponse = await client
           .from('saved_plans')
-          .select('free_plan_id, personalized_plan_id, saved_at')
+          .select('free_plan_id, personalized_plan_id, is_active, saved_at')
           .eq('profile_id', userId)
+          .eq('is_active', true)
           .order('saved_at', ascending: false)
           .limit(1);
 
@@ -373,7 +374,7 @@ class _FitnessPlanScreenState extends State<FitnessPlanScreen> {
             padding: EdgeInsets.symmetric(vertical: 40),
             child: Center(
               child: Text(
-                'Select a plan from the Workout tab to start.',
+                'Set an active plan from the Workout tab or Saved Plans.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: AppColors.textSecondary),
               ),

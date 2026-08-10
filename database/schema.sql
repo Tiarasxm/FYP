@@ -667,17 +667,265 @@ using (
 -- =========================================================
 -- 16. SAVED PLANS TABLE
 -- =========================================================
+-- saved_plans now separates two concepts:
+--   is_saved  = shown in Saved Workout Plans
+--   is_active = current plan used by Home / Fitness Plan / Active Workout
+--
+-- This supports:
+--   Free users: max 5 saved plans
+--   Priority users: unlimited saved plans
+--   One active plan per user
+--   A plan can be active without being saved
 
 create table if not exists public.saved_plans (
   saved_plan_id uuid primary key default gen_random_uuid(),
   profile_id uuid not null,
   free_plan_id uuid,
   personalized_plan_id uuid,
-  saved_at timestamptz default now(),
+  is_saved boolean not null default true,
+  is_active boolean not null default false,
+  saved_at timestamptz not null default now(),
   constraint saved_plans_profile_id_fkey foreign key (profile_id) references public.profiles(id),
   constraint saved_plans_free_plan_id_fkey foreign key (free_plan_id) references public.free_plans(free_plan_id),
   constraint saved_plans_personalized_plan_id_fkey foreign key (personalized_plan_id) references public.personalized_plans(personalized_plan_id)
 );
+
+-- Safe migration for databases where saved_plans already existed before
+-- is_saved / is_active were added.
+alter table public.saved_plans
+add column if not exists is_saved boolean not null default true;
+
+alter table public.saved_plans
+add column if not exists is_active boolean not null default false;
+
+alter table public.saved_plans
+alter column saved_at set default now();
+
+update public.saved_plans
+set saved_at = now()
+where saved_at is null;
+
+alter table public.saved_plans
+alter column saved_at set not null;
+
+-- Treat old existing saved_plans rows as saved rows.
+update public.saved_plans
+set is_saved = true
+where is_saved is null;
+
+update public.saved_plans
+set is_active = false
+where is_active is null;
+
+-- If the database had old saved rows but no active row yet,
+-- keep the previous behavior by making the latest saved row active.
+with users_without_active as (
+  select distinct sp.profile_id
+  from public.saved_plans sp
+  where not exists (
+    select 1
+    from public.saved_plans active_sp
+    where active_sp.profile_id = sp.profile_id
+      and active_sp.is_active = true
+  )
+),
+latest_saved as (
+  select distinct on (sp.profile_id)
+    sp.saved_plan_id
+  from public.saved_plans sp
+  join users_without_active uwa on uwa.profile_id = sp.profile_id
+  where sp.is_saved = true
+  order by sp.profile_id, sp.saved_at desc, sp.saved_plan_id
+)
+update public.saved_plans sp
+set is_active = true
+where sp.saved_plan_id in (
+  select saved_plan_id from latest_saved
+);
+
+-- If older data accidentally has multiple active plans for a user,
+-- keep only the newest one active.
+with ranked_active as (
+  select
+    saved_plan_id,
+    row_number() over (
+      partition by profile_id
+      order by saved_at desc, saved_plan_id
+    ) as rn
+  from public.saved_plans
+  where is_active = true
+)
+update public.saved_plans
+set is_active = false
+where saved_plan_id in (
+  select saved_plan_id
+  from ranked_active
+  where rn > 1
+);
+
+-- Merge duplicate saved free-plan rows before adding the unique index.
+with ranked_free as (
+  select
+    saved_plan_id,
+    bool_or(is_saved) over (
+      partition by profile_id, free_plan_id
+    ) as merged_is_saved,
+    bool_or(is_active) over (
+      partition by profile_id, free_plan_id
+    ) as merged_is_active,
+    row_number() over (
+      partition by profile_id, free_plan_id
+      order by is_active desc, is_saved desc, saved_at desc, saved_plan_id
+    ) as rn
+  from public.saved_plans
+  where free_plan_id is not null
+)
+update public.saved_plans sp
+set
+  is_saved = ranked_free.merged_is_saved,
+  is_active = ranked_free.merged_is_active
+from ranked_free
+where sp.saved_plan_id = ranked_free.saved_plan_id
+  and ranked_free.rn = 1;
+
+with ranked_free as (
+  select
+    saved_plan_id,
+    row_number() over (
+      partition by profile_id, free_plan_id
+      order by is_active desc, is_saved desc, saved_at desc, saved_plan_id
+    ) as rn
+  from public.saved_plans
+  where free_plan_id is not null
+)
+delete from public.saved_plans sp
+using ranked_free
+where sp.saved_plan_id = ranked_free.saved_plan_id
+  and ranked_free.rn > 1;
+
+-- Merge duplicate saved personalized-plan rows before adding the unique index.
+with ranked_personalized as (
+  select
+    saved_plan_id,
+    bool_or(is_saved) over (
+      partition by profile_id, personalized_plan_id
+    ) as merged_is_saved,
+    bool_or(is_active) over (
+      partition by profile_id, personalized_plan_id
+    ) as merged_is_active,
+    row_number() over (
+      partition by profile_id, personalized_plan_id
+      order by is_active desc, is_saved desc, saved_at desc, saved_plan_id
+    ) as rn
+  from public.saved_plans
+  where personalized_plan_id is not null
+)
+update public.saved_plans sp
+set
+  is_saved = ranked_personalized.merged_is_saved,
+  is_active = ranked_personalized.merged_is_active
+from ranked_personalized
+where sp.saved_plan_id = ranked_personalized.saved_plan_id
+  and ranked_personalized.rn = 1;
+
+with ranked_personalized as (
+  select
+    saved_plan_id,
+    row_number() over (
+      partition by profile_id, personalized_plan_id
+      order by is_active desc, is_saved desc, saved_at desc, saved_plan_id
+    ) as rn
+  from public.saved_plans
+  where personalized_plan_id is not null
+)
+delete from public.saved_plans sp
+using ranked_personalized
+where sp.saved_plan_id = ranked_personalized.saved_plan_id
+  and ranked_personalized.rn > 1;
+
+-- After duplicate merge, ensure only one active row per user again.
+with ranked_active as (
+  select
+    saved_plan_id,
+    row_number() over (
+      partition by profile_id
+      order by saved_at desc, saved_plan_id
+    ) as rn
+  from public.saved_plans
+  where is_active = true
+)
+update public.saved_plans
+set is_active = false
+where saved_plan_id in (
+  select saved_plan_id
+  from ranked_active
+  where rn > 1
+);
+
+create index if not exists saved_plans_profile_id_idx
+on public.saved_plans(profile_id);
+
+drop index if exists saved_plans_one_active_per_user;
+
+create unique index saved_plans_one_active_per_user
+on public.saved_plans(profile_id)
+where is_active = true;
+
+drop index if exists saved_plans_unique_free_plan_per_user;
+
+create unique index saved_plans_unique_free_plan_per_user
+on public.saved_plans(profile_id, free_plan_id)
+where free_plan_id is not null;
+
+drop index if exists saved_plans_unique_personalized_plan_per_user;
+
+create unique index saved_plans_unique_personalized_plan_per_user
+on public.saved_plans(profile_id, personalized_plan_id)
+where personalized_plan_id is not null;
+
+create index if not exists saved_plans_saved_list_idx
+on public.saved_plans(profile_id, saved_at desc)
+where is_saved = true;
+
+-- Enforce the Free-plan saved limit at database level.
+-- Priority users are unlimited.
+create or replace function public.enforce_saved_plan_limit()
+returns trigger as $$
+declare
+  user_type_value text;
+  existing_saved_count integer;
+begin
+  if new.is_saved = true then
+    select lower(coalesce(user_type, 'free'))
+    into user_type_value
+    from public.profiles
+    where id = new.profile_id;
+
+    if coalesce(user_type_value, 'free') <> 'priority' then
+      select count(*)
+      into existing_saved_count
+      from public.saved_plans
+      where profile_id = new.profile_id
+        and is_saved = true
+        and saved_plan_id is distinct from new.saved_plan_id;
+
+      if existing_saved_count >= 5 then
+        raise exception 'Free users can save at most 5 workout plans. Delete a saved plan or upgrade to Priority.';
+      end if;
+    end if;
+  end if;
+
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists saved_plans_limit_trigger on public.saved_plans;
+
+create trigger saved_plans_limit_trigger
+before insert or update of profile_id, is_saved
+on public.saved_plans
+for each row
+execute function public.enforce_saved_plan_limit();
 
 alter table public.saved_plans enable row level security;
 
@@ -689,6 +937,7 @@ for all
 to authenticated
 using (profile_id = auth.uid() or public.is_admin())
 with check (profile_id = auth.uid() or public.is_admin());
+
 
 -- =========================================================
 -- 17. WORKOUT LOGS TABLE

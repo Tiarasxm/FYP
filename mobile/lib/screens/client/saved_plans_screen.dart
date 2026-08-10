@@ -15,17 +15,18 @@ class SavedPlansScreen extends StatefulWidget {
 
 class _SavedPlansScreenState extends State<SavedPlansScreen> {
   bool _isLoading = true;
+  bool _isUpdating = false;
 
-  Map<String, dynamic>? _activePlan;
-  String _createdBy = 'ShapeRush';
+  bool _isPriority = false;
+  List<Map<String, dynamic>> _savedPlans = [];
 
   @override
   void initState() {
     super.initState();
-    _loadActivePlan();
+    _loadSavedPlans();
   }
 
-  Future<void> _loadActivePlan() async {
+  Future<void> _loadSavedPlans() async {
     setState(() {
       _isLoading = true;
     });
@@ -38,91 +39,96 @@ class _SavedPlansScreenState extends State<SavedPlansScreen> {
         throw Exception('User is not signed in.');
       }
 
+      final profile = await client
+          .from('profiles')
+          .select('user_type')
+          .eq('id', userId)
+          .maybeSingle();
+
+      final userType =
+          profile?['user_type']?.toString().trim().toLowerCase() ?? 'free';
+      final isPriority = userType == 'priority';
+
       final savedResponse = await client
           .from('saved_plans')
-          .select('saved_plan_id, free_plan_id, saved_at')
+          .select('saved_plan_id, free_plan_id, is_active, saved_at')
           .eq('profile_id', userId)
-          .order('saved_at', ascending: false)
-          .limit(1);
+          .eq('is_saved', true)
+          .order('saved_at', ascending: false);
 
       final savedRows = List<Map<String, dynamic>>.from(savedResponse as List);
 
-      if (savedRows.isEmpty) {
+      final planIds = savedRows
+          .map((row) => row['free_plan_id']?.toString())
+          .where((id) => id != null && id.isNotEmpty)
+          .cast<String>()
+          .toList();
+
+      if (planIds.isEmpty) {
         if (!mounted) return;
 
         setState(() {
-          _activePlan = null;
-          _createdBy = 'ShapeRush';
+          _isPriority = isPriority;
+          _savedPlans = [];
         });
 
         return;
       }
 
-      final freePlanId = savedRows.first['free_plan_id']?.toString();
-
-      if (freePlanId == null || freePlanId.isEmpty) {
-        if (!mounted) return;
-
-        setState(() {
-          _activePlan = null;
-          _createdBy = 'ShapeRush';
-        });
-
-        return;
-      }
-
-      final plan = await client
+      final plansResponse = await client
           .from('free_plans')
           .select(
             'free_plan_id, professional_id, plan_name, category, tag1, tag2, tag3, visibility, duration_weeks, status, created_at',
           )
-          .eq('free_plan_id', freePlanId)
-          .or('status.is.null,status.neq.archived')
-          .maybeSingle();
+          .inFilter('free_plan_id', planIds)
+          .or('status.is.null,status.neq.archived');
 
-      if (plan == null) {
-        if (!mounted) return;
+      final planRows = List<Map<String, dynamic>>.from(plansResponse as List);
 
-        setState(() {
-          _activePlan = null;
-          _createdBy = 'ShapeRush';
-        });
+      final planById = <String, Map<String, dynamic>>{};
 
-        return;
+      for (final plan in planRows) {
+        final id = plan['free_plan_id']?.toString();
+        if (id != null && id.isNotEmpty) {
+          planById[id] = plan;
+        }
       }
 
-      String createdBy = 'ShapeRush';
+      final mergedPlans = <Map<String, dynamic>>[];
 
-      final professionalId = plan['professional_id']?.toString();
+      for (final saved in savedRows) {
+        final planId = saved['free_plan_id']?.toString();
+        if (planId == null || planId.isEmpty) continue;
 
-      if (professionalId != null && professionalId.isNotEmpty) {
-        final profile = await client
-            .from('profiles')
-            .select('full_name, email')
-            .eq('id', professionalId)
-            .maybeSingle();
+        final plan = planById[planId];
+        if (plan == null) continue;
 
-        final fullName = profile?['full_name']?.toString().trim();
-        final email = profile?['email']?.toString().trim();
+        final visibility =
+            plan['visibility']?.toString().trim().toLowerCase() ?? 'public';
 
-        if (fullName != null && fullName.isNotEmpty) {
-          createdBy = fullName;
-        } else if (email != null && email.isNotEmpty) {
-          createdBy = email.split('@').first;
+        if (!isPriority && visibility != 'public') {
+          continue;
         }
+
+        mergedPlans.add({
+          ...plan,
+          '_saved_plan_id': saved['saved_plan_id'],
+          '_is_active': saved['is_active'] == true,
+          '_saved_at': saved['saved_at'],
+        });
       }
 
       if (!mounted) return;
 
       setState(() {
-        _activePlan = plan;
-        _createdBy = createdBy;
+        _isPriority = isPriority;
+        _savedPlans = mergedPlans;
       });
     } catch (error) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load active plan: $error')),
+        SnackBar(content: Text('Failed to load saved plans: $error')),
       );
     } finally {
       if (mounted) {
@@ -188,11 +194,170 @@ class _SavedPlansScreenState extends State<SavedPlansScreen> {
     return tags;
   }
 
-  Future<void> _openPlanDetail() async {
-    final plan = _activePlan;
+  bool _isActivePlan(Map<String, dynamic> plan) {
+    return plan['_is_active'] == true;
+  }
 
-    if (plan == null) return;
+  Future<void> _setActivePlan(Map<String, dynamic> plan) async {
+    if (_isUpdating) return;
 
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+    final planId = plan['free_plan_id']?.toString();
+    final savedPlanId = plan['_saved_plan_id']?.toString();
+
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You must be signed in.')),
+      );
+      return;
+    }
+
+    if (planId == null || planId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Missing plan id.')),
+      );
+      return;
+    }
+
+    if (savedPlanId == null || savedPlanId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Missing saved plan id.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isUpdating = true;
+    });
+
+    try {
+      await client
+          .from('saved_plans')
+          .update({'is_active': false})
+          .eq('profile_id', userId)
+          .eq('is_active', true);
+
+      await client
+          .from('saved_plans')
+          .update({
+            'is_active': true,
+            'saved_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('saved_plan_id', savedPlanId)
+          .eq('profile_id', userId);
+
+      await _loadSavedPlans();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Active plan updated.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to set active plan: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUpdating = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _removeSavedPlan(Map<String, dynamic> plan) async {
+    if (_isUpdating) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Remove saved plan?'),
+          content: Text(
+            _isActivePlan(plan)
+                ? 'This plan will be removed from saved plans, but it will stay as your active plan.'
+                : 'This plan will be removed from your saved plans.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Remove'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+    final savedPlanId = plan['_saved_plan_id']?.toString();
+
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You must be signed in.')),
+      );
+      return;
+    }
+
+    if (savedPlanId == null || savedPlanId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Missing saved plan id.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isUpdating = true;
+    });
+
+    try {
+      if (_isActivePlan(plan)) {
+        await client
+            .from('saved_plans')
+            .update({'is_saved': false})
+            .eq('saved_plan_id', savedPlanId)
+            .eq('profile_id', userId);
+      } else {
+        await client
+            .from('saved_plans')
+            .delete()
+            .eq('saved_plan_id', savedPlanId)
+            .eq('profile_id', userId);
+      }
+
+      await _loadSavedPlans();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Removed from saved plans.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to remove saved plan: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUpdating = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _openPlanDetail(Map<String, dynamic> plan) async {
     final planId = plan['free_plan_id']?.toString();
 
     if (planId == null || planId.isEmpty) {
@@ -212,12 +377,16 @@ class _SavedPlansScreenState extends State<SavedPlansScreen> {
     );
 
     if (result == true && mounted) {
-      await _loadActivePlan();
+      await _loadSavedPlans();
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final limitText = _isPriority
+        ? '${_savedPlans.length} saved plans'
+        : '${_savedPlans.length}/5 saved plans';
+
     return SubScreenScaffold(
       title: 'Saved Workout Plans',
       children: [
@@ -228,10 +397,24 @@ class _SavedPlansScreenState extends State<SavedPlansScreen> {
               child: CircularProgressIndicator(),
             ),
           )
-        else if (_activePlan == null)
-          _emptyState()
-        else
-          _planCard(_activePlan!),
+        else ...[
+          Text(
+            limitText,
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (_savedPlans.isEmpty)
+            _emptyState()
+          else
+            for (final plan in _savedPlans) ...[
+              _planCard(plan),
+              const SizedBox(height: 14),
+            ],
+        ],
       ],
     );
   }
@@ -255,22 +438,18 @@ class _SavedPlansScreenState extends State<SavedPlansScreen> {
                 size: 30,
               ),
             ),
-
             const SizedBox(height: 16),
-
             const Text(
-              'No active plan yet',
+              'No saved plans yet',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
                 color: AppColors.textPrimary,
               ),
             ),
-
             const SizedBox(height: 6),
-
             const Text(
-              'Choose an available plan from the Workout tab.',
+              'Save plans from the Workout tab.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,
@@ -287,14 +466,18 @@ class _SavedPlansScreenState extends State<SavedPlansScreen> {
     final title = _planTitle(plan);
     final duration = _durationText(plan);
     final tags = _planTags(plan);
+    final isActive = _isActivePlan(plan);
 
     return GestureDetector(
-      onTap: _openPlanDetail,
+      onTap: () => _openPlanDetail(plan),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.primarySoft,
+          color: isActive ? AppColors.primarySoft : AppColors.cardMuted,
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isActive ? AppColors.primary : AppColors.border,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -312,33 +495,16 @@ class _SavedPlansScreenState extends State<SavedPlansScreen> {
                     ),
                   ),
                 ),
-
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.card,
-                    borderRadius: BorderRadius.circular(
-                      AppSpacing.pillRadius,
-                    ),
-                  ),
-                  child: const Text(
-                    'ACTIVE',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.primary,
-                      letterSpacing: 0.5,
-                    ),
+                IconButton(
+                  onPressed: _isUpdating ? null : () => _removeSavedPlan(plan),
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    color: AppColors.textSecondary,
                   ),
                 ),
               ],
             ),
-
             const SizedBox(height: 6),
-
             Text(
               '$duration • ~45 min',
               style: const TextStyle(
@@ -346,37 +512,40 @@ class _SavedPlansScreenState extends State<SavedPlansScreen> {
                 color: AppColors.textSecondary,
               ),
             ),
-
             const SizedBox(height: 12),
-
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
+                if (isActive) const PillTag('Active'),
                 for (final tag in tags) PillTag(tag),
               ],
             ),
-
             const SizedBox(height: 14),
-
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Created By $_createdBy',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textMuted,
-                    ),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed:
+                    isActive || _isUpdating ? null : () => _setActivePlan(plan),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: AppColors.border,
+                  disabledForegroundColor: AppColors.textSecondary,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
                   ),
                 ),
-
-                const Icon(
-                  Icons.bookmark,
-                  color: AppColors.primary,
-                  size: 24,
+                child: Text(
+                  isActive ? 'Current Active Plan' : 'Set as Active Plan',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-              ],
+              ),
             ),
           ],
         ),

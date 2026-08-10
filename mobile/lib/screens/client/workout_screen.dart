@@ -41,6 +41,9 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   Map<String, dynamic>? _activePlan;
   String? _activePlanId;
 
+  Set<String> _savedPlanIds = {};
+  int _savedPlanCount = 0;
+
   List<Professional> _professionals = [];
   String _proSearchText = '';
 
@@ -72,6 +75,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       await _loadUserProfileForRecommendation(client, userId);
       await _loadActivePlan(client, userId);
       await _loadAvailablePlans(client);
+      await _loadSavedPlanStatus(client, userId);
 
       if (_isPriority) {
         await _loadProfessionals(client);
@@ -143,8 +147,9 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   Future<void> _loadActivePlan(SupabaseClient client, String userId) async {
     final savedRows = await client
         .from('saved_plans')
-        .select('saved_plan_id, free_plan_id, saved_at')
+        .select('saved_plan_id, free_plan_id, personalized_plan_id, is_active, saved_at')
         .eq('profile_id', userId)
+        .eq('is_active', true)
         .order('saved_at', ascending: false)
         .limit(1);
 
@@ -188,7 +193,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final visibility =
         activePlan?['visibility']?.toString().trim().toLowerCase() ?? 'public';
 
-    if (!_isPriority && visibility != 'public') {
+    if (activePlan == null || (!_isPriority && visibility != 'public')) {
       setState(() {
         _activePlanId = null;
         _activePlan = null;
@@ -199,6 +204,32 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     setState(() {
       _activePlanId = activePlanId;
       _activePlan = activePlan;
+    });
+  }
+
+  Future<void> _loadSavedPlanStatus(
+    SupabaseClient client,
+    String userId,
+  ) async {
+    final response = await client
+        .from('saved_plans')
+        .select('free_plan_id, is_saved')
+        .eq('profile_id', userId)
+        .eq('is_saved', true);
+
+    final rows = List<Map<String, dynamic>>.from(response as List);
+
+    final savedIds = rows
+        .map((row) => row['free_plan_id']?.toString())
+        .where((id) => id != null && id.isNotEmpty)
+        .cast<String>()
+        .toSet();
+
+    if (!mounted) return;
+
+    setState(() {
+      _savedPlanIds = savedIds;
+      _savedPlanCount = savedIds.length;
     });
   }
 
@@ -572,6 +603,170 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   bool _isActivePlan(Map<String, dynamic> plan) {
     final planId = plan['free_plan_id']?.toString();
     return planId != null && planId == _activePlanId;
+  }
+
+  bool _isSavedPlan(Map<String, dynamic> plan) {
+    final planId = plan['free_plan_id']?.toString();
+    return planId != null && _savedPlanIds.contains(planId);
+  }
+
+  Future<void> _toggleSavePlan(Map<String, dynamic> plan) async {
+    final planId = plan['free_plan_id']?.toString();
+
+    if (planId == null || planId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Missing plan id.')),
+      );
+      return;
+    }
+
+    if (_isSavedPlan(plan)) {
+      await _removeSavedPlan(planId);
+    } else {
+      await _savePlan(planId);
+    }
+  }
+
+  Future<void> _savePlan(String planId) async {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You must be signed in.')),
+      );
+      return;
+    }
+
+    try {
+      if (!_isPriority && !_savedPlanIds.contains(planId) && _savedPlanCount >= 5) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Free users can save up to 5 plans. Remove one saved plan first.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      final existingResponse = await client
+          .from('saved_plans')
+          .select('saved_plan_id, is_active')
+          .eq('profile_id', userId)
+          .eq('free_plan_id', planId)
+          .limit(1);
+
+      final existingRows =
+          List<Map<String, dynamic>>.from(existingResponse as List);
+
+      final now = DateTime.now().toUtc().toIso8601String();
+
+      if (existingRows.isEmpty) {
+        await client.from('saved_plans').insert({
+          'profile_id': userId,
+          'free_plan_id': planId,
+          'personalized_plan_id': null,
+          'is_saved': true,
+          'is_active': false,
+          'saved_at': now,
+        });
+      } else {
+        final savedPlanId = existingRows.first['saved_plan_id']?.toString();
+
+        if (savedPlanId == null || savedPlanId.isEmpty) {
+          throw Exception('Missing saved_plan_id.');
+        }
+
+        await client
+            .from('saved_plans')
+            .update({
+              'is_saved': true,
+              'saved_at': now,
+            })
+            .eq('saved_plan_id', savedPlanId)
+            .eq('profile_id', userId);
+      }
+
+      await _loadSavedPlanStatus(client, userId);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Plan saved.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save plan: $error')),
+      );
+    }
+  }
+
+  Future<void> _removeSavedPlan(String planId) async {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You must be signed in.')),
+      );
+      return;
+    }
+
+    try {
+      final existingResponse = await client
+          .from('saved_plans')
+          .select('saved_plan_id, is_active')
+          .eq('profile_id', userId)
+          .eq('free_plan_id', planId)
+          .limit(1);
+
+      final existingRows =
+          List<Map<String, dynamic>>.from(existingResponse as List);
+
+      if (existingRows.isEmpty) {
+        await _loadSavedPlanStatus(client, userId);
+        return;
+      }
+
+      final row = existingRows.first;
+      final savedPlanId = row['saved_plan_id']?.toString();
+      final isActive = row['is_active'] == true;
+
+      if (savedPlanId == null || savedPlanId.isEmpty) {
+        throw Exception('Missing saved_plan_id.');
+      }
+
+      if (isActive) {
+        await client
+            .from('saved_plans')
+            .update({'is_saved': false})
+            .eq('saved_plan_id', savedPlanId)
+            .eq('profile_id', userId);
+      } else {
+        await client
+            .from('saved_plans')
+            .delete()
+            .eq('saved_plan_id', savedPlanId)
+            .eq('profile_id', userId);
+      }
+
+      await _loadSavedPlanStatus(client, userId);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Removed from saved plans.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to remove saved plan: $error')),
+      );
+    }
   }
 
   Future<void> _openPlan(Map<String, dynamic> plan) async {
@@ -1185,6 +1380,30 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                       ),
                     ),
                   ),
+
+                const SizedBox(width: 8),
+
+                GestureDetector(
+                  onTap: () => _toggleSavePlan(plan),
+                  child: Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: AppColors.card,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Icon(
+                      _isSavedPlan(plan)
+                          ? Icons.bookmark
+                          : Icons.bookmark_border,
+                      size: 18,
+                      color: _isSavedPlan(plan)
+                          ? AppColors.primary
+                          : AppColors.textSecondary,
+                    ),
+                  ),
+                ),
               ],
             ),
 
@@ -1206,6 +1425,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               runSpacing: 8,
               children: [
                 PillTag(visibility == 'private' ? 'Private' : 'Public'),
+                if (_isSavedPlan(plan)) const PillTag('Saved'),
                 if (showRecommendation) const PillTag('Recommended'),
                 for (final tag in tags) PillTag(tag),
               ],
