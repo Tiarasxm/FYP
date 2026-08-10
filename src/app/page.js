@@ -676,7 +676,7 @@ function getPlanCta(planKind, viewerLoading, viewerLoggedIn, viewerUserType) {
 
   if (normalizedType === "priority") {
     return planKind === "free"
-      ? { label: "Switch to Free", href: "/choose-plan" }
+      ? null
       : { label: "Current Plan", disabled: true };
   }
 
