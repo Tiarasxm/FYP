@@ -114,8 +114,10 @@ class _MembershipPageState extends State<MembershipPage> {
     });
 
     try {
+      final userTypeValue = newPlan == 'priority' ? 'Priority' : 'Free';
+
       await supabase.from('profiles').update({
-        'user_type': newPlan,
+        'user_type': userTypeValue,
       }).eq('id', userId);
 
       if (!mounted) return;
