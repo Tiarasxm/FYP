@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import Navbar from "@/app/components/Navbar";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -120,19 +121,7 @@ export default function LoginPage() {
 
   return (
     <main className="min-h-screen bg-[#f8f8ff] text-black flex flex-col">
-      {/* Navbar */}
-      <nav className="sticky top-0 z-50 h-[72px] bg-white flex items-center justify-between px-10 shadow-sm">
-        <Link href="/" className="text-[22px] font-bold tracking-tight">
-          ShapeRush
-        </Link>
-
-        <Link
-          href="/register"
-          className="bg-[#6c5cff] text-white px-8 py-3 rounded-xl text-[13px] font-semibold"
-        >
-          Register
-        </Link>
-      </nav>
+      <Navbar />
 
       {/* Login Form */}
       <section className="flex-1 flex items-center justify-center px-6 py-16">

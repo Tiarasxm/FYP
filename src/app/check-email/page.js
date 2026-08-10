@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import Navbar from "@/app/components/Navbar";
 
 function CheckEmailContent() {
   const searchParams = useSearchParams();
@@ -20,27 +21,7 @@ function CheckEmailContent() {
 export default function CheckEmailPage() {
   return (
     <main className="min-h-screen bg-[#f8f8ff] text-black">
-      {/* Navbar */}
-      <nav className="sticky top-0 z-50 h-[78px] bg-white flex items-center justify-between px-10 md:px-12 shadow-sm">
-        <Link href="/" className="text-[22px] font-bold tracking-tight">
-          ShapeRush
-        </Link>
-
-        <div className="hidden md:flex items-center gap-9 text-[13px] font-medium">
-          <Link href="/">Home</Link>
-          <Link href="/#features">Features</Link>
-          <Link href="/#plans">Plans</Link>
-          <Link href="/#reviews">Reviews</Link>
-          <Link href="/#faq">FAQ</Link>
-        </div>
-
-        <Link
-          href="/register"
-          className="bg-[#6c5cff] text-white px-8 py-3 rounded-xl text-[13px] font-semibold"
-        >
-          Register
-        </Link>
-      </nav>
+      <Navbar />
 
       {/* Check Email Content */}
       <section className="min-h-[640px] flex items-center justify-center px-6 py-16">

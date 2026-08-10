@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import Navbar from "@/app/components/Navbar";
 
 const plans = [
   {
@@ -22,7 +22,7 @@ const plans = [
   },
   {
     id: "priority",
-    title: "Premium",
+    title: "Priority",
     price: "$7.99",
     description:
       "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do.",
@@ -90,12 +90,7 @@ export default function ChoosePlanPage() {
 
   return (
     <main className="min-h-screen bg-[#f8f8ff] text-black flex flex-col">
-      {/* Navbar */}
-      <nav className="sticky top-0 z-50 h-[72px] bg-white flex items-center justify-between px-10 shadow-sm">
-        <Link href="/" className="text-[22px] font-bold tracking-tight">
-          ShapeRush
-        </Link>
-      </nav>
+      <Navbar />
 
       {/* Plan selection */}
       <section className="relative overflow-hidden flex-1 bg-[#fafaff] px-10 md:px-24 py-24">

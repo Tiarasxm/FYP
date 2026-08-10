@@ -5,11 +5,12 @@ import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import Navbar from "@/app/components/Navbar";
 
 export default function RegisterPage() {
   const router = useRouter();
 
-  const [role, setRole] = useState("client");
+  const [role, setRole] = useState("free");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -107,27 +108,7 @@ export default function RegisterPage() {
 
   return (
     <main className="min-h-screen bg-[#f8f8ff] text-black">
-      {/* Navbar */}
-      <nav className="sticky top-0 z-50 h-[78px] bg-white flex items-center justify-between px-10 md:px-12 shadow-sm">
-        <Link href="/" className="text-[22px] font-bold tracking-tight">
-          ShapeRush
-        </Link>
-
-        <div className="hidden md:flex items-center gap-9 text-[13px] font-medium">
-          <Link href="/">Home</Link>
-          <Link href="/#features">Features</Link>
-          <Link href="/#plans">Plans</Link>
-          <Link href="/#reviews">Reviews</Link>
-          <Link href="/#faq">FAQ</Link>
-        </div>
-
-        <Link
-          href="/register"
-          className="bg-[#6c5cff] text-white px-8 py-3 rounded-xl text-[13px] font-semibold"
-        >
-          Register
-        </Link>
-      </nav>
+      <Navbar />
 
       {/* Register Content */}
       <section className="min-h-[760px] flex items-center justify-center px-6 py-16">
@@ -173,20 +154,20 @@ export default function RegisterPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setRole("client");
+                    setRole("free");
                     setFullName("");
                     setEmail("");
                     setPassword("");
                     setEmailError("");
                   }}
                   className={`h-[64px] rounded-lg border-2 flex flex-col items-center justify-center gap-1 text-[13px] font-semibold transition-colors ${
-                    role === "client"
+                    role === "free"
                       ? "border-[#6c5cff] bg-[#f0eeff] text-[#6c5cff]"
                       : "border-gray-200 text-gray-600 hover:border-gray-300"
                   }`}
                 >
                   <UserIcon />
-                  Client
+                  Free User
                 </button>
 
                 <button

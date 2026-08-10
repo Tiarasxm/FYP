@@ -60,7 +60,7 @@ const defaultSubscription = {
       ],
     },
     {
-      title: "Premium",
+      title: "Priority",
       price: "$7.99",
       description:
         "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do.",
@@ -119,40 +119,6 @@ export default function HomePage() {
   const [currentReviewIndex, setCurrentReviewIndex] = useState(0);
   const [loggedIn, setLoggedIn] = useState(false);
 
-  useEffect(() => {
-    fetchWebsiteContent();
-    fetchFeaturedReviews();
-
-    supabase.auth.getSession().then(({ data }) => {
-      setLoggedIn(!!data.session);
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setLoggedIn(!!session);
-    });
-
-    return () => listener.subscription.unsubscribe();
-
-  }, []);
-
-  useEffect(() => {
-    setCurrentReviewIndex(0);
-  }, [featuredReviews.length]);
-
-  useEffect(() => {
-    if (featuredReviews.length <= 1) {
-      return;
-    }
-
-    const timer = setInterval(() => {
-      setCurrentReviewIndex((currentIndex) =>
-        currentIndex === featuredReviews.length - 1 ? 0 : currentIndex + 1
-      );
-    }, 4000);
-
-    return () => clearInterval(timer);
-  }, [featuredReviews.length]);
-
   async function fetchWebsiteContent() {
     const { data, error } = await supabase
       .from("website_content")
@@ -201,6 +167,41 @@ export default function HomePage() {
 
     setFeaturedReviews(formattedReviews);
   }
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- setState calls happen after network awaits, not synchronously
+    fetchWebsiteContent();
+    fetchFeaturedReviews();
+
+    supabase.auth.getSession().then(({ data }) => {
+      setLoggedIn(!!data.session);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setLoggedIn(!!session);
+    });
+
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resets the carousel index when the review list changes
+    setCurrentReviewIndex(0);
+  }, [featuredReviews.length]);
+
+  useEffect(() => {
+    if (featuredReviews.length <= 1) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setCurrentReviewIndex((currentIndex) =>
+        currentIndex === featuredReviews.length - 1 ? 0 : currentIndex + 1
+      );
+    }, 4000);
+
+    return () => clearInterval(timer);
+  }, [featuredReviews.length]);
 
   const testimonialReviews =
     featuredReviews.length > 0 ? featuredReviews : [defaultReview];

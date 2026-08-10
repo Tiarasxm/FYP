@@ -1,29 +1,10 @@
 import Link from "next/link";
+import Navbar from "@/app/components/Navbar";
 
 export default function PrivacyPolicyPage() {
   return (
     <main className="min-h-screen bg-[#f8f8ff] text-black">
-      {/* Navbar */}
-      <nav className="sticky top-0 z-50 h-[72px] bg-white flex items-center justify-between px-10 shadow-sm">
-        <Link href="/" className="text-[22px] font-bold tracking-tight">
-          ShapeRush
-        </Link>
-
-        <div className="hidden md:flex items-center gap-9 text-[13px] font-medium">
-          <Link href="/">Home</Link>
-          <Link href="/#features">Features</Link>
-          <Link href="/#plans">Plans</Link>
-          <Link href="/#reviews">Reviews</Link>
-          <Link href="/#faq">FAQ</Link>
-        </div>
-
-        <Link
-          href="/register"
-          className="bg-[#6c5cff] text-white px-8 py-3 rounded-xl text-[13px] font-semibold"
-        >
-          Register
-        </Link>
-      </nav>
+      <Navbar />
 
       {/* Content */}
       <section className="px-10 py-20">

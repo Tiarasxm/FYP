@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import Navbar from "@/app/components/Navbar";
 
 const GOOGLE_REGISTER_ROLE_KEY = "googleRegisterRole";
 const GOOGLE_REGISTER_ROLE_MAX_AGE_MS = 10 * 60 * 1000;
@@ -199,27 +200,7 @@ export default function FitnessProfilePage() {
 
   return (
     <main className="min-h-screen bg-[#f8f8ff] text-black">
-      {/* Navbar */}
-      <nav className="sticky top-0 z-50 h-[78px] bg-white flex items-center justify-between px-10 md:px-12 shadow-sm">
-        <Link href="/" className="text-[22px] font-bold tracking-tight">
-          ShapeRush
-        </Link>
-
-        <div className="hidden md:flex items-center gap-9 text-[13px] font-medium">
-          <Link href="/">Home</Link>
-          <Link href="/#features">Features</Link>
-          <Link href="/#plans">Plans</Link>
-          <Link href="/#reviews">Reviews</Link>
-          <Link href="/#faq">FAQ</Link>
-        </div>
-
-        <Link
-          href="/register"
-          className="bg-[#6c5cff] text-white px-8 py-3 rounded-xl text-[13px] font-semibold"
-        >
-          Register
-        </Link>
-      </nav>
+      <Navbar />
 
       {profileErrorMessage && (
         <div className="bg-red-50 border-b border-red-200 text-red-700 text-[14px] text-center px-6 py-3">
