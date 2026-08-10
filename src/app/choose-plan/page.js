@@ -54,10 +54,11 @@ export default function ChoosePlanPage() {
     }
 
     if (selected === "priority") {
-      const { error: profileError } = await supabase
+      const { data: profileRows, error: profileError } = await supabase
         .from("profiles")
         .update({ user_type: "Priority" })
-        .eq("id", userData.user.id);
+        .eq("id", userData.user.id)
+        .select();
 
       if (profileError) {
         alert(profileError.message);
@@ -65,10 +66,18 @@ export default function ChoosePlanPage() {
         return;
       }
 
+      if (!profileRows || profileRows.length === 0) {
+        alert(
+          "Failed to update your plan. Please try again or contact support."
+        );
+        setLoading(false);
+        return;
+      }
+
       const now = new Date();
       const expiresAt = new Date(now);
       expiresAt.setMonth(expiresAt.getMonth() + 1);
-      const { error: priorityError } = await supabase
+      const { data: priorityRows, error: priorityError } = await supabase
         .from("priority_user")
         .upsert(
           {
@@ -77,9 +86,19 @@ export default function ChoosePlanPage() {
             expires_at: expiresAt.toISOString(),
           },
           { onConflict: "profile_id" }
-        );
+        )
+        .select();
+
       if (priorityError) {
         alert(priorityError.message);
+        setLoading(false);
+        return;
+      }
+
+      if (!priorityRows || priorityRows.length === 0) {
+        alert(
+          "Failed to activate your priority subscription. Please try again or contact support."
+        );
         setLoading(false);
         return;
       }
