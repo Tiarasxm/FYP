@@ -64,7 +64,8 @@ class _CreatePostPageState extends State<CreatePostPage>
 
     try {
       final cameras = await availableCameras();
-      if (cameras.isEmpty) throw CameraException('noCamera', 'No camera found.');
+      if (cameras.isEmpty)
+        throw CameraException('noCamera', 'No camera found.');
 
       final backCamera = cameras.where(
         (camera) => camera.lensDirection == CameraLensDirection.back,
@@ -103,12 +104,15 @@ class _CreatePostPageState extends State<CreatePostPage>
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _takePhoto() async {
     final controller = _cameraController;
-    if (controller == null || !controller.value.isInitialized || _isTakingPhoto) {
+    if (controller == null ||
+        !controller.value.isInitialized ||
+        _isTakingPhoto) {
       return;
     }
 
@@ -205,13 +209,15 @@ class _CreatePostPageState extends State<CreatePostPage>
                 children: [
                   const Text(
                     'Create Post',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w700),
                   ),
                   Align(
                     alignment: Alignment.centerLeft,
                     child: IconButton(
                       onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+                      icon: const Icon(Icons.arrow_back_ios_new,
+                          color: Colors.white),
                     ),
                   ),
                 ],
@@ -228,8 +234,10 @@ class _CreatePostPageState extends State<CreatePostPage>
                     left: 24,
                     child: IconButton.filled(
                       onPressed: _pickFromGallery,
-                      style: IconButton.styleFrom(backgroundColor: Colors.white24),
-                      icon: const Icon(Icons.photo_library_outlined, color: Colors.white),
+                      style:
+                          IconButton.styleFrom(backgroundColor: Colors.white24),
+                      icon: const Icon(Icons.photo_library_outlined,
+                          color: Colors.white),
                     ),
                   ),
                   GestureDetector(
@@ -250,7 +258,8 @@ class _CreatePostPageState extends State<CreatePostPage>
                         child: _isTakingPhoto
                             ? const Padding(
                                 padding: EdgeInsets.all(15),
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               )
                             : null,
                       ),
@@ -267,7 +276,8 @@ class _CreatePostPageState extends State<CreatePostPage>
 
   Widget _buildCameraPreview() {
     if (_isCameraLoading) {
-      return const Center(child: CircularProgressIndicator(color: Colors.white));
+      return const Center(
+          child: CircularProgressIndicator(color: Colors.white));
     }
     if (_cameraError != null) {
       return Center(
@@ -276,19 +286,38 @@ class _CreatePostPageState extends State<CreatePostPage>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.no_photography_outlined, color: Colors.white, size: 42),
+              const Icon(Icons.no_photography_outlined,
+                  color: Colors.white, size: 42),
               const SizedBox(height: 12),
               Text(_cameraError!, style: const TextStyle(color: Colors.white)),
               const SizedBox(height: 12),
-              OutlinedButton(onPressed: _initializeCamera, child: const Text('Try Again')),
+              OutlinedButton(
+                  onPressed: _initializeCamera, child: const Text('Try Again')),
             ],
           ),
         ),
       );
     }
-    return ColoredBox(
-      color: const Color(0xFF303030),
-      child: Center(child: CameraPreview(_cameraController!)),
+    final controller = _cameraController!;
+    final previewSize = controller.value.previewSize;
+
+    if (previewSize == null) {
+      return CameraPreview(controller);
+    }
+
+    return ClipRect(
+      child: SizedBox.expand(
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            // Camera preview dimensions are reported in landscape order.
+            // Swap them so a portrait phone fills the available area.
+            width: previewSize.height,
+            height: previewSize.width,
+            child: CameraPreview(controller),
+          ),
+        ),
+      ),
     );
   }
 
@@ -314,7 +343,8 @@ class _CreatePostPageState extends State<CreatePostPage>
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
             child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight - 30),
+              constraints:
+                  BoxConstraints(minHeight: constraints.maxHeight - 30),
               child: IntrinsicHeight(
                 child: Column(
                   children: [
@@ -336,7 +366,8 @@ class _CreatePostPageState extends State<CreatePostPage>
                       scrollPadding: const EdgeInsets.only(bottom: 100),
                       decoration: const InputDecoration(
                         hintText: 'Write caption with details',
-                        hintStyle: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                        hintStyle:
+                            TextStyle(fontSize: 12, color: AppColors.textMuted),
                         border: InputBorder.none,
                         counterText: '',
                       ),
