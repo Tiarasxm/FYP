@@ -29,7 +29,7 @@ class TermsConditionsPage extends StatelessWidget {
             TermsSection(
               title: "Acceptance of Terms",
               content:
-                  "By downloading, installing or using WiseWorkout, users agree to comply with these Terms and Conditions. Users who do not agree should stop using the application.",
+                  "By downloading, installing or using ShapeRush, users agree to comply with these Terms and Conditions. Users who do not agree should stop using the application.",
             ),
             TermsSection(
               title: "Eligibility",
@@ -39,7 +39,7 @@ class TermsConditionsPage extends StatelessWidget {
             TermsSection(
               title: "Health and Safety Disclaimer",
               content:
-                  "WiseWorkout provides general fitness and wellness information. It does not provide medical diagnosis, treatment or professional medical advice.",
+                  "ShapeRush provides general fitness and wellness information. It does not provide medical diagnosis, treatment or professional medical advice.",
             ),
             TermsSection(
               title: "Physical Limitations",
@@ -64,7 +64,7 @@ class TermsConditionsPage extends StatelessWidget {
             TermsSection(
               title: "Wearable Device Information",
               content:
-                  "Data received from wearable devices may be incomplete or inaccurate. WiseWorkout does not guarantee the accuracy of third-party device measurements.",
+                  "Data received from wearable devices may be incomplete or inaccurate. ShapeRush does not guarantee the accuracy of third-party device measurements.",
             ),
             TermsSection(
               title: "Membership and Payment",
@@ -74,7 +74,7 @@ class TermsConditionsPage extends StatelessWidget {
             TermsSection(
               title: "Limitation of Liability",
               content:
-                  "To the extent permitted by law, WiseWorkout is not liable for injuries, losses, data inaccuracies or damages arising from reliance on application content or third-party services.",
+                  "To the extent permitted by law, ShapeRush is not liable for injuries, losses, data inaccuracies or damages arising from reliance on application content or third-party services.",
             ),
             TermsSection(
               title: "Changes to the Terms",

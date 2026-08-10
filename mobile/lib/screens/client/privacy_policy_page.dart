@@ -29,7 +29,7 @@ class PrivacyPolicyPage extends StatelessWidget {
             PolicySection(
               title: "A Legal Disclaimer",
               content:
-                  "This Privacy Policy describes how WiseWorkout collects, uses, stores and protects information when users access the application. By using the application, users agree to the practices described in this policy.",
+                  "This Privacy Policy describes how ShapeRush collects, uses, stores and protects information when users access the application. By using the application, users agree to the practices described in this policy.",
             ),
             PolicySection(
               title: "Interpretation and Definition",
@@ -39,7 +39,7 @@ class PrivacyPolicyPage extends StatelessWidget {
             PolicySection(
               title: "Information We Collect",
               content:
-                  "WiseWorkout may collect account information, profile details, workout records, nutrition logs, wearable device data, comments, posts, uploaded images and application usage information.",
+                  "ShapeRush may collect account information, profile details, workout records, nutrition logs, wearable device data, comments, posts, uploaded images and application usage information.",
             ),
             PolicySection(
               title: "How We Use Information",
@@ -54,7 +54,7 @@ class PrivacyPolicyPage extends StatelessWidget {
             PolicySection(
               title: "Third-Party Services",
               content:
-                  "WiseWorkout may use third-party services for authentication, cloud storage, analytics, wearable device integration and payment processing. These providers may process information under their own privacy policies.",
+                  "ShapeRush may use third-party services for authentication, cloud storage, analytics, wearable device integration and payment processing. These providers may process information under their own privacy policies.",
             ),
             PolicySection(
               title: "User Rights",
@@ -69,7 +69,7 @@ class PrivacyPolicyPage extends StatelessWidget {
             PolicySection(
               title: "Contact Us",
               content:
-                  "Questions about this Privacy Policy may be submitted through the feedback or support function in WiseWorkout.",
+                  "Questions about this Privacy Policy may be submitted through the feedback or support function in ShapeRush.",
             ),
           ],
         ),

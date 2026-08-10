@@ -33,6 +33,7 @@ flutter:
     - assets/images/shaperush_bg.png
     - assets/images/shaperush_logo.png
     - assets/images/shaperush_logo_padded.png
+    - assets/images/google_logo.png
 
 flutter_launcher_icons:
   android: true

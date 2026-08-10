@@ -25,9 +25,9 @@ class FaqPage extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         children: const [
           FaqItem(
-            question: "Is WiseWorkout free to use?",
+            question: "Is ShapeRush free to use?",
             answer:
-                "Yes. WiseWorkout offers a free plan with basic workout, nutrition, progress tracking and social features. Some advanced features may require a premium membership.",
+                "Yes. ShapeRush offers a free plan with basic workout, nutrition, progress tracking and social features. Some advanced features may require a premium membership.",
           ),
           SizedBox(height: 10),
           FaqItem(

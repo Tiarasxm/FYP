@@ -508,21 +508,18 @@ class _SignInScreenState extends State<SignInScreen> {
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        'G',
-                        style: TextStyle(
-                          fontSize: 25,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.red,
-                        ),
+                      Image(
+                        image: AssetImage('assets/images/google_logo.png'),
+                        width: 20,
+                        height: 20,
                       ),
                       SizedBox(width: 12),
                       Text(
-                        'Sign in with Google',
+                        'Continue with Google',
                         style: TextStyle(
                           fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF3C4043),
                         ),
                       ),
                     ],
