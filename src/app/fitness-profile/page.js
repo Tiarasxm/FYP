@@ -54,6 +54,25 @@ export default function FitnessProfilePage() {
 
     const user = userData.user;
 
+    const { data: existingProfile, error: fetchError } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error("Profile lookup error:", fetchError.message);
+      setProfileErrorMessage(
+        "We couldn't finish setting up your account. Please refresh this page or contact support."
+      );
+      return;
+    }
+
+    if (existingProfile) {
+      localStorage.removeItem(GOOGLE_REGISTER_ROLE_KEY);
+      return;
+    }
+
     const role =
       readAndClearGoogleRegisterRole() ||
       user.user_metadata?.role ||
@@ -67,18 +86,13 @@ export default function FitnessProfilePage() {
 
     setDisplayName(fullName);
 
-    const { error: profileError } = await supabase.from("profiles").upsert(
-      {
-        id: user.id,
-        full_name: fullName,
-        email: user.email,
-        user_type: role,
-        status: "incomplete",
-      },
-      {
-        onConflict: "id",
-      }
-    );
+    const { error: profileError } = await supabase.from("profiles").insert({
+      id: user.id,
+      full_name: fullName,
+      email: user.email,
+      user_type: role,
+      status: "incomplete",
+    });
 
     if (profileError) {
       console.error("Profile save error:", profileError.message);
