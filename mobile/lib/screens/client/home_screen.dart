@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/client/menu_item.dart';
+import '../../services/health_sync_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/client/calorie_ring.dart';
 import '../../widgets/client/section_card.dart';
@@ -41,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   int _steps = 0;
   int _heartRate = 0;
+  DateTime? _heartRateMeasuredAt;
   int _kcalBurned = 0;
   int _kcalGoal = 500;
   double _todayVolumeKg = 0;
@@ -83,6 +85,8 @@ class _HomeScreenState extends State<HomeScreen> {
       await _loadProfile(client, userId);
       await _loadActivePlan(client, userId);
       await _loadTodayVolume(client, userId);
+      await HealthSyncService.syncTodayAndRecentDays(userId);
+      await _loadTodayHealthMetrics(userId);
     } catch (error) {
       if (!mounted) return;
 
@@ -422,6 +426,36 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  Future<void> _loadTodayHealthMetrics(String userId) async {
+    final row = await HealthSyncService.fetchTodayMetrics(userId);
+
+    if (!mounted) return;
+
+    setState(() {
+      _steps = _parseInt(row?['steps']) ?? 0;
+      _heartRate = _parseInt(row?['heart_rate']) ?? 0;
+      _heartRateMeasuredAt =
+          DateTime.tryParse(row?['heart_rate_measured_at']?.toString() ?? '');
+      _kcalBurned = _parseInt(row?['calories_burned']) ?? 0;
+    });
+  }
+
+  String? _relativeTimeText(DateTime? time) {
+    if (time == null) return null;
+
+    final localTime = time.toLocal();
+    final diff = DateTime.now().difference(localTime);
+
+    if (diff.inSeconds < 60) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays == 1) return 'yesterday';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+
+    return '${localTime.day.toString().padLeft(2, '0')}/'
+        '${localTime.month.toString().padLeft(2, '0')}';
+  }
+
   void _clearActivePlan() {
     if (!mounted) return;
 
@@ -615,6 +649,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       label: 'Heart Rate',
                       value: '$_heartRate',
                       unit: 'bpm',
+                      subtitle: () {
+                        final relative = _relativeTimeText(_heartRateMeasuredAt);
+                        return relative == null ? null : '($relative)';
+                      }(),
                     ),
                     const SizedBox(height: 10),
                     _statTile(
@@ -647,6 +685,7 @@ class _HomeScreenState extends State<HomeScreen> {
     required String label,
     required String value,
     String? unit,
+    String? subtitle,
   }) {
     return Container(
       padding: const EdgeInsets.all(10),
@@ -705,6 +744,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
+                if (subtitle != null)
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 9,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
               ],
             ),
           ),

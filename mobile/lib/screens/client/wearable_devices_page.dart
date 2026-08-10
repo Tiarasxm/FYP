@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/health_service.dart';
+import '../../services/health_sync_service.dart';
 import '../../theme/app_theme.dart';
 
 class WearableDevicesPage extends StatefulWidget {
@@ -16,29 +18,15 @@ class _WearableDevicesPageState extends State<WearableDevicesPage> {
   final SupabaseClient supabase = Supabase.instance.client;
 
   final Map<String, bool> connections = {
-    'motion_fitness': false,
     'google_fit': false,
-    'fitbit': false,
   };
 
   final List<_DeviceConfig> devices = const [
     _DeviceConfig(
-      provider: 'motion_fitness',
-      title: 'Motion & Fitness Activity',
-      subtitle: 'Use phone motion data for activity tracking.',
-      icon: Icons.directions_run,
-    ),
-    _DeviceConfig(
       provider: 'google_fit',
       title: 'Google Fit / Health Connect',
-      subtitle: 'Connect Google fitness data or Android Health Connect.',
+      subtitle: 'Sync steps, heart rate and calories from Android Health Connect.',
       icon: Icons.health_and_safety_outlined,
-    ),
-    _DeviceConfig(
-      provider: 'fitbit',
-      title: 'Fitbit',
-      subtitle: 'Connect your Fitbit account for fitness data.',
-      icon: Icons.watch_outlined,
     ),
   ];
 
@@ -68,9 +56,7 @@ class _WearableDevicesPageState extends State<WearableDevicesPage> {
       final rows = List<Map<String, dynamic>>.from(response as List);
 
       final loaded = <String, bool>{
-        'motion_fitness': false,
         'google_fit': false,
-        'fitbit': false,
       };
 
       for (final row in rows) {
@@ -173,6 +159,29 @@ class _WearableDevicesPageState extends State<WearableDevicesPage> {
         throw Exception('User is not signed in.');
       }
 
+      if (shouldConnect) {
+        final available = await HealthService.isAvailable();
+
+        if (!available) {
+          _showMessage(
+            'Health Connect is not available on this device. Please install it from the Play Store.',
+            isError: true,
+          );
+          await HealthService.installHealthConnect();
+          return;
+        }
+
+        final granted = await HealthService.requestPermissions();
+
+        if (!granted) {
+          _showMessage(
+            'Permission was not granted. Please allow access in Health Connect to sync your data.',
+            isError: true,
+          );
+          return;
+        }
+      }
+
       final now = DateTime.now().toUtc().toIso8601String();
 
       await supabase.from('wearable_connections').upsert(
@@ -194,15 +203,15 @@ class _WearableDevicesPageState extends State<WearableDevicesPage> {
       });
 
       if (shouldConnect) {
-        if (device.provider == 'fitbit' || device.provider == 'google_fit') {
-          _showMessage(
-            '${device.title} connection saved. OAuth data sync can be added next.',
-          );
-        } else {
-          _showMessage('${device.title} connected.');
+        _showMessage('${device.title} connected. Syncing your data...');
+        await HealthSyncService.syncTodayAndRecentDays(userId);
+        if (mounted) {
+          _showMessage('Sync complete.');
         }
       } else {
-        _showMessage('${device.title} disconnected.');
+        _showMessage(
+          '${device.title} disconnected. You can revoke app permissions in Health Connect settings.',
+        );
       }
     } catch (error) {
       _showMessage('Failed to update device: $error', isError: true);
@@ -300,8 +309,8 @@ class _WearableDevicesPageState extends State<WearableDevicesPage> {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Text(
-        'Note: Google Fit / Fitbit data sync needs external authorization. '
-        'This page now saves connection status first.',
+        'Note: Health Connect requires the Health Connect app to be installed. '
+        'You will be asked to grant access to Steps, Heart Rate and Calories data.',
         style: TextStyle(
           fontSize: 11,
           height: 1.4,

@@ -2056,10 +2056,7 @@ create table if not exists public.wearable_connections (
   profile_id uuid not null references public.profiles(id) on delete cascade,
   provider text not null check (
     provider in (
-      'apple_health',
-      'motion_fitness',
-      'google_fit',
-      'fitbit'
+      'google_fit'
     )
   ),
   is_connected boolean not null default false,
@@ -2070,6 +2067,18 @@ create table if not exists public.wearable_connections (
   updated_at timestamptz not null default now(),
   unique(profile_id, provider)
 );
+
+-- Migration: drop deprecated providers (apple_health, motion_fitness, fitbit).
+-- 'google_fit' is now repurposed to represent the Android Health Connect connection.
+delete from public.wearable_connections
+where provider not in ('google_fit');
+
+alter table public.wearable_connections
+drop constraint if exists wearable_connections_provider_check;
+
+alter table public.wearable_connections
+add constraint wearable_connections_provider_check
+check (provider in ('google_fit'));
 
 create index if not exists wearable_connections_profile_id_idx
 on public.wearable_connections(profile_id);
@@ -2102,6 +2111,66 @@ with check (profile_id = auth.uid());
 
 create policy "Users can delete own wearable connections"
 on public.wearable_connections
+for delete
+to authenticated
+using (profile_id = auth.uid());
+
+-- =========================================================
+-- 39B. DAILY HEALTH METRICS (Health Connect sync)
+-- =========================================================
+
+create table if not exists public.daily_health_metrics (
+  metric_id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles(id) on delete cascade,
+  metric_date date not null,
+  steps integer not null default 0,
+  heart_rate integer,
+  heart_rate_measured_at timestamptz,
+  calories_burned numeric not null default 0,
+  synced_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(profile_id, metric_date)
+);
+
+-- Migration: add heart_rate_measured_at to existing daily_health_metrics tables.
+alter table public.daily_health_metrics
+add column if not exists heart_rate_measured_at timestamptz;
+
+create index if not exists daily_health_metrics_profile_id_idx
+on public.daily_health_metrics(profile_id);
+
+create index if not exists daily_health_metrics_profile_date_idx
+on public.daily_health_metrics(profile_id, metric_date);
+
+alter table public.daily_health_metrics enable row level security;
+
+drop policy if exists "Users can view own daily health metrics" on public.daily_health_metrics;
+drop policy if exists "Users can insert own daily health metrics" on public.daily_health_metrics;
+drop policy if exists "Users can update own daily health metrics" on public.daily_health_metrics;
+drop policy if exists "Users can delete own daily health metrics" on public.daily_health_metrics;
+
+create policy "Users can view own daily health metrics"
+on public.daily_health_metrics
+for select
+to authenticated
+using (profile_id = auth.uid());
+
+create policy "Users can insert own daily health metrics"
+on public.daily_health_metrics
+for insert
+to authenticated
+with check (profile_id = auth.uid());
+
+create policy "Users can update own daily health metrics"
+on public.daily_health_metrics
+for update
+to authenticated
+using (profile_id = auth.uid())
+with check (profile_id = auth.uid());
+
+create policy "Users can delete own daily health metrics"
+on public.daily_health_metrics
 for delete
 to authenticated
 using (profile_id = auth.uid());
