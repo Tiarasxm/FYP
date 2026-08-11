@@ -392,7 +392,7 @@ export default function HomePage() {
 
             {approvedFeedback.length > 0 ? (
               <>
-                <p className="mt-8 text-[16px] leading-7 min-h-[70px]">
+                <p className="mt-8 text-[16px] leading-7 min-h-[112px] flex items-center justify-center">
                   “{mainReview?.feedback}”
                 </p>
 
