@@ -122,6 +122,117 @@ using (
   and (storage.foldername(name))[1] = auth.uid()::text
 );
 
+-- Steps Leaderboard Privacy + Weekly Ranking
+-- Real step data table:
+--   public.daily_health_metrics(profile_id, metric_date, steps)
+
+-- 1. Add user privacy setting
+alter table public.profiles
+add column if not exists steps_leaderboard_visible boolean not null default false;
+
+comment on column public.profiles.steps_leaderboard_visible is
+'If true, this user joins the steps leaderboard and can view other joined users. If false, this user is hidden and cannot view the leaderboard.';
+
+-- 2. Helpful indexes
+create index if not exists daily_health_metrics_leaderboard_idx
+on public.daily_health_metrics (metric_date, profile_id);
+
+create index if not exists profiles_steps_leaderboard_visible_idx
+on public.profiles (steps_leaderboard_visible);
+
+
+-- 3. RPC: user joins or hides from steps leaderboard
+create or replace function public.set_steps_leaderboard_visible(
+  p_visible boolean
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  update public.profiles
+  set steps_leaderboard_visible = coalesce(p_visible, false)
+  where id = auth.uid();
+
+  if not found then
+    raise exception 'Profile not found';
+  end if;
+
+  return coalesce(p_visible, false);
+end;
+$$;
+
+grant execute on function public.set_steps_leaderboard_visible(boolean)
+to authenticated;
+
+
+-- 4. RPC: weekly steps leaderboard
+-- Privacy rule:
+--   - Caller must have steps_leaderboard_visible = true.
+--   - Result only includes users with steps_leaderboard_visible = true.
+--   - If caller is hidden, this function returns empty rows.
+create or replace function public.get_steps_leaderboard(
+  p_start_date date,
+  p_end_date date
+)
+returns table (
+  profile_id uuid,
+  display_name text,
+  total_steps bigint
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  if p_start_date is null or p_end_date is null or p_end_date < p_start_date then
+    return;
+  end if;
+
+  if not exists (
+    select 1
+    from public.profiles caller
+    where caller.id = auth.uid()
+      and caller.steps_leaderboard_visible is true
+      and coalesce(caller.status, 'active') <> 'deleted'
+      and coalesce(caller.user_type, 'free') in ('free', 'priority')
+  ) then
+    return;
+  end if;
+
+  return query
+  select
+    p.id as profile_id,
+    coalesce(
+      nullif(trim(p.full_name), ''),
+      'User ' || substring(p.id::text, 1, 8)
+    ) as display_name,
+    coalesce(sum(coalesce(d.steps, 0)), 0)::bigint as total_steps
+  from public.profiles p
+  left join public.daily_health_metrics d
+    on d.profile_id = p.id
+   and d.metric_date >= p_start_date
+   and d.metric_date <= p_end_date
+  where p.steps_leaderboard_visible is true
+    and coalesce(p.status, 'active') <> 'deleted'
+    and coalesce(p.user_type, 'free') in ('free', 'priority')
+  group by p.id, p.full_name
+  order by total_steps desc, display_name asc;
+end;
+$$;
+
+grant execute on function public.get_steps_leaderboard(date, date)
+to authenticated;
+
 -- =========================================================
 -- 1b. PRIORITY USER TABLE
 -- =========================================================
