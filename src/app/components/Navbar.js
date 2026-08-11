@@ -14,6 +14,7 @@ export default function Navbar() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [userType, setUserType] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
 
   async function loadSession() {
@@ -23,6 +24,7 @@ export default function Navbar() {
       setLoggedIn(false);
       setFullName("");
       setEmail("");
+      setUserType("");
       return;
     }
 
@@ -30,12 +32,13 @@ export default function Navbar() {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("full_name, email")
+      .select("full_name, email, user_type")
       .eq("id", data.user.id)
       .single();
 
     setFullName(profile?.full_name || "");
     setEmail(profile?.email || data.user.email || "");
+    setUserType(profile?.user_type || "");
   }
 
   useEffect(() => {
@@ -75,7 +78,10 @@ export default function Navbar() {
     router.push("/");
   }
 
-  const avatarLetter = fullName.trim() ? fullName.trim()[0].toUpperCase() : "?";
+  const isAdmin = userType.trim().toLowerCase() === "admin";
+
+  const displayName = fullName.trim() || email.split("@")[0] || "User";
+  const avatarLetter = displayName[0].toUpperCase();
 
   return (
     <nav className="sticky top-0 z-50 h-[72px] bg-white flex items-center justify-between px-10 shadow-sm">
@@ -103,7 +109,7 @@ export default function Navbar() {
                 {avatarLetter}
               </span>
               <span className="text-[13px] font-semibold text-black">
-                {fullName}
+                {displayName}
               </span>
               <ChevronIcon open={menuOpen} />
             </button>
@@ -116,7 +122,7 @@ export default function Navbar() {
                   </span>
                   <div className="min-w-0">
                     <p className="text-[13px] font-semibold text-black truncate">
-                      {fullName}
+                      {displayName}
                     </p>
                     <p className="text-[12px] text-gray-500 truncate">
                       {email}
@@ -126,27 +132,39 @@ export default function Navbar() {
 
                 <div className="h-px bg-gray-100 my-1" />
 
-                <Link
-                  href="/profile"
-                  onClick={() => setMenuOpen(false)}
-                  className="block px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-50"
-                >
-                  Profile
-                </Link>
-                <Link
-                  href="/choose-plan"
-                  onClick={() => setMenuOpen(false)}
-                  className="block px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-50"
-                >
-                  Subscription
-                </Link>
-                <Link
-                  href="/welcome"
-                  onClick={() => setMenuOpen(false)}
-                  className="block px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-50"
-                >
-                  Download
-                </Link>
+                {isAdmin ? (
+                  <Link
+                    href="/admin/dashboard"
+                    onClick={() => setMenuOpen(false)}
+                    className="block px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-50"
+                  >
+                    Admin Dashboard
+                  </Link>
+                ) : (
+                  <>
+                    <Link
+                      href="/profile"
+                      onClick={() => setMenuOpen(false)}
+                      className="block px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-50"
+                    >
+                      Profile
+                    </Link>
+                    <Link
+                      href="/choose-plan"
+                      onClick={() => setMenuOpen(false)}
+                      className="block px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-50"
+                    >
+                      Subscription
+                    </Link>
+                    <Link
+                      href="/welcome"
+                      onClick={() => setMenuOpen(false)}
+                      className="block px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-50"
+                    >
+                      Download
+                    </Link>
+                  </>
+                )}
 
                 <div className="h-px bg-gray-100 my-1" />
 
