@@ -141,7 +141,7 @@ export default function HomePage() {
     const { data, error } = await supabase
       .from("app_feedback")
       .select(
-        "feedback_id, rating, feedback_text, media_url, created_at, updated_at, profiles(full_name)"
+        "feedback_id, rating, feedback_text, media_url, created_at, updated_at, profiles(full_name, avatar_url)"
       )
       .eq("status", "approved")
       .order("updated_at", { ascending: false })
@@ -155,6 +155,7 @@ export default function HomePage() {
     const formattedFeedback = (data || []).map((row) => ({
       id: row.feedback_id,
       reviewer_name: row.profiles?.full_name || "-",
+      avatar_url: row.profiles?.avatar_url || null,
       rating: row.rating,
       feedback: row.feedback_text,
       media_url: row.media_url,
@@ -376,78 +377,69 @@ export default function HomePage() {
 
       {/* Testimonials */}
       <section id="reviews" className="bg-white px-0 py-20 overflow-hidden">
-        <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-10">
-          <div className="hidden md:flex gap-3 -ml-8">
-            <PersonCard image="/images/testimonial-1.png" />
-            <PersonCard image="/images/testimonial-2.png" />
-            <PersonCard image="/images/testimonial-3.png" />
-          </div>
+        <div className="max-w-[560px] mx-auto text-center px-10">
+          <p className="text-[#6c5cff] text-[13px] font-semibold uppercase">
+            TESTIMONIALS
+          </p>
 
-          <div className="text-center px-10">
-            <p className="text-[#6c5cff] text-[13px] font-semibold uppercase">
-              TESTIMONIALS
-            </p>
+          <h2 className="text-[24px] font-bold mt-2">What Users Say</h2>
 
-            <h2 className="text-[24px] font-bold mt-2">What Users Say</h2>
-
-            {approvedFeedback.length > 0 ? (
-              <>
-                <p className="mt-8 text-[16px] leading-7 min-h-[112px] flex items-center justify-center">
-                  “{mainReview?.feedback}”
-                </p>
-
-                <p className="mt-6 text-gray-400">{mainReview?.reviewer_name}</p>
-
-                <p className="text-yellow-400 text-[28px] mt-2">
-                  {renderStars(mainReview?.rating)}
-                </p>
-
-                <div className="flex justify-center items-center gap-3 mt-8">
-                  <button
-                    type="button"
-                    onClick={goToPreviousReview}
-                    className="text-[#6c5cff] text-[24px] font-bold px-2"
-                    aria-label="Previous review"
-                  >
-                    ‹
-                  </button>
-
-                  {testimonialReviews.slice(0, 6).map((review, index) => (
-                    <button
-                      key={review.id || index}
-                      type="button"
-                      onClick={() => setCurrentReviewIndex(index)}
-                      className={
-                        index === currentReviewIndex
-                          ? "w-5 h-2 bg-[#6c5cff] rounded-full"
-                          : "w-2 h-2 bg-gray-300 rounded-full"
-                      }
-                      aria-label={`Show review ${index + 1}`}
-                    />
-                  ))}
-
-                  <button
-                    type="button"
-                    onClick={goToNextReview}
-                    className="text-[#6c5cff] text-[24px] font-bold px-2"
-                    aria-label="Next review"
-                  >
-                    ›
-                  </button>
-                </div>
-              </>
-            ) : (
-              <p className="mt-8 text-[16px] leading-7 min-h-[70px] text-gray-400">
-                No reviews yet.
+          {approvedFeedback.length > 0 ? (
+            <>
+              <p className="mt-8 text-[16px] leading-7 min-h-[112px] flex items-center justify-center">
+                “{mainReview?.feedback}”
               </p>
-            )}
-          </div>
 
-          <div className="hidden md:flex gap-3 -mr-8">
-            <PersonCard image="/images/testimonial-4.png" />
-            <PersonCard image="/images/testimonial-5.png" />
-            <PersonCard image="/images/testimonial-6.png" />
-          </div>
+              <TestimonialAvatar
+                name={mainReview?.reviewer_name}
+                imageUrl={mainReview?.media_url || mainReview?.avatar_url}
+              />
+
+              <p className="mt-3 text-gray-400">{mainReview?.reviewer_name}</p>
+
+              <p className="text-yellow-400 text-[28px] mt-2">
+                {renderStars(mainReview?.rating)}
+              </p>
+
+              <div className="flex justify-center items-center gap-3 mt-8">
+                <button
+                  type="button"
+                  onClick={goToPreviousReview}
+                  className="text-[#6c5cff] text-[24px] font-bold px-2"
+                  aria-label="Previous review"
+                >
+                  ‹
+                </button>
+
+                {testimonialReviews.slice(0, 6).map((review, index) => (
+                  <button
+                    key={review.id || index}
+                    type="button"
+                    onClick={() => setCurrentReviewIndex(index)}
+                    className={
+                      index === currentReviewIndex
+                        ? "w-5 h-2 bg-[#6c5cff] rounded-full"
+                        : "w-2 h-2 bg-gray-300 rounded-full"
+                    }
+                    aria-label={`Show review ${index + 1}`}
+                  />
+                ))}
+
+                <button
+                  type="button"
+                  onClick={goToNextReview}
+                  className="text-[#6c5cff] text-[24px] font-bold px-2"
+                  aria-label="Next review"
+                >
+                  ›
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="mt-8 text-[16px] leading-7 min-h-[70px] text-gray-400">
+              No reviews yet.
+            </p>
+          )}
         </div>
       </section>
 
@@ -592,15 +584,27 @@ function PlanItem({ text }) {
   );
 }
 
-function PersonCard({ image }) {
+function TestimonialAvatar({ name, imageUrl }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const initial = (name || "").trim().charAt(0).toUpperCase() || "?";
+
+  if (imageUrl && !imageFailed) {
+    return (
+      <div className="relative w-16 h-16 rounded-full overflow-hidden mx-auto mt-6">
+        <Image
+          src={imageUrl}
+          alt={name || "Reviewer"}
+          fill
+          className="object-cover"
+          onError={() => setImageFailed(true)}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="relative w-[160px] h-[245px] rounded-xl overflow-hidden bg-gray-100">
-      <Image
-        src={image}
-        alt="ShapeRush user testimonial"
-        fill
-        className="object-cover object-top"
-      />
+    <div className="w-16 h-16 rounded-full bg-[#6c5cff] text-white flex items-center justify-center text-[22px] font-bold mx-auto mt-6">
+      {initial}
     </div>
   );
 }
