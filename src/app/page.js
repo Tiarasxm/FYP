@@ -110,7 +110,6 @@ export default function HomePage() {
   const [subscription, setSubscription] = useState(defaultSubscription);
   const [faq, setFaq] = useState(defaultFaq);
   const [approvedFeedback, setApprovedFeedback] = useState([]);
-  const [currentReviewIndex, setCurrentReviewIndex] = useState(0);
   const [viewerLoading, setViewerLoading] = useState(true);
   const [viewerLoggedIn, setViewerLoggedIn] = useState(false);
   const [viewerUserType, setViewerUserType] = useState(null);
@@ -194,42 +193,6 @@ export default function HomePage() {
     fetchApprovedFeedback();
     fetchViewer();
   }, []);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- resets the carousel index when the review list changes
-    setCurrentReviewIndex(0);
-  }, [approvedFeedback.length]);
-
-  useEffect(() => {
-    if (approvedFeedback.length <= 1) {
-      return;
-    }
-
-    const timer = setInterval(() => {
-      setCurrentReviewIndex((currentIndex) =>
-        currentIndex === approvedFeedback.length - 1 ? 0 : currentIndex + 1
-      );
-    }, 4000);
-
-    return () => clearInterval(timer);
-  }, [approvedFeedback.length]);
-
-  const testimonialReviews = approvedFeedback;
-
-  const mainReview =
-    testimonialReviews[currentReviewIndex] || testimonialReviews[0];
-
-  function goToPreviousReview() {
-    setCurrentReviewIndex((currentIndex) =>
-      currentIndex === 0 ? testimonialReviews.length - 1 : currentIndex - 1
-    );
-  }
-
-  function goToNextReview() {
-    setCurrentReviewIndex((currentIndex) =>
-      currentIndex === testimonialReviews.length - 1 ? 0 : currentIndex + 1
-    );
-  }
 
   return (
     <main className="min-h-screen bg-[#f7f7ff] text-black">
@@ -376,71 +339,26 @@ export default function HomePage() {
       </section>
 
       {/* Testimonials */}
-      <section id="reviews" className="bg-white px-0 py-20 overflow-hidden">
-        <div className="max-w-[560px] mx-auto text-center px-10">
+      <section id="reviews" className="bg-white px-10 md:px-24 py-20 overflow-hidden">
+        <div className="text-center">
           <p className="text-[#6c5cff] text-[13px] font-semibold uppercase">
             TESTIMONIALS
           </p>
 
           <h2 className="text-[24px] font-bold mt-2">What Users Say</h2>
-
-          {approvedFeedback.length > 0 ? (
-            <>
-              <p className="mt-8 text-[16px] leading-7 min-h-[112px] flex items-center justify-center">
-                “{mainReview?.feedback}”
-              </p>
-
-              <TestimonialAvatar
-                name={mainReview?.reviewer_name}
-                imageUrl={mainReview?.media_url || mainReview?.avatar_url}
-              />
-
-              <p className="mt-3 text-gray-400">{mainReview?.reviewer_name}</p>
-
-              <p className="text-yellow-400 text-[28px] mt-2">
-                {renderStars(mainReview?.rating)}
-              </p>
-
-              <div className="flex justify-center items-center gap-3 mt-8">
-                <button
-                  type="button"
-                  onClick={goToPreviousReview}
-                  className="text-[#6c5cff] text-[24px] font-bold px-2"
-                  aria-label="Previous review"
-                >
-                  ‹
-                </button>
-
-                {testimonialReviews.slice(0, 6).map((review, index) => (
-                  <button
-                    key={review.id || index}
-                    type="button"
-                    onClick={() => setCurrentReviewIndex(index)}
-                    className={
-                      index === currentReviewIndex
-                        ? "w-5 h-2 bg-[#6c5cff] rounded-full"
-                        : "w-2 h-2 bg-gray-300 rounded-full"
-                    }
-                    aria-label={`Show review ${index + 1}`}
-                  />
-                ))}
-
-                <button
-                  type="button"
-                  onClick={goToNextReview}
-                  className="text-[#6c5cff] text-[24px] font-bold px-2"
-                  aria-label="Next review"
-                >
-                  ›
-                </button>
-              </div>
-            </>
-          ) : (
-            <p className="mt-8 text-[16px] leading-7 min-h-[70px] text-gray-400">
-              No reviews yet.
-            </p>
-          )}
         </div>
+
+        {approvedFeedback.length > 0 ? (
+          <div className="mt-12 flex flex-wrap justify-center gap-6">
+            {approvedFeedback.map((review) => (
+              <TestimonialCard key={review.id} review={review} />
+            ))}
+          </div>
+        ) : (
+          <p className="mt-8 text-[16px] leading-7 min-h-[70px] text-gray-400 text-center">
+            No reviews yet.
+          </p>
+        )}
       </section>
 
       {/* FAQ */}
@@ -584,13 +502,32 @@ function PlanItem({ text }) {
   );
 }
 
+function TestimonialCard({ review }) {
+  return (
+    <div className="w-full sm:w-[calc(50%-12px)] lg:w-[calc(33.333%-16px)] bg-white rounded-[20px] shadow-sm p-7 flex flex-col items-center text-center">
+      <p className="text-[14px] leading-6 flex-1">“{review.feedback}”</p>
+
+      <TestimonialAvatar
+        name={review.reviewer_name}
+        imageUrl={review.media_url || review.avatar_url}
+      />
+
+      <p className="mt-3 text-gray-400">{review.reviewer_name}</p>
+
+      <p className="text-yellow-400 text-[20px] mt-2">
+        {renderStars(review.rating)}
+      </p>
+    </div>
+  );
+}
+
 function TestimonialAvatar({ name, imageUrl }) {
   const [imageFailed, setImageFailed] = useState(false);
   const initial = (name || "").trim().charAt(0).toUpperCase() || "?";
 
   if (imageUrl && !imageFailed) {
     return (
-      <div className="relative w-16 h-16 rounded-full overflow-hidden mx-auto mt-6">
+      <div className="relative w-12 h-12 rounded-full overflow-hidden mt-6">
         <Image
           src={imageUrl}
           alt={name || "Reviewer"}
@@ -603,7 +540,7 @@ function TestimonialAvatar({ name, imageUrl }) {
   }
 
   return (
-    <div className="w-16 h-16 rounded-full bg-[#6c5cff] text-white flex items-center justify-center text-[22px] font-bold mx-auto mt-6">
+    <div className="w-12 h-12 rounded-full bg-[#6c5cff] text-white flex items-center justify-center text-[16px] font-bold mt-6">
       {initial}
     </div>
   );
