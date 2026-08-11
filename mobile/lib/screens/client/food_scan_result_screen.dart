@@ -26,7 +26,6 @@ class _FoodScanResultScreenState extends State<FoodScanResultScreen> {
   static const String _mealImageBucket = 'meal-images';
 
   bool _isScanning = true;
-  bool _isUpdating = false;
   bool _isLogging = false;
 
   Uint8List? _imageBytes;
@@ -86,20 +85,8 @@ class _FoodScanResultScreenState extends State<FoodScanResultScreen> {
     return 'image/jpeg';
   }
 
-  Map<String, dynamic> _currentResultJson() {
-    return {
-      'food_name': _foodName,
-      'calories_kcal': _calories,
-      'protein_g': _proteinG,
-      'carbs_g': _carbsG,
-      'fat_g': _fatG,
-      'ingredients': _ingredients.map((item) => item.toJson()).toList(),
-    };
-  }
 
-  Future<void> _scanFood({
-    String? correction,
-  }) async {
+  Future<void> _scanFood() async {
     final bytes = _imageBytes;
 
     if (bytes == null || bytes.isEmpty) {
@@ -108,8 +95,7 @@ class _FoodScanResultScreenState extends State<FoodScanResultScreen> {
     }
 
     setState(() {
-      _isScanning = correction == null;
-      _isUpdating = correction != null;
+      _isScanning = true;
     });
 
     try {
@@ -118,8 +104,6 @@ class _FoodScanResultScreenState extends State<FoodScanResultScreen> {
         body: {
           'imageBase64': base64Encode(bytes),
           'mimeType': _imageMimeType,
-          'correction': correction,
-          'previousResult': correction == null ? null : _currentResultJson(),
         },
       );
 
@@ -134,7 +118,6 @@ class _FoodScanResultScreenState extends State<FoodScanResultScreen> {
       if (mounted) {
         setState(() {
           _isScanning = false;
-          _isUpdating = false;
         });
       }
     }
@@ -310,94 +293,6 @@ class _FoodScanResultScreenState extends State<FoodScanResultScreen> {
     return 'jpg';
   }
 
-  Future<void> _showFixResults() async {
-    if (_isScanning || _isUpdating) return;
-
-    final controller = TextEditingController();
-
-    final correction = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
-          ),
-          child: Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(20),
-            decoration: const BoxDecoration(
-              color: AppColors.card,
-              borderRadius: BorderRadius.all(Radius.circular(20)),
-            ),
-            child: SafeArea(
-              top: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 38,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: AppColors.border,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                  ),
-                  const Center(
-                    child: Text(
-                      'Fix Results',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: controller,
-                    maxLines: 3,
-                    style: const TextStyle(fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText:
-                          'Simply describe what needs to be fixed here. '
-                          'Eg. "That is grilled chicken, not tuna."',
-                      hintStyle: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textMuted,
-                      ),
-                      filled: true,
-                      fillColor: AppColors.cardMuted,
-                      contentPadding: const EdgeInsets.all(14),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  PrimaryButton(
-                    label: 'Update',
-                    onPressed: () {
-                      Navigator.of(sheetContext).pop(controller.text.trim());
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-
-    controller.dispose();
-
-    if (correction == null || correction.trim().isEmpty) return;
-
-    await _scanFood(correction: correction.trim());
-  }
 
   Future<void> _editTextValue({
     required String title,
@@ -784,42 +679,13 @@ class _FoodScanResultScreenState extends State<FoodScanResultScreen> {
               AppSpacing.screenPadding,
               16,
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: scanning || _isUpdating ? null : _showFixResults,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      side: const BorderSide(color: AppColors.primary),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    child: _isUpdating
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text(
-                            'Fix Results',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: PrimaryButton(
-                    label: _isLogging ? 'Logging...' : 'Log Meal',
-                    onPressed: scanning || _isLogging ? null : _logMeal,
-                  ),
-                ),
-              ],
+            child: PrimaryButton(
+              label: scanning
+                  ? 'Scanning...'
+                  : _isLogging
+                      ? 'Logging...'
+                      : 'Log Meal',
+              onPressed: scanning || _isLogging ? null : _logMeal,
             ),
           ),
         ],
