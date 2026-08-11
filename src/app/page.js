@@ -227,7 +227,7 @@ export default function HomePage() {
             <div className="mt-10 flex items-center gap-5">
               <div className="relative w-[130px] h-[52px]">
                 <Image
-                  src="/images/avatar-group.png"
+                  src={hero.avatar_group_url || "/images/avatar-group.png"}
                   alt="Active users"
                   fill
                   className="object-contain"
@@ -245,7 +245,7 @@ export default function HomePage() {
 
           <div className="relative hidden md:block h-[500px]">
             <Image
-              src="/images/hero-phones.png"
+              src={hero.image_url || "/images/hero-phones.png"}
               alt="ShapeRush app preview"
               fill
               priority
@@ -262,7 +262,7 @@ export default function HomePage() {
       >
         <div className="max-w-[650px]">
           <Image
-            src="/images/feature-workout.png"
+            src={features.image_url || "/images/feature-workout.png"}
             alt="Users checking workout progress"
             width={1040}
             height={780}

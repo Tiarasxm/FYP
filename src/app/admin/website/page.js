@@ -10,11 +10,14 @@ const defaultHero = {
   titleLine1: "",
   titleLine2: "",
   subtitle: "",
+  image_url: null,
+  avatar_group_url: null,
 };
 
 const defaultFeatures = {
   sectionLabel: "Features",
   title: "",
+  image_url: null,
   items: Array.from({ length: 6 }, () => ({
     title: "",
     text: "",
@@ -63,6 +66,9 @@ export default function AdminWebsitePage() {
 
   const [featuredReviews, setFeaturedReviews] = useState([]);
   const [availableReviews, setAvailableReviews] = useState([]);
+
+  const [uploadingFields, setUploadingFields] = useState({});
+  const [uploadErrors, setUploadErrors] = useState({});
 
   async function fetchWebsiteContent() {
     setLoading(true);
@@ -161,6 +167,40 @@ export default function AdminWebsitePage() {
     alert("Updated successfully.");
   }
 
+  async function handleImageUpload({
+    file,
+    folder,
+    trackingKey,
+    contentKey,
+    section,
+    setSection,
+  }) {
+    if (!file) return;
+
+    setUploadingFields((prev) => ({ ...prev, [trackingKey]: true }));
+    setUploadErrors((prev) => ({ ...prev, [trackingKey]: "" }));
+
+    const safeName = file.name.replace(/\s+/g, "-");
+    const filePath = `${folder}/${Date.now()}-${safeName}`;
+
+    const { error: storageError } = await supabase.storage
+      .from("website-images")
+      .upload(filePath, file);
+
+    if (storageError) {
+      setUploadErrors((prev) => ({ ...prev, [trackingKey]: storageError.message }));
+      setUploadingFields((prev) => ({ ...prev, [trackingKey]: false }));
+      return;
+    }
+
+    const { data } = supabase.storage
+      .from("website-images")
+      .getPublicUrl(filePath);
+
+    setSection({ ...section, [contentKey]: data.publicUrl });
+    setUploadingFields((prev) => ({ ...prev, [trackingKey]: false }));
+  }
+
   async function addReview(review) {
     const { error } = await supabase
       .from("reviews")
@@ -253,6 +293,46 @@ export default function AdminWebsitePage() {
                     maxLength={100}
                   />
 
+                  <ImageField
+                    label="Hero Phone Mockup"
+                    value={hero.image_url}
+                    defaultSrc="/images/hero-phones.png"
+                    uploading={!!uploadingFields.heroImage}
+                    error={uploadErrors.heroImage}
+                    onUpload={(file) =>
+                      handleImageUpload({
+                        file,
+                        folder: "hero",
+                        trackingKey: "heroImage",
+                        contentKey: "image_url",
+                        section: hero,
+                        setSection: setHero,
+                      })
+                    }
+                    onReset={() => setHero({ ...hero, image_url: null })}
+                  />
+
+                  <ImageField
+                    label="Avatar Group"
+                    value={hero.avatar_group_url}
+                    defaultSrc="/images/avatar-group.png"
+                    uploading={!!uploadingFields.heroAvatar}
+                    error={uploadErrors.heroAvatar}
+                    onUpload={(file) =>
+                      handleImageUpload({
+                        file,
+                        folder: "hero",
+                        trackingKey: "heroAvatar",
+                        contentKey: "avatar_group_url",
+                        section: hero,
+                        setSection: setHero,
+                      })
+                    }
+                    onReset={() =>
+                      setHero({ ...hero, avatar_group_url: null })
+                    }
+                  />
+
                   <UpdateButton onClick={() => saveSection("hero", hero)} />
                 </section>
               )}
@@ -275,6 +355,27 @@ export default function AdminWebsitePage() {
                       setFeatures({ ...features, title: value })
                     }
                     maxLength={50}
+                  />
+
+                  <ImageField
+                    label="Features Image"
+                    value={features.image_url}
+                    defaultSrc="/images/feature-workout.png"
+                    uploading={!!uploadingFields.featuresImage}
+                    error={uploadErrors.featuresImage}
+                    onUpload={(file) =>
+                      handleImageUpload({
+                        file,
+                        folder: "features",
+                        trackingKey: "featuresImage",
+                        contentKey: "image_url",
+                        section: features,
+                        setSection: setFeatures,
+                      })
+                    }
+                    onReset={() =>
+                      setFeatures({ ...features, image_url: null })
+                    }
                   />
 
                   {features.items.map((item, index) => (
@@ -584,6 +685,50 @@ function TextArea({ label, value, onChange, maxLength }) {
   );
 }
 
+function ImageField({
+  label,
+  value,
+  defaultSrc,
+  uploading,
+  error,
+  onUpload,
+  onReset,
+}) {
+  return (
+    <div style={styles.fieldGroup}>
+      <label style={styles.label}>{label}</label>
+
+      {/* eslint-disable-next-line @next/next/no-img-element -- admin-only thumbnail preview, not part of the served landing page */}
+      <img src={value || defaultSrc} alt={label} style={styles.imagePreview} />
+
+      <input
+        type="file"
+        accept="image/png, image/jpeg, image/webp"
+        disabled={uploading}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+
+          if (file) {
+            onUpload(file);
+          }
+
+          event.target.value = "";
+        }}
+        style={styles.fileInput}
+      />
+
+      {uploading && <p style={styles.muted}>Uploading...</p>}
+      {error && <p style={styles.errorText}>{error}</p>}
+
+      {value && (
+        <button type="button" onClick={onReset} style={styles.resetButton}>
+          Reset to default
+        </button>
+      )}
+    </div>
+  );
+}
+
 function UpdateButton({ onClick }) {
   return (
     <button type="button" onClick={onClick} style={styles.updateButton}>
@@ -765,6 +910,40 @@ const styles = {
     boxSizing: "border-box",
     outline: "none",
     resize: "none",
+  },
+
+  imagePreview: {
+    width: "100%",
+    maxHeight: "180px",
+    objectFit: "cover",
+    borderRadius: "10px",
+    border: "1px solid #e5e5e5",
+    marginBottom: "10px",
+    backgroundColor: "#f5f5f8",
+  },
+
+  fileInput: {
+    width: "100%",
+    fontSize: "12px",
+  },
+
+  errorText: {
+    color: "#e63946",
+    fontSize: "12px",
+    marginTop: "6px",
+  },
+
+  resetButton: {
+    marginTop: "10px",
+    height: "32px",
+    padding: "0 14px",
+    border: "1px solid #6658ff",
+    borderRadius: "8px",
+    backgroundColor: "#ffffff",
+    color: "#6658ff",
+    fontSize: "12px",
+    fontWeight: "700",
+    cursor: "pointer",
   },
 
   updateButton: {
