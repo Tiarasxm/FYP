@@ -22,7 +22,7 @@ export default function AdminUsersPage() {
     const isAdminLoggedIn = localStorage.getItem("adminLoggedIn");
 
     if (isAdminLoggedIn !== "true") {
-      router.replace("/admin/login");
+      router.replace("/login");
       return;
     }
 

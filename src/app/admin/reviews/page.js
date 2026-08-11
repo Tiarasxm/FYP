@@ -59,7 +59,7 @@ export default function AdminReviewsPage() {
     const isAdminLoggedIn = localStorage.getItem("adminLoggedIn");
 
     if (isAdminLoggedIn !== "true") {
-      router.replace("/admin/login");
+      router.replace("/login");
       return;
     }
 

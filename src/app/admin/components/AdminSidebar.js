@@ -14,7 +14,7 @@ export default function AdminSidebar() {
     localStorage.removeItem("adminLoggedIn");
     localStorage.removeItem("adminEmail");
 
-    router.replace("/admin/login");
+    router.replace("/login");
   }
 
   function isActive(path) {
