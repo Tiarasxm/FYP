@@ -86,6 +86,17 @@ export default function AdminSidebar() {
             </div>
           </Link>
 
+          <Link href="/admin/app-feedback" style={styles.linkReset}>
+            <div
+              style={{
+                ...styles.navItem,
+                ...(isActive("/admin/app-feedback") ? styles.activeNavItem : {}),
+              }}
+            >
+              App Feedback
+            </div>
+          </Link>
+
           <Link href="/admin/reports" style={styles.linkReset}>
             <div
               style={{
