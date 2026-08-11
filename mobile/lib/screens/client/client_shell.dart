@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../services/membership_service.dart';
 import '../../theme/app_theme.dart';
 import 'home_screen.dart';
 import 'workout_screen.dart';
@@ -17,6 +18,12 @@ class ClientShell extends StatefulWidget {
 class _ClientShellState extends State<ClientShell> {
   int _index = 0;
   final List<int> _refreshVersions = List<int>.filled(5, 0);
+
+  @override
+  void initState() {
+    super.initState();
+    MembershipService.ensureCurrentPriorityStatus();
+  }
 
   List<Widget> get _screens => [
         HomeScreen(key: ValueKey('home-${_refreshVersions[0]}')),

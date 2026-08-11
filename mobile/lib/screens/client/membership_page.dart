@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/membership_service.dart';
 import '../../theme/app_theme.dart';
 
 class MembershipPage extends StatefulWidget {
@@ -14,6 +15,10 @@ class _MembershipPageState extends State<MembershipPage> {
   bool isUpdating = false;
 
   String currentPlan = 'free';
+
+  DateTime? _subscribedAt;
+  DateTime? _priorityUntil;
+  bool _isCancelling = false;
 
   final SupabaseClient supabase = Supabase.instance.client;
 
@@ -35,20 +40,59 @@ class _MembershipPageState extends State<MembershipPage> {
         throw Exception('User is not signed in.');
       }
 
+      await MembershipService.ensureCurrentPriorityStatus();
+
       final response = await supabase
           .from('profiles')
           .select('user_type')
           .eq('id', userId)
           .maybeSingle();
 
-      if (!mounted) return;
-
       final userType =
           response?['user_type']?.toString().trim().toLowerCase() ?? 'free';
 
-      setState(() {
-        currentPlan = userType == 'priority' ? 'priority' : 'free';
-      });
+      final priority = await supabase
+          .from('priority_user')
+          .select('subscribed_at, expires_at')
+          .eq('profile_id', userId)
+          .maybeSingle();
+
+      DateTime? subscribedAt = _parseDateTime(priority?['subscribed_at']);
+      DateTime? expiresAt = _parseDateTime(priority?['expires_at']);
+
+      if (userType == 'priority') {
+        if (subscribedAt == null) {
+          final now = DateTime.now();
+          await supabase.from('priority_user').upsert({
+            'profile_id': userId,
+            'subscribed_at': now.toIso8601String(),
+          });
+          subscribedAt = now;
+        }
+
+        final endsAt = expiresAt ?? _oneMonthAfter(subscribedAt);
+
+        if (endsAt.isBefore(DateTime.now())) {
+          await supabase
+              .from('profiles')
+              .update({'user_type': 'Free'})
+              .eq('id', userId);
+
+          await supabase
+              .from('priority_user')
+              .delete()
+              .eq('profile_id', userId);
+
+          _resetPriorityState('free');
+        } else {
+          _resetPriorityState('priority',
+              subscribedAt: subscribedAt,
+              priorityUntil: endsAt,
+              isCancelling: expiresAt != null);
+        }
+      } else {
+        _resetPriorityState('free');
+      }
     } catch (error) {
       if (!mounted) return;
 
@@ -65,6 +109,50 @@ class _MembershipPageState extends State<MembershipPage> {
         });
       }
     }
+  }
+
+  void _resetPriorityState(
+    String plan, {
+    DateTime? subscribedAt,
+    DateTime? priorityUntil,
+    bool isCancelling = false,
+  }) {
+    setState(() {
+      currentPlan = plan;
+      _subscribedAt = subscribedAt;
+      _priorityUntil = priorityUntil;
+      _isCancelling = isCancelling;
+    });
+  }
+
+  DateTime? _parseDateTime(dynamic value) {
+    if (value == null) return null;
+    return DateTime.tryParse(value.toString());
+  }
+
+  DateTime _oneMonthAfter(DateTime date) {
+    return DateTime(date.year, date.month + 1, date.day);
+  }
+
+  String _formatDate(DateTime? date) {
+    if (date == null) return '-';
+
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
   Future<bool> _showConfirmDialog({
@@ -99,7 +187,7 @@ class _MembershipPageState extends State<MembershipPage> {
     return result == true;
   }
 
-  Future<void> _updateMembership(String newPlan) async {
+  Future<void> _upgradeToPriority() async {
     if (isUpdating) return;
 
     final userId = supabase.auth.currentUser?.id;
@@ -109,62 +197,88 @@ class _MembershipPageState extends State<MembershipPage> {
       return;
     }
 
+    final confirmed = await _showConfirmDialog(
+      title: 'Upgrade to Priority',
+      message: 'Do you want to upgrade your account to Priority membership?',
+      confirmText: 'Upgrade',
+    );
+
+    if (!confirmed) return;
+
     setState(() {
       isUpdating = true;
     });
 
     try {
-      final userTypeValue = newPlan == 'priority' ? 'Priority' : 'Free';
+      final now = DateTime.now();
 
-      await supabase.from('profiles').update({
-        'user_type': userTypeValue,
-      }).eq('id', userId);
-
-      if (!mounted) return;
-
-      setState(() {
-        currentPlan = newPlan;
+      await supabase.from('priority_user').upsert({
+        'profile_id': userId,
+        'subscribed_at': now.toIso8601String(),
+        'expires_at': null,
       });
 
-      if (newPlan == 'priority') {
-        _showMessage('Priority membership activated.');
-      } else {
-        _showMessage('Priority membership cancelled.');
-      }
+      await supabase.from('profiles').update({
+        'user_type': 'Priority',
+      }).eq('id', userId);
+
+      _showMessage('Priority membership activated.');
     } catch (error) {
-      _showMessage('Failed to update membership: $error', isError: true);
+      _showMessage('Failed to upgrade membership: $error', isError: true);
     } finally {
       if (mounted) {
         setState(() {
           isUpdating = false;
         });
       }
+      _loadMembership();
     }
   }
 
-  Future<void> _upgradeToPriority() async {
-    final confirmed = await _showConfirmDialog(
-      title: 'Upgrade to Priority',
-      message:
-          'Do you want to upgrade your account to Priority membership?',
-      confirmText: 'Upgrade',
-    );
-
-    if (!confirmed) return;
-
-    await _updateMembership('priority');
-  }
-
   Future<void> _cancelSubscription() async {
+    if (isUpdating) return;
+
+    final userId = supabase.auth.currentUser?.id;
+
+    if (userId == null) {
+      _showMessage('User is not signed in.', isError: true);
+      return;
+    }
+
+    if (_subscribedAt == null) return;
+
+    final endsAt = _oneMonthAfter(_subscribedAt!);
+    final endsAtText = _formatDate(endsAt);
+
     final confirmed = await _showConfirmDialog(
       title: 'Cancel Subscription',
-      message: 'Are you sure you want to cancel your Priority membership?',
+      message:
+          'You will remain Priority until $endsAtText, then your account will switch to Free.',
       confirmText: 'Yes, Cancel',
     );
 
     if (!confirmed) return;
 
-    await _updateMembership('free');
+    setState(() {
+      isUpdating = true;
+    });
+
+    try {
+      await supabase.from('priority_user').update({
+        'expires_at': endsAt.toIso8601String(),
+      }).eq('profile_id', userId);
+
+      _showMessage('Priority will end on $endsAtText.');
+    } catch (error) {
+      _showMessage('Failed to cancel membership: $error', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          isUpdating = false;
+        });
+      }
+      _loadMembership();
+    }
   }
 
   void _showMessage(String message, {bool isError = false}) {
@@ -178,27 +292,6 @@ class _MembershipPageState extends State<MembershipPage> {
     );
   }
 
-  String _nextBillingDateText() {
-    final now = DateTime.now();
-    final next = DateTime(now.year, now.month + 1, now.day);
-
-    const months = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-
-    return '${next.day} ${months[next.month - 1]} ${next.year}';
-  }
 
   void _goBack() {
     Navigator.pop(context, true);
@@ -246,11 +339,16 @@ class _MembershipPageState extends State<MembershipPage> {
                       description:
                           "Access basic workout, nutrition, progress tracking and social features.",
                       isCurrentPlan: currentPlan == 'free',
-                      buttonText:
-                          currentPlan == 'free' ? null : 'Switch to Free',
+                      isCancelling: _isCancelling,
+                      buttonText: currentPlan == 'free'
+                          ? null
+                          : (_isCancelling
+                              ? 'Downgrade scheduled'
+                              : 'Switch to Free'),
                       isUpdating: isUpdating,
-                      onPressed:
-                          currentPlan == 'free' ? null : _cancelSubscription,
+                      onPressed: (currentPlan == 'free' || _isCancelling)
+                          ? null
+                          : _cancelSubscription,
                     ),
 
                     const SizedBox(height: 12),
@@ -261,16 +359,21 @@ class _MembershipPageState extends State<MembershipPage> {
                       description:
                           "Unlock advanced features, additional insights and enhanced membership benefits.",
                       isCurrentPlan: currentPlan == 'priority',
-                      nextBillingDate: currentPlan == 'priority'
-                          ? _nextBillingDateText()
+                      isCancelling: _isCancelling,
+                      nextBillingDate: _priorityUntil != null
+                          ? _formatDate(_priorityUntil)
                           : null,
                       buttonText: currentPlan == 'priority'
-                          ? 'Cancel Subscription'
+                          ? (_isCancelling
+                              ? 'Downgrade scheduled'
+                              : 'Cancel Subscription')
                           : 'Upgrade to Priority',
                       isUpdating: isUpdating,
-                      onPressed: currentPlan == 'priority'
-                          ? _cancelSubscription
-                          : _upgradeToPriority,
+                      onPressed: _isCancelling
+                          ? null
+                          : (currentPlan == 'priority'
+                              ? _cancelSubscription
+                              : _upgradeToPriority),
                     ),
                   ],
                 ),
@@ -287,6 +390,7 @@ class MembershipCard extends StatelessWidget {
   final bool isCurrentPlan;
   final String? nextBillingDate;
   final String? buttonText;
+  final bool isCancelling;
   final bool isUpdating;
   final VoidCallback? onPressed;
 
@@ -298,6 +402,7 @@ class MembershipCard extends StatelessWidget {
     this.isCurrentPlan = false,
     this.nextBillingDate,
     this.buttonText,
+    this.isCancelling = false,
     this.isUpdating = false,
     this.onPressed,
   });
@@ -389,10 +494,14 @@ class MembershipCard extends StatelessWidget {
             const SizedBox(height: 16),
             Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
-                    "Next billing",
-                    style: TextStyle(
+                    _isPriority && isCancelling
+                        ? "Downgrading on"
+                        : _isPriority
+                            ? "Priority until"
+                            : "Next billing",
+                    style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
@@ -400,13 +509,27 @@ class MembershipCard extends StatelessWidget {
                 ),
                 Text(
                   nextBillingDate!,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
+                    color: _isPriority && isCancelling
+                        ? Colors.redAccent
+                        : AppColors.textPrimary,
                   ),
                 ),
               ],
             ),
+            if (isCancelling) ...[
+              const SizedBox(height: 8),
+              Text(
+                'You will switch to the Free plan on this date.',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.redAccent.withOpacity(0.9),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ],
 
           if (buttonText != null) ...[

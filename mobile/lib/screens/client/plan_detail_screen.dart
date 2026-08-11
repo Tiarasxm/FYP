@@ -24,13 +24,9 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
   bool _isLoadingDays = true;
   bool _isLoadingExercises = false;
   bool _isSwitching = false;
-  bool _isSavingPlan = false;
   bool _isLoadingPlanState = true;
 
-  bool _isPriority = false;
-  bool _isSaved = false;
   bool _isActive = false;
-  int _savedPlanCount = 0;
 
   List<Map<String, dynamic>> _days = [];
   List<Map<String, dynamic>> _exercises = [];
@@ -108,30 +104,13 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     return widget.isPersonalized ? 'personalized_plan_id' : 'free_plan_id';
   }
 
-  Map<String, dynamic> _planPayload({
-    required String userId,
-    required bool isSaved,
-    required bool isActive,
-  }) {
-    final now = DateTime.now().toIso8601String();
-
-    return {
-      'profile_id': userId,
-      'free_plan_id': widget.isPersonalized ? null : widget.planId,
-      'personalized_plan_id': widget.isPersonalized ? widget.planId : null,
-      'is_saved': isSaved,
-      'is_active': isActive,
-      'saved_at': now,
-    };
-  }
-
   Future<Map<String, dynamic>?> _findSavedPlanRow(
     SupabaseClient client,
     String userId,
   ) async {
     final response = await client
         .from('saved_plans')
-        .select('saved_plan_id, is_saved, is_active')
+        .select('saved_plan_id, is_active')
         .eq('profile_id', userId)
         .eq(_planIdColumn, widget.planId)
         .limit(1);
@@ -143,11 +122,10 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     return rows.first;
   }
 
-  Future<String> _ensureSavedPlanRow({
-    required SupabaseClient client,
-    required String userId,
-    required bool isSavedWhenCreating,
-  }) async {
+  Future<String> _ensureSavedPlanRow(
+    SupabaseClient client,
+    String userId,
+  ) async {
     final existing = await _findSavedPlanRow(client, userId);
 
     if (existing != null) {
@@ -160,15 +138,18 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       return savedPlanId;
     }
 
+    final now = DateTime.now().toIso8601String();
+
     final row = await client
         .from('saved_plans')
-        .insert(
-          _planPayload(
-            userId: userId,
-            isSaved: isSavedWhenCreating,
-            isActive: false,
-          ),
-        )
+        .insert({
+          'profile_id': userId,
+          'free_plan_id': widget.isPersonalized ? null : widget.planId,
+          'personalized_plan_id': widget.isPersonalized ? widget.planId : null,
+          'is_saved': false,
+          'is_active': false,
+          'saved_at': now,
+        })
         .select('saved_plan_id')
         .single();
 
@@ -194,30 +175,11 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
         throw Exception('User is not signed in.');
       }
 
-      final profile = await client
-          .from('profiles')
-          .select('user_type')
-          .eq('id', userId)
-          .maybeSingle();
-
-      final userType =
-          profile?['user_type']?.toString().trim().toLowerCase() ?? 'free';
-
-      final savedResponse = await client
-          .from('saved_plans')
-          .select('saved_plan_id')
-          .eq('profile_id', userId)
-          .eq('is_saved', true);
-
-      final savedRows = List<Map<String, dynamic>>.from(savedResponse as List);
       final currentRow = await _findSavedPlanRow(client, userId);
 
       if (!mounted) return;
 
       setState(() {
-        _isPriority = userType == 'priority';
-        _savedPlanCount = savedRows.length;
-        _isSaved = currentRow?['is_saved'] == true;
         _isActive = currentRow?['is_active'] == true;
       });
     } catch (error) {
@@ -235,179 +197,6 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     }
   }
 
-  Future<void> _savePlan() async {
-    if (_isSavingPlan || _isSaved) return;
-
-    final client = Supabase.instance.client;
-    final userId = client.auth.currentUser?.id;
-
-    if (userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You must be signed in.')),
-      );
-      return;
-    }
-
-    if (!_isPriority && _savedPlanCount >= 5) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Free users can save up to 5 plans. Delete a saved plan first.',
-          ),
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      _isSavingPlan = true;
-    });
-
-    try {
-      final savedPlanId = await _ensureSavedPlanRow(
-        client: client,
-        userId: userId,
-        isSavedWhenCreating: true,
-      );
-
-      await client
-          .from('saved_plans')
-          .update({
-            'is_saved': true,
-            'saved_at': DateTime.now().toIso8601String(),
-          })
-          .eq('saved_plan_id', savedPlanId)
-          .eq('profile_id', userId);
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Plan saved.')),
-      );
-
-      await _loadPlanState();
-    } catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save plan: $error')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSavingPlan = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _deleteSavedPlan() async {
-    if (_isSavingPlan || !_isSaved) return;
-
-    final client = Supabase.instance.client;
-    final userId = client.auth.currentUser?.id;
-
-    if (userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You must be signed in.')),
-      );
-      return;
-    }
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Delete saved plan?'),
-          content: Text(
-            _isActive
-                ? 'This plan will be removed from Saved Plans, but it will stay as your active plan.'
-                : 'This plan will be removed from your Saved Plans.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(dialogContext, false);
-              },
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(dialogContext, true);
-              },
-              child: const Text('Delete'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed != true) return;
-
-    setState(() {
-      _isSavingPlan = true;
-    });
-
-    try {
-      final currentRow = await _findSavedPlanRow(client, userId);
-      final savedPlanId = currentRow?['saved_plan_id']?.toString();
-
-      if (savedPlanId == null || savedPlanId.isEmpty) {
-        await _loadPlanState();
-        return;
-      }
-
-      final isActive = currentRow?['is_active'] == true;
-
-      if (isActive) {
-        await client
-            .from('saved_plans')
-            .update({'is_saved': false})
-            .eq('saved_plan_id', savedPlanId)
-            .eq('profile_id', userId);
-      } else {
-        await client
-            .from('saved_plans')
-            .delete()
-            .eq('saved_plan_id', savedPlanId)
-            .eq('profile_id', userId);
-      }
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            isActive
-                ? 'Removed from Saved Plans. It is still your active plan.'
-                : 'Saved plan deleted.',
-          ),
-        ),
-      );
-
-      await _loadPlanState();
-    } catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete saved plan: $error')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSavingPlan = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _toggleSavedPlan() async {
-    if (_isSaved) {
-      await _deleteSavedPlan();
-    } else {
-      await _savePlan();
-    }
-  }
 
 
   Future<void> _loadDays() async {
@@ -564,11 +353,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
           .eq('profile_id', userId)
           .eq('is_active', true);
 
-      final savedPlanId = await _ensureSavedPlanRow(
-        client: client,
-        userId: userId,
-        isSavedWhenCreating: false,
-      );
+      final savedPlanId = await _ensureSavedPlanRow(client, userId);
 
       await client
           .from('saved_plans')
@@ -641,10 +426,6 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
             ),
           )
         else ...[
-          _savedPlanActionCard(),
-
-          const SizedBox(height: 18),
-
           const Text(
             'Week',
             style: TextStyle(
@@ -734,92 +515,6 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
             ],
         ],
       ],
-    );
-  }
-
-  Widget _savedPlanActionCard() {
-    final limitText = _isPriority ? 'No save limit' : '$_savedPlanCount/5 saved';
-
-    String statusText;
-
-    if (_isLoadingPlanState) {
-      statusText = 'Loading saved status...';
-    } else if (_isSaved && _isActive) {
-      statusText = 'Saved • Current active plan';
-    } else if (_isSaved) {
-      statusText = 'Saved to your saved plans';
-    } else if (_isActive) {
-      statusText = 'Active plan • not saved';
-    } else {
-      statusText = 'Not saved yet';
-    }
-
-    final buttonText = _isSaved ? 'Delete Saved' : 'Save Plan';
-    final buttonIcon = _isSaved ? Icons.bookmark_remove : Icons.bookmark_add_outlined;
-    final buttonColor = _isSaved ? Colors.red : AppColors.primary;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.cardMuted,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                _isSaved ? Icons.bookmark : Icons.bookmark_border,
-                color: _isSaved ? AppColors.primary : AppColors.textSecondary,
-                size: 22,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  statusText,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-              ),
-              Text(
-                limitText,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            height: 42,
-            child: OutlinedButton.icon(
-              onPressed: (_isSavingPlan || _isLoadingPlanState)
-                  ? null
-                  : _toggleSavedPlan,
-              icon: Icon(buttonIcon, size: 18),
-              label: Text(
-                _isSavingPlan ? 'Updating...' : buttonText,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: buttonColor,
-                side: BorderSide(color: buttonColor),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/client/nutrition.dart';
+import '../../models/client/nutrition_goals.dart';
+import '../../services/nutrition_goals_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/client/progress_bar.dart';
 import '../../widgets/client/section_card.dart';
@@ -18,11 +20,6 @@ class NutritionScreen extends StatefulWidget {
 }
 
 class _NutritionScreenState extends State<NutritionScreen> {
-  static const int _caloriesGoal = 1600;
-  static const int _proteinGoal = 108;
-  static const int _carbsGoal = 180;
-  static const int _fatGoal = 60;
-
   int _water = 0;
   int _waterGoal = 2000;
 
@@ -30,14 +27,51 @@ class _NutritionScreenState extends State<NutritionScreen> {
   bool _isLoadingMembership = true;
   bool _isLoadingMeals = true;
   bool _isLoadingWater = true;
+  bool _isLoadingGoals = true;
   bool _isAddingWater = false;
 
+  NutritionGoals _goals = NutritionGoals.defaults;
+
   List<Map<String, dynamic>> _mealLogs = [];
+
+  RealtimeChannel? _profileChannel;
 
   @override
   void initState() {
     super.initState();
     _loadNutritionData();
+    _subscribeToProfileChanges();
+  }
+
+  @override
+  void dispose() {
+    _profileChannel?.unsubscribe();
+    _profileChannel = null;
+    super.dispose();
+  }
+
+  void _subscribeToProfileChanges() {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+
+    if (userId == null) return;
+
+    _profileChannel = client
+        .channel('public:profiles:nutrition:$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'profiles',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: userId,
+          ),
+          callback: (payload) {
+            _loadNutritionGoals();
+          },
+        )
+        .subscribe();
   }
 
   Future<void> _loadNutritionData() async {
@@ -46,7 +80,34 @@ class _NutritionScreenState extends State<NutritionScreen> {
       _loadWaterGoal(),
       _loadWater(),
       _loadMembershipStatus(),
+      _loadNutritionGoals(),
     ]);
+  }
+
+  Future<void> _loadNutritionGoals() async {
+    setState(() {
+      _isLoadingGoals = true;
+    });
+
+    try {
+      final goals = await NutritionGoalsService.calculateForCurrentUser();
+
+      if (!mounted) return;
+
+      setState(() {
+        _goals = goals;
+      });
+    } catch (error) {
+      if (mounted) {
+        _showMessage('Failed to load nutrition goals: $error');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingGoals = false;
+        });
+      }
+    }
   }
 
   DateTime get _startOfTodayUtc {
@@ -90,19 +151,19 @@ class _NutritionScreenState extends State<NutritionScreen> {
       Macro(
         name: 'Protein',
         current: _proteinConsumed.round(),
-        target: _proteinGoal,
+        target: _goals.protein,
         color: AppColors.red,
       ),
       Macro(
         name: 'Carbs',
         current: _carbsConsumed.round(),
-        target: _carbsGoal,
+        target: _goals.carbs,
         color: AppColors.cyan,
       ),
       Macro(
         name: 'Fat',
         current: _fatConsumed.round(),
-        target: _fatGoal,
+        target: _goals.fat,
         color: AppColors.green,
       ),
     ];
@@ -602,11 +663,16 @@ class _NutritionScreenState extends State<NutritionScreen> {
 
   Widget _calorieCard() {
     final consumed = _caloriesConsumed;
-    const goal = _caloriesGoal;
+    final goal = _goals.calories;
 
-    final proteinFraction = (_proteinConsumed * 4 / goal).clamp(0, 1).toDouble();
-    final carbsFraction = (_carbsConsumed * 4 / goal).clamp(0, 1).toDouble();
-    final fatFraction = (_fatConsumed * 9 / goal).clamp(0, 1).toDouble();
+    final proteinFraction =
+        _isLoadingGoals ? 0.0 : _goals.proteinFraction;
+    final carbsFraction =
+        _isLoadingGoals ? 0.0 : _goals.carbsFraction;
+    final fatFraction =
+        _isLoadingGoals ? 0.0 : _goals.fatFraction;
+
+    final goalText = _isLoadingGoals ? '-' : '$goal';
 
     return SectionCard(
       child: Row(
@@ -636,9 +702,9 @@ class _NutritionScreenState extends State<NutritionScreen> {
                           fontWeight: FontWeight.w800,
                         ),
                       ),
-                      const TextSpan(
-                        text: ' /$goal kcal',
-                        style: TextStyle(
+                      TextSpan(
+                        text: ' /$goalText kcal',
+                        style: const TextStyle(
                           fontSize: 14,
                           color: AppColors.textSecondary,
                           fontWeight: FontWeight.w600,
@@ -648,14 +714,22 @@ class _NutritionScreenState extends State<NutritionScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                SegmentedBar(
-                  fractions: [proteinFraction, carbsFraction, fatFraction],
-                  colors: const [
-                    AppColors.red,
-                    AppColors.cyan,
-                    AppColors.green,
-                  ],
-                ),
+                if (_isLoadingGoals)
+                  const SizedBox(
+                    height: 8,
+                    child: LinearProgressIndicator(
+                      borderRadius: BorderRadius.all(Radius.circular(4)),
+                    ),
+                  )
+                else
+                  SegmentedBar(
+                    fractions: [proteinFraction, carbsFraction, fatFraction],
+                    colors: const [
+                      AppColors.red,
+                      AppColors.cyan,
+                      AppColors.green,
+                    ],
+                  ),
               ],
             ),
           ),
@@ -670,14 +744,19 @@ class _NutritionScreenState extends State<NutritionScreen> {
     return Row(
       children: [
         for (var i = 0; i < macros.length; i++) ...[
-          Expanded(child: _macroTile(macros[i])),
+          Expanded(
+            child: _macroTile(
+              macros[i],
+              isLoading: _isLoadingGoals,
+            ),
+          ),
           if (i != macros.length - 1) const SizedBox(width: 12),
         ],
       ],
     );
   }
 
-  Widget _macroTile(Macro macro) {
+  Widget _macroTile(Macro macro, {required bool isLoading}) {
     return SectionCard(
       padding: const EdgeInsets.all(14),
       child: Column(
@@ -692,29 +771,47 @@ class _NutritionScreenState extends State<NutritionScreen> {
             ),
           ),
           const SizedBox(height: 6),
-          RichText(
-            text: TextSpan(
-              style: const TextStyle(color: AppColors.textPrimary),
-              children: [
-                TextSpan(
-                  text: '${macro.current}g',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
+          if (isLoading)
+            Container(
+              width: 60,
+              height: 18,
+              decoration: BoxDecoration(
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            )
+          else
+            RichText(
+              text: TextSpan(
+                style: const TextStyle(color: AppColors.textPrimary),
+                children: [
+                  TextSpan(
+                    text: '${macro.current}g',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                ),
-                TextSpan(
-                  text: ' /${macro.target}g',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textMuted,
+                  TextSpan(
+                    text: ' /${macro.target}g',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textMuted,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
           const SizedBox(height: 10),
-          ProgressBar(progress: macro.progress, color: macro.color),
+          if (isLoading)
+            const SizedBox(
+              height: 6,
+              child: LinearProgressIndicator(
+                borderRadius: BorderRadius.all(Radius.circular(3)),
+              ),
+            )
+          else
+            ProgressBar(progress: macro.progress, color: macro.color),
         ],
       ),
     );

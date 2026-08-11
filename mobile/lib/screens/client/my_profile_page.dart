@@ -25,6 +25,7 @@ class _MyProfilePageState extends State<MyProfilePage> {
 
   String? selectedActivityLevel;
   String? selectedFitnessGoal;
+  String? selectedGender;
 
   Uint8List? selectedAvatarBytes;
   XFile? selectedAvatarFile;
@@ -33,7 +34,6 @@ class _MyProfilePageState extends State<MyProfilePage> {
 
   final TextEditingController nameController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
-  final TextEditingController genderController = TextEditingController();
   final TextEditingController dateOfBirthController = TextEditingController();
   final TextEditingController weightController = TextEditingController();
   final TextEditingController heightController = TextEditingController();
@@ -54,6 +54,12 @@ class _MyProfilePageState extends State<MyProfilePage> {
     'Build Muscles',
   ];
 
+  static const List<String> genderOptions = [
+    'Male',
+    'Female',
+    'Other',
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -64,7 +70,6 @@ class _MyProfilePageState extends State<MyProfilePage> {
   void dispose() {
     nameController.dispose();
     emailController.dispose();
-    genderController.dispose();
     dateOfBirthController.dispose();
     weightController.dispose();
     heightController.dispose();
@@ -116,7 +121,10 @@ class _MyProfilePageState extends State<MyProfilePage> {
       setState(() {
         nameController.text = data['full_name']?.toString() ?? '';
         emailController.text = data['email']?.toString() ?? user.email ?? '';
-        genderController.text = data['gender']?.toString() ?? '';
+        selectedGender = _validOption(
+          data['gender'],
+          genderOptions,
+        );
         dateOfBirthController.text = _formatDateForDisplay(
           data['date_of_birth'],
         );
@@ -395,7 +403,7 @@ class _MyProfilePageState extends State<MyProfilePage> {
 
   Future<void> updateProfile() async {
     final name = nameController.text.trim();
-    final gender = genderController.text.trim();
+    final gender = selectedGender;
     final dateText = dateOfBirthController.text.trim();
     final weightText = weightController.text.trim();
     final heightText = heightController.text.trim();
@@ -439,7 +447,7 @@ class _MyProfilePageState extends State<MyProfilePage> {
 
       await client.from('profiles').update({
         'full_name': name,
-        'gender': gender.isEmpty ? null : gender,
+        'gender': gender,
         'date_of_birth': _dateToDatabase(dateOfBirth),
         'weight_kg': weight,
         'height_cm': height,
@@ -603,9 +611,18 @@ class _MyProfilePageState extends State<MyProfilePage> {
                 enabled: false,
                 keyboardType: TextInputType.emailAddress,
               ),
-              ProfileInputField(
+              ProfileDropdownField(
                 label: "Gender",
-                controller: genderController,
+                value: selectedGender,
+                items: genderOptions,
+                hintText: "Select gender",
+                onChanged: isSaving
+                    ? null
+                    : (value) {
+                        setState(() {
+                          selectedGender = value;
+                        });
+                      },
               ),
               ProfileInputField(
                 label: "Date of Birth",
