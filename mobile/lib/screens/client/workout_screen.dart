@@ -115,6 +115,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       if (mounted) {
         setState(() {
           _isLoadingPlans = false;
+          _isLoadingPros = false;
         });
       }
     }
@@ -508,31 +509,55 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     final rows = List<Map<String, dynamic>>.from(data as List);
 
-    final pros = <Professional>[];
-    for (final row in rows) {
-      final profileId = row['profile_id'];
+    final profileIds = rows
+        .map((row) => row['profile_id']?.toString())
+        .where((id) => id != null && id.isNotEmpty)
+        .cast<String>()
+        .toList();
+
+    final ratingTotals = <String, double>{};
+    final ratingCounts = <String, int>{};
+
+    if (profileIds.isNotEmpty) {
       final reviewData = await client
           .from('reviews')
-          .select('rating')
-          .eq('reviewer_id', profileId);
-      final reviewRows = List<Map<String, dynamic>>.from(reviewData as List);
-      final reviewCount = reviewRows.length;
-      double avgRating = 0;
+          .select('professional_id, rating')
+          .inFilter('professional_id', profileIds);
 
-      if (reviewCount > 0) {
-        final total = reviewRows.fold<double>(
-          0,
-          (sum, r) => sum + ((r['rating'] as num?)?.toDouble() ?? 0),
-        );
-        avgRating = total / reviewCount;
+      final reviewRows = List<Map<String, dynamic>>.from(reviewData as List);
+
+      for (final review in reviewRows) {
+        final professionalId = review['professional_id']?.toString();
+
+        if (professionalId == null || professionalId.isEmpty) {
+          continue;
+        }
+
+        final rating = (review['rating'] as num?)?.toDouble() ?? 0;
+
+        ratingTotals[professionalId] =
+            (ratingTotals[professionalId] ?? 0) + rating;
+        ratingCounts[professionalId] = (ratingCounts[professionalId] ?? 0) + 1;
       }
+    }
+
+    final pros = <Professional>[];
+
+    for (final row in rows) {
+      final profileId = row['profile_id']?.toString() ?? '';
+      final reviewCount = ratingCounts[profileId] ?? 0;
+      final avgRating = reviewCount > 0
+          ? (ratingTotals[profileId] ?? 0) / reviewCount
+          : 0.0;
 
       row['avg_rating'] = avgRating;
       row['review_count'] = reviewCount;
+
       pros.add(Professional.fromSupabase(row));
     }
 
     if (!mounted) return;
+
     setState(() {
       _professionals = pros;
     });
