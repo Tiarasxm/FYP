@@ -95,13 +95,6 @@ const defaultFaq = {
   ],
 };
 
-const defaultReview = {
-  reviewer_name: "Luke H.",
-  rating: 5,
-  feedback:
-    "This app is like having a personal trainer with you 24/7. The guided workouts are clear and easy to follow, and the progress tracking keeps me accountable.",
-};
-
 const featureIcons = [
   "/images/icon-personalized.png",
   "/images/icon-workout.png",
@@ -116,7 +109,7 @@ export default function HomePage() {
   const [features, setFeatures] = useState(defaultFeatures);
   const [subscription, setSubscription] = useState(defaultSubscription);
   const [faq, setFaq] = useState(defaultFaq);
-  const [featuredReviews, setFeaturedReviews] = useState([]);
+  const [approvedFeedback, setApprovedFeedback] = useState([]);
   const [currentReviewIndex, setCurrentReviewIndex] = useState(0);
   const [viewerLoading, setViewerLoading] = useState(true);
   const [viewerLoggedIn, setViewerLoggedIn] = useState(false);
@@ -144,31 +137,32 @@ export default function HomePage() {
     setFaq(contentMap.faq || defaultFaq);
   }
 
-  async function fetchFeaturedReviews() {
+  async function fetchApprovedFeedback() {
     const { data, error } = await supabase
-      .from("reviews")
+      .from("app_feedback")
       .select(
-        "review_id, rating, feedback, submitted_at, featured_on_website, profiles!reviews_reviewer_id_fkey(full_name)"
+        "feedback_id, rating, feedback_text, media_url, created_at, updated_at, profiles(full_name)"
       )
-      .eq("featured_on_website", true)
-      .order("submitted_at", { ascending: false })
+      .eq("status", "approved")
+      .order("updated_at", { ascending: false })
       .limit(6);
 
     if (error) {
-      console.error("Fetch featured reviews error:", error.message);
+      console.error("Fetch approved feedback error:", error.message);
       return;
     }
 
-    const formattedReviews = (data || []).map((review) => ({
-      id: review.review_id,
-      reviewer_name: review.profiles?.full_name || "-",
-      rating: review.rating,
-      feedback: review.feedback,
-      submitted_at: review.submitted_at,
-      featured_on_website: review.featured_on_website,
+    const formattedFeedback = (data || []).map((row) => ({
+      id: row.feedback_id,
+      reviewer_name: row.profiles?.full_name || "-",
+      rating: row.rating,
+      feedback: row.feedback_text,
+      media_url: row.media_url,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
     }));
 
-    setFeaturedReviews(formattedReviews);
+    setApprovedFeedback(formattedFeedback);
   }
 
   async function fetchViewer() {
@@ -196,31 +190,30 @@ export default function HomePage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- setState calls happen after network awaits, not synchronously
     fetchWebsiteContent();
-    fetchFeaturedReviews();
+    fetchApprovedFeedback();
     fetchViewer();
   }, []);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- resets the carousel index when the review list changes
     setCurrentReviewIndex(0);
-  }, [featuredReviews.length]);
+  }, [approvedFeedback.length]);
 
   useEffect(() => {
-    if (featuredReviews.length <= 1) {
+    if (approvedFeedback.length <= 1) {
       return;
     }
 
     const timer = setInterval(() => {
       setCurrentReviewIndex((currentIndex) =>
-        currentIndex === featuredReviews.length - 1 ? 0 : currentIndex + 1
+        currentIndex === approvedFeedback.length - 1 ? 0 : currentIndex + 1
       );
     }, 4000);
 
     return () => clearInterval(timer);
-  }, [featuredReviews.length]);
+  }, [approvedFeedback.length]);
 
-  const testimonialReviews =
-    featuredReviews.length > 0 ? featuredReviews : [defaultReview];
+  const testimonialReviews = approvedFeedback;
 
   const mainReview =
     testimonialReviews[currentReviewIndex] || testimonialReviews[0];
@@ -397,51 +390,57 @@ export default function HomePage() {
 
             <h2 className="text-[24px] font-bold mt-2">What Users Say</h2>
 
-            <p className="mt-8 text-[16px] leading-7 min-h-[70px]">
-              “{mainReview?.feedback || defaultReview.feedback}”
-            </p>
+            {approvedFeedback.length > 0 ? (
+              <>
+                <p className="mt-8 text-[16px] leading-7 min-h-[70px]">
+                  “{mainReview?.feedback}”
+                </p>
 
-            <p className="mt-6 text-gray-400">
-              {mainReview?.reviewer_name || defaultReview.reviewer_name}
-            </p>
+                <p className="mt-6 text-gray-400">{mainReview?.reviewer_name}</p>
 
-            <p className="text-yellow-400 text-[28px] mt-2">
-              {renderStars(mainReview?.rating || defaultReview.rating)}
-            </p>
+                <p className="text-yellow-400 text-[28px] mt-2">
+                  {renderStars(mainReview?.rating)}
+                </p>
 
-            <div className="flex justify-center items-center gap-3 mt-8">
-              <button
-                type="button"
-                onClick={goToPreviousReview}
-                className="text-[#6c5cff] text-[24px] font-bold px-2"
-                aria-label="Previous review"
-              >
-                ‹
-              </button>
+                <div className="flex justify-center items-center gap-3 mt-8">
+                  <button
+                    type="button"
+                    onClick={goToPreviousReview}
+                    className="text-[#6c5cff] text-[24px] font-bold px-2"
+                    aria-label="Previous review"
+                  >
+                    ‹
+                  </button>
 
-              {testimonialReviews.slice(0, 6).map((review, index) => (
-                <button
-                  key={review.id || index}
-                  type="button"
-                  onClick={() => setCurrentReviewIndex(index)}
-                  className={
-                    index === currentReviewIndex
-                      ? "w-5 h-2 bg-[#6c5cff] rounded-full"
-                      : "w-2 h-2 bg-gray-300 rounded-full"
-                  }
-                  aria-label={`Show review ${index + 1}`}
-                />
-              ))}
+                  {testimonialReviews.slice(0, 6).map((review, index) => (
+                    <button
+                      key={review.id || index}
+                      type="button"
+                      onClick={() => setCurrentReviewIndex(index)}
+                      className={
+                        index === currentReviewIndex
+                          ? "w-5 h-2 bg-[#6c5cff] rounded-full"
+                          : "w-2 h-2 bg-gray-300 rounded-full"
+                      }
+                      aria-label={`Show review ${index + 1}`}
+                    />
+                  ))}
 
-              <button
-                type="button"
-                onClick={goToNextReview}
-                className="text-[#6c5cff] text-[24px] font-bold px-2"
-                aria-label="Next review"
-              >
-                ›
-              </button>
-            </div>
+                  <button
+                    type="button"
+                    onClick={goToNextReview}
+                    className="text-[#6c5cff] text-[24px] font-bold px-2"
+                    aria-label="Next review"
+                  >
+                    ›
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="mt-8 text-[16px] leading-7 min-h-[70px] text-gray-400">
+                No reviews yet.
+              </p>
+            )}
           </div>
 
           <div className="hidden md:flex gap-3 -mr-8">
