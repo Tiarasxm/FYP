@@ -4,7 +4,6 @@ export const defaultHero = {
   subtitle:
     "Structured workout plans, nutrition tracking and progress insights in one app, with guidance from certified fitness professionals when you need it.",
   image_url: null,
-  avatar_group_url: null,
 };
 
 export const defaultFeatures = {

@@ -223,27 +223,6 @@ export default function AdminWebsitePage() {
                     onReset={() => setHero({ ...hero, image_url: null })}
                   />
 
-                  <ImageField
-                    label="Avatar Group"
-                    value={hero.avatar_group_url}
-                    defaultSrc="/images/avatar-group.png"
-                    uploading={!!uploadingFields.heroAvatar}
-                    error={uploadErrors.heroAvatar}
-                    onUpload={(file) =>
-                      handleImageUpload({
-                        file,
-                        folder: "hero",
-                        trackingKey: "heroAvatar",
-                        contentKey: "avatar_group_url",
-                        section: hero,
-                        setSection: setHero,
-                      })
-                    }
-                    onReset={() =>
-                      setHero({ ...hero, avatar_group_url: null })
-                    }
-                  />
-
                   <SectionActions
                     onSave={() => saveSection("hero", hero)}
                     onReset={() => resetSection("hero", defaultHero, setHero)}

@@ -141,24 +141,6 @@ export default function HomePage() {
             >
               Get Started Free <span className="ml-4">→</span>
             </Link>
-
-            <div className="mt-10 flex items-center gap-5">
-              <div className="relative w-[130px] h-[52px]">
-                <Image
-                  src={hero.avatar_group_url || "/images/avatar-group.png"}
-                  alt="Active users"
-                  fill
-                  className="object-contain"
-                />
-              </div>
-
-              <div>
-                <p className="text-[18px] font-bold">50K+</p>
-                <p className="text-[14px] text-gray-500">
-                  Monthly Active User
-                </p>
-              </div>
-            </div>
           </div>
 
           <div className="relative hidden md:block h-[500px]">
