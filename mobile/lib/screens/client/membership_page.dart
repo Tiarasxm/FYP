@@ -20,12 +20,79 @@ class _MembershipPageState extends State<MembershipPage> {
   DateTime? _priorityUntil;
   bool _isCancelling = false;
 
+  static const String _defaultFreePrice = '\$0';
+  static const String _defaultFreeDescription =
+      'Access basic workout, nutrition, progress tracking and social features.';
+  static const String _defaultPriorityPrice = '\$7.99 /month';
+  static const String _defaultPriorityDescription =
+      'Unlock advanced features, additional insights and enhanced membership benefits.';
+
+  String _freePrice = _defaultFreePrice;
+  String _freeDescription = _defaultFreeDescription;
+  String _priorityPrice = _defaultPriorityPrice;
+  String _priorityDescription = _defaultPriorityDescription;
+
   final SupabaseClient supabase = Supabase.instance.client;
 
   @override
   void initState() {
     super.initState();
     _loadMembership();
+  }
+
+  Future<void> _loadPlanContent() async {
+    try {
+      final response = await supabase
+          .from('website_content')
+          .select('content')
+          .eq('section_key', 'subscription')
+          .maybeSingle();
+
+      final content = response?['content'];
+      final plans = content is Map ? content['plans'] : null;
+
+      if (plans is! List) return;
+
+      String? freePrice;
+      String? freeDescription;
+      String? priorityPrice;
+      String? priorityDescription;
+
+      for (final plan in plans) {
+        if (plan is! Map) continue;
+
+        final title = plan['title']?.toString().trim().toLowerCase();
+        final price = plan['price']?.toString();
+        final description = plan['description']?.toString();
+
+        if (title == 'free') {
+          freePrice = price;
+          freeDescription = description;
+        } else if (title == 'priority') {
+          priorityPrice = price;
+          priorityDescription = description;
+        }
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        if (freePrice != null && freePrice.isNotEmpty) {
+          _freePrice = freePrice;
+        }
+        if (freeDescription != null && freeDescription.isNotEmpty) {
+          _freeDescription = freeDescription;
+        }
+        if (priorityPrice != null && priorityPrice.isNotEmpty) {
+          _priorityPrice = '$priorityPrice /month';
+        }
+        if (priorityDescription != null && priorityDescription.isNotEmpty) {
+          _priorityDescription = priorityDescription;
+        }
+      });
+    } catch (_) {
+      // Keep the hardcoded fallback values so the screen never renders blank.
+    }
   }
 
   Future<void> _loadMembership() async {
@@ -41,6 +108,7 @@ class _MembershipPageState extends State<MembershipPage> {
       }
 
       await MembershipService.ensureCurrentPriorityStatus();
+      await _loadPlanContent();
 
       final response = await supabase
           .from('profiles')
@@ -335,9 +403,8 @@ class _MembershipPageState extends State<MembershipPage> {
 
                     MembershipCard(
                       title: "Free",
-                      price: "\$0",
-                      description:
-                          "Access basic workout, nutrition, progress tracking and social features.",
+                      price: _freePrice,
+                      description: _freeDescription,
                       isCurrentPlan: currentPlan == 'free',
                       isCancelling: _isCancelling,
                       buttonText: currentPlan == 'free'
@@ -355,9 +422,8 @@ class _MembershipPageState extends State<MembershipPage> {
 
                     MembershipCard(
                       title: "Priority",
-                      price: "\$7.99 /month",
-                      description:
-                          "Unlock advanced features, additional insights and enhanced membership benefits.",
+                      price: _priorityPrice,
+                      description: _priorityDescription,
                       isCurrentPlan: currentPlan == 'priority',
                       isCancelling: _isCancelling,
                       nextBillingDate: _priorityUntil != null
