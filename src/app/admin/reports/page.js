@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import AdminSidebar from "../components/AdminSidebar";
 import { supabase } from "@/lib/supabase";
 import { createAuditLog } from "@/lib/adminAuditLog";
@@ -48,7 +49,39 @@ export default function AdminReportsPage() {
       return;
     }
 
-    setReports(data || []);
+    const rows = data || [];
+
+    const profileIds = Array.from(
+      new Set(
+        rows.flatMap((row) => [row.reporter_id, row.reported_user_id]).filter(Boolean)
+      )
+    );
+
+    let profileNames = {};
+
+    if (profileIds.length > 0) {
+      const { data: profiles, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", profileIds);
+
+      if (profilesError) {
+        console.error("Fetch report profiles error:", profilesError.message);
+      } else {
+        profileNames = Object.fromEntries(
+          (profiles || []).map((profile) => [profile.id, profile.full_name])
+        );
+      }
+    }
+
+    setReports(
+      rows.map((row) => ({
+        ...row,
+        reporter_name: profileNames[row.reporter_id] || null,
+        reported_user_name: profileNames[row.reported_user_id] || null,
+      }))
+    );
+
     setLoading(false);
   }
 
@@ -82,20 +115,20 @@ export default function AdminReportsPage() {
     setSelectedReport(null);
   }
 
-  async function handleRemove(report) {
-    const isComment = report.content_type?.toLowerCase() === "comment";
-    const actionText = isComment
-      ? "Remove this comment? This will permanently delete it and cannot be undone."
-      : "Remove this post? This will permanently delete it and cannot be undone.";
+  async function handleRemovePost(report) {
+    if (!report.post_id) {
+      alert("This report has no linked content to remove.");
+      return;
+    }
 
-    const confirmed = window.confirm(actionText);
+    const confirmed = window.confirm(
+      "Remove this post? This will permanently delete it and cannot be undone."
+    );
 
     if (!confirmed) return;
 
-    const contentTable = isComment ? "post_comments" : "posts";
-
     const { data: deletedContent, error: deleteError } = await supabase
-      .from(contentTable)
+      .from("posts")
       .delete()
       .eq("id", report.post_id)
       .select();
@@ -106,9 +139,7 @@ export default function AdminReportsPage() {
     }
 
     if (!deletedContent || deletedContent.length === 0) {
-      alert(
-        "Failed to remove content: no matching post or comment was found."
-      );
+      alert("Failed to remove content: no matching post was found.");
       return;
     }
 
@@ -125,9 +156,9 @@ export default function AdminReportsPage() {
     }
 
     await createAuditLog({
-      action: isComment ? "remove_comment" : "remove_post",
+      action: "remove_post",
       target: report.report_id,
-      targetType: report.content_type?.toLowerCase() || "content",
+      targetType: "post",
     });
 
     setReports((currentReports) =>
@@ -141,7 +172,10 @@ export default function AdminReportsPage() {
     let result = [...reports];
 
     if (typeFilter !== "All Type") {
-      result = result.filter((report) => report.content_type === typeFilter);
+      result = result.filter(
+        (report) =>
+          report.content_type?.toLowerCase() === typeFilter.toLowerCase()
+      );
     }
 
     if (timeFilter !== "All Time") {
@@ -201,8 +235,8 @@ export default function AdminReportsPage() {
                 style={styles.select}
               >
                 <option>All Type</option>
-                <option>Comment</option>
                 <option>Post</option>
+                <option>User</option>
               </select>
 
               <select
@@ -288,15 +322,17 @@ export default function AdminReportsPage() {
           report={selectedReport}
           onClose={() => setSelectedReport(null)}
           onDismiss={handleDismiss}
-          onRemove={handleRemove}
+          onRemovePost={handleRemovePost}
         />
       )}
     </main>
   );
 }
 
-function ReportDetailPanel({ report, onClose, onDismiss, onRemove }) {
-  const isComment = report.content_type?.toLowerCase() === "comment";
+function ReportDetailPanel({ report, onClose, onDismiss, onRemovePost }) {
+  const contentType = report.content_type?.toLowerCase();
+  const isPost = contentType === "post";
+  const isUser = contentType === "user";
 
   return (
     <div style={styles.overlay}>
@@ -306,11 +342,18 @@ function ReportDetailPanel({ report, onClose, onDismiss, onRemove }) {
         </button>
 
         <p style={styles.detailLine}>
-          <strong>Reporter:</strong> {shortId(report.reporter_id)}
+          <strong>Reported:</strong>{" "}
+          {isPost ? "Reported post" : isUser ? "Reported user" : report.content_type}
         </p>
 
         <p style={styles.detailLine}>
-          <strong>Content Type:</strong> {report.content_type}
+          <strong>Reporter:</strong>{" "}
+          {report.reporter_name || shortId(report.reporter_id)}
+        </p>
+
+        <p style={styles.detailLine}>
+          <strong>Reported User:</strong>{" "}
+          {report.reported_user_name || shortId(report.reported_user_id)}
         </p>
 
         <p style={styles.detailLine}>
@@ -334,13 +377,30 @@ function ReportDetailPanel({ report, onClose, onDismiss, onRemove }) {
             Dismiss
           </button>
 
-          <button
-            type="button"
-            onClick={() => onRemove(report)}
-            style={styles.removeButton}
-          >
-            {isComment ? "Remove Comment" : "Remove Post"}
-          </button>
+          {isPost && (
+            <button
+              type="button"
+              onClick={() => onRemovePost(report)}
+              style={styles.removeButton}
+            >
+              Remove Post
+            </button>
+          )}
+
+          {isUser && (
+            <Link
+              href="/admin/users"
+              style={{
+                ...styles.removeButton,
+                textDecoration: "none",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              View User
+            </Link>
+          )}
         </div>
       </aside>
     </div>
