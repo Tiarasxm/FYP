@@ -6,6 +6,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/client/pill_tag.dart';
 import '../../widgets/client/sub_screen_scaffold.dart';
 import 'chat_screen.dart';
+import 'plan_detail_screen.dart';
 import 'reviews_screen.dart';
 
 class ProfessionalDetailScreen extends StatefulWidget {
@@ -22,11 +23,15 @@ class _ProfessionalDetailScreenState extends State<ProfessionalDetailScreen> {
   RealtimeChannel? _reviewsChannel;
   RealtimeChannel? _profileChannel;
 
+  List<Map<String, dynamic>> _plans = [];
+  bool _isLoadingPlans = true;
+
   @override
   void initState() {
     super.initState();
     professional = widget.professional;
     _loadRating();
+    _loadPlans();
     _subscribeToReviews();
     _subscribeToProfileChanges();
   }
@@ -168,6 +173,38 @@ class _ProfessionalDetailScreenState extends State<ProfessionalDetailScreen> {
     }
   }
 
+  Future<void> _loadPlans() async {
+    final profId = professional.profileId;
+
+    if (profId == null) {
+      setState(() => _isLoadingPlans = false);
+      return;
+    }
+
+    try {
+      final data = await Supabase.instance.client
+          .from('free_plans')
+          .select(
+            'free_plan_id, plan_name, duration_weeks, tag1, tag2, tag3, visibility, status',
+          )
+          .eq('professional_id', profId)
+          .ilike('visibility', 'public')
+          .not('status', 'in', ['draft', 'archived'])
+          .order('created_at', ascending: false);
+
+      if (!mounted) return;
+
+      setState(() {
+        _plans = List<Map<String, dynamic>>.from(data as List);
+        _isLoadingPlans = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading professional plans: $e');
+      if (!mounted) return;
+      setState(() => _isLoadingPlans = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return SubScreenScaffold(
@@ -237,10 +274,40 @@ class _ProfessionalDetailScreenState extends State<ProfessionalDetailScreen> {
           style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 12),
-        _planCard('30-Day Full Body Fat Burn'),
-        const SizedBox(height: 12),
-        _planCard('30-Day Upper Body Strength'),
+        _plansSection(),
       ],
+    );
+  }
+
+  Widget _plansSection() {
+    if (_isLoadingPlans) {
+      return const Center(
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+
+    if (_plans.isEmpty) {
+      return Text(
+        'No public plans available.',
+        style: TextStyle(
+          fontSize: 13,
+          color: AppColors.textSecondary,
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: _plans.map((plan) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _planCard(plan),
+        );
+      }).toList(),
     );
   }
 
@@ -298,47 +365,67 @@ class _ProfessionalDetailScreenState extends State<ProfessionalDetailScreen> {
     return Container(width: 1, height: 30, color: AppColors.border);
   }
 
-  Widget _planCard(String title) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.cardMuted,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
+  Widget _planCard(Map<String, dynamic> plan) {
+    final title = plan['plan_name']?.toString() ?? 'Untitled Plan';
+    final durationWeeks = (plan['duration_weeks'] as num?)?.toInt() ?? 4;
+    final days = durationWeeks * 7;
+    final tags = [plan['tag1'], plan['tag2'], plan['tag3']]
+        .whereType<String>()
+        .where((tag) => tag.trim().isNotEmpty)
+        .toList();
+
+    return GestureDetector(
+      onTap: () {
+        final planId = plan['free_plan_id']?.toString();
+        if (planId == null || planId.isEmpty) return;
+
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => PlanDetailScreen(
+              planId: planId,
+              title: title,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.cardMuted,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-              ),
-              const Icon(Icons.bookmark_border,
-                  size: 20, color: AppColors.textMuted),
-            ],
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            '30 Days',
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 10),
-          const Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              PillTag('Full Body'),
-              PillTag('Fat Loss'),
-              PillTag('Strength'),
-            ],
-          ),
-        ],
+                const Icon(Icons.bookmark_border,
+                    size: 20, color: AppColors.textMuted),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '$days Days',
+              style: const TextStyle(
+                  fontSize: 12, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: tags.map((tag) => PillTag(tag)).toList(),
+            ),
+          ],
+        ),
       ),
     );
   }
