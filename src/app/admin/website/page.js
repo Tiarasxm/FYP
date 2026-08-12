@@ -24,9 +24,6 @@ export default function AdminWebsitePage() {
   const [subscription, setSubscription] = useState(defaultSubscription);
   const [faq, setFaq] = useState(defaultFaq);
 
-  const [featuredReviews, setFeaturedReviews] = useState([]);
-  const [availableReviews, setAvailableReviews] = useState([]);
-
   const [uploadingFields, setUploadingFields] = useState({});
   const [uploadErrors, setUploadErrors] = useState({});
 
@@ -57,41 +54,6 @@ export default function AdminWebsitePage() {
     setLoading(false);
   }
 
-  async function fetchReviews() {
-    const { data, error } = await supabase
-      .from("reviews")
-      .select(
-        "review_id, rating, feedback, media_path, submitted_at, ai_analysis, featured_on_website, profiles!reviews_reviewer_id_fkey(full_name)"
-      )
-      .order("submitted_at", { ascending: false });
-
-    if (error) {
-      console.error("Fetch reviews error:", error.message);
-      return;
-    }
-
-    const formattedReviews = (data || []).map((review) => ({
-      id: review.review_id,
-      reviewer_name: review.profiles?.full_name || "-",
-      rating: review.rating,
-      feedback: review.feedback,
-      media_path: review.media_path,
-      submitted_at: review.submitted_at,
-      ai_analysis: review.ai_analysis,
-      featured_on_website: review.featured_on_website,
-    }));
-
-    const positiveReviews = formattedReviews.filter(
-      (review) =>
-        review.featured_on_website !== true &&
-        review.ai_analysis === "positive" &&
-        Number(review.rating) >= 4
-    );
-
-    setFeaturedReviews(formattedReviews.filter((review) => review.featured_on_website));
-    setAvailableReviews(positiveReviews);
-  }
-
   useEffect(() => {
     const isAdminLoggedIn = localStorage.getItem("adminLoggedIn");
 
@@ -103,7 +65,6 @@ export default function AdminWebsitePage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous local admin-auth gate check, not fetched data
     setAllowed(true);
     fetchWebsiteContent();
-    fetchReviews();
   }, [router]);
 
   async function saveSection(sectionKey, content) {
@@ -189,46 +150,6 @@ export default function AdminWebsitePage() {
 
     setSection({ ...section, [contentKey]: data.publicUrl });
     setUploadingFields((prev) => ({ ...prev, [trackingKey]: false }));
-  }
-
-  async function addReview(review) {
-    const { error } = await supabase
-      .from("reviews")
-      .update({ featured_on_website: true })
-      .eq("review_id", review.id);
-
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    await createAuditLog({
-      action: "add_featured_review",
-      target: review.id,
-      targetType: "review",
-    });
-
-    fetchReviews();
-  }
-
-  async function removeReview(review) {
-    const { error } = await supabase
-      .from("reviews")
-      .update({ featured_on_website: false })
-      .eq("review_id", review.id);
-
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    await createAuditLog({
-      action: "remove_featured_review",
-      target: review.id,
-      targetType: "review",
-    });
-
-    fetchReviews();
   }
 
   if (!allowed) {
@@ -536,49 +457,6 @@ export default function AdminWebsitePage() {
 
               <AccordionHeader
                 number="4."
-                title="Testimonials Section"
-                open={openSection === "testimonials"}
-                onClick={() =>
-                  setOpenSection(
-                    openSection === "testimonials" ? "" : "testimonials"
-                  )
-                }
-              />
-
-              {openSection === "testimonials" && (
-                <section style={styles.sectionBody}>
-                  <h3 style={styles.reviewTitle}>
-                    Featured on Website{" "}
-                    <span style={styles.muted}>
-                      (Must be 6)
-                    </span>
-                  </h3>
-
-                  <ReviewTable
-                    reviews={featuredReviews}
-                    actionLabel="Remove"
-                    onAction={removeReview}
-                  />
-
-                  <h3 style={{ ...styles.reviewTitle, marginTop: "46px" }}>
-                    AI-Filtered Review{" "}
-                    <span style={styles.muted}>
-                      ({availableReviews.length})
-                    </span>
-                  </h3>
-
-                  <ReviewTable
-                    reviews={availableReviews}
-                    actionLabel="Add"
-                    onAction={addReview}
-                  />
-
-                  <UpdateButton onClick={() => alert("Testimonials updated.")} />
-                </section>
-              )}
-
-              <AccordionHeader
-                number="5."
                 title="FAQ Section"
                 open={openSection === "faq"}
                 onClick={() =>
@@ -735,14 +613,6 @@ function ImageField({
   );
 }
 
-function UpdateButton({ onClick }) {
-  return (
-    <button type="button" onClick={onClick} style={styles.updateButton}>
-      Update
-    </button>
-  );
-}
-
 function SectionActions({ onSave, onReset }) {
   return (
     <div style={styles.actionsRow}>
@@ -759,88 +629,6 @@ function SectionActions({ onSave, onReset }) {
       </button>
     </div>
   );
-}
-
-function ReviewTable({ reviews, actionLabel, onAction }) {
-  return (
-    <div>
-      <div style={styles.reviewHeader}>
-        <div style={{ flex: 0.8 }}>Review ID</div>
-        <div style={{ flex: 1 }}>Name</div>
-        <div style={{ flex: 0.9 }}>Rating</div>
-        <div style={{ flex: 1.6 }}>Feedback</div>
-        <div style={{ flex: 1 }}>Submitted</div>
-        <div style={{ flex: 0.8 }}>Media</div>
-        <div style={{ flex: 0.8 }}></div>
-      </div>
-
-      {reviews.length > 0 ? (
-        reviews.map((review) => (
-          <div key={review.id} style={styles.reviewRow}>
-            <div style={{ flex: 0.8 }}>{shortId(review.id)}</div>
-            <div style={{ flex: 1 }}>{review.reviewer_name || "-"}</div>
-
-            <div style={{ flex: 0.9 }}>
-              <span style={styles.starText}>{renderStars(review.rating)}</span>
-              <br />
-              <span style={styles.muted}>({review.rating}/5)</span>
-            </div>
-
-            <div style={{ flex: 1.6 }}>
-              {truncateText(review.feedback || "-", 42)}
-            </div>
-
-            <div style={{ flex: 1 }}>{formatDateTime(review.submitted_at)}</div>
-
-            <div style={{ flex: 0.8 }}>
-              <button style={styles.smallButton}>View</button>
-            </div>
-
-            <div style={{ flex: 0.8 }}>
-              <button
-                type="button"
-                onClick={() => onAction(review)}
-                style={styles.smallButton}
-              >
-                {actionLabel}
-              </button>
-            </div>
-          </div>
-        ))
-      ) : (
-        <div style={styles.emptyText}>No reviews found.</div>
-      )}
-    </div>
-  );
-}
-
-function shortId(id) {
-  if (!id) return "-";
-  return id.slice(0, 4);
-}
-
-function renderStars(rating) {
-  const value = Number(rating || 0);
-  return "★".repeat(value) + "☆".repeat(5 - value);
-}
-
-function truncateText(text, maxLength) {
-  if (!text) return "-";
-  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
-}
-
-function formatDateTime(value) {
-  if (!value) return "-";
-
-  const date = new Date(value);
-
-  return date.toLocaleString("en-US", {
-    month: "numeric",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
 }
 
 const styles = {
@@ -1009,50 +797,5 @@ const styles = {
   planTitle: {
     fontSize: "14px",
     margin: "0 0 12px",
-  },
-
-  reviewTitle: {
-    fontSize: "14px",
-    margin: "0 0 18px",
-  },
-
-  reviewHeader: {
-    display: "flex",
-    alignItems: "center",
-    borderBottom: "1px solid #dddddd",
-    padding: "10px 0",
-    color: "#888888",
-    fontSize: "11px",
-  },
-
-  reviewRow: {
-    display: "flex",
-    alignItems: "center",
-    minHeight: "54px",
-    borderBottom: "1px solid #e5e5e5",
-    fontSize: "11px",
-  },
-
-  starText: {
-    color: "#f5b800",
-    letterSpacing: "1px",
-  },
-
-  smallButton: {
-    minWidth: "58px",
-    height: "28px",
-    border: "none",
-    borderRadius: "16px",
-    backgroundColor: "#efefef",
-    color: "#222222",
-    fontSize: "11px",
-    fontWeight: "700",
-    cursor: "pointer",
-  },
-
-  emptyText: {
-    padding: "20px 0",
-    color: "#888888",
-    fontSize: "12px",
   },
 };
