@@ -298,7 +298,7 @@ export default function AdminDashboardPage() {
             </p>
 
             <button
-              onClick={() => router.push("/admin/pending-professionals")}
+              onClick={() => router.push("/admin/professionals?status=pending")}
               style={styles.reviewButton}
             >Review</button>
           </div>

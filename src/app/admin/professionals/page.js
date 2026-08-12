@@ -28,6 +28,12 @@ export default function AdminProfessionalsPage() {
       return;
     }
 
+    const params = new URLSearchParams(window.location.search);
+
+    if (params.get("status")?.toLowerCase() === "pending") {
+      setStatusFilter("Pending");
+    }
+
     setAllowed(true);
     fetchProfessionals();
   }, [router]);
@@ -82,7 +88,7 @@ export default function AdminProfessionalsPage() {
     event.stopPropagation();
 
     if (professional.status === "Pending") {
-      router.push("/admin/pending-professionals");
+      setSelectedProfessional(professional);
       return;
     }
 
@@ -138,6 +144,94 @@ export default function AdminProfessionalsPage() {
         rawStatus: nextStatus,
       }));
     }
+  }
+
+  async function handleApprove(professional) {
+    const confirmed = window.confirm(`Approve ${professional.name}?`);
+
+    if (!confirmed) return;
+
+    const { error: proError } = await supabase
+      .from("fitness_professional")
+      .update({
+        approved: true,
+      })
+      .eq("profile_id", professional.id);
+
+    if (proError) {
+      alert(proError.message);
+      return;
+    }
+
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update({
+        status: "active",
+      })
+      .eq("id", professional.id);
+
+    if (profileError) {
+      alert(profileError.message);
+      return;
+    }
+
+    await createAuditLog({
+      action: "approve_pro",
+      target: professional.id,
+      targetType: "professional",
+    });
+
+    setProfessionals((currentProfessionals) =>
+      currentProfessionals.map((item) =>
+        item.id === professional.id
+          ? { ...item, status: "Active", rawStatus: "active", approved: true }
+          : item
+      )
+    );
+
+    setSelectedProfessional(null);
+  }
+
+  async function handleReject(professional) {
+    const confirmed = window.confirm(`Reject ${professional.name}?`);
+
+    if (!confirmed) return;
+
+    const { error: proError } = await supabase
+      .from("fitness_professional")
+      .update({
+        approved: false,
+      })
+      .eq("profile_id", professional.id);
+
+    if (proError) {
+      alert(proError.message);
+      return;
+    }
+
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update({
+        status: "rejected",
+      })
+      .eq("id", professional.id);
+
+    if (profileError) {
+      alert(profileError.message);
+      return;
+    }
+
+    await createAuditLog({
+      action: "reject_pro",
+      target: professional.id,
+      targetType: "professional",
+    });
+
+    setProfessionals((currentProfessionals) =>
+      currentProfessionals.filter((item) => item.id !== professional.id)
+    );
+
+    setSelectedProfessional(null);
   }
 
   function handleViewDocument(professional) {
@@ -334,13 +428,21 @@ export default function AdminProfessionalsPage() {
           professional={selectedProfessional}
           onClose={() => setSelectedProfessional(null)}
           onViewDocument={handleViewDocument}
+          onApprove={handleApprove}
+          onReject={handleReject}
         />
       )}
     </main>
   );
 }
 
-function ProfessionalDetailPanel({ professional, onClose, onViewDocument }) {
+function ProfessionalDetailPanel({
+  professional,
+  onClose,
+  onViewDocument,
+  onApprove,
+  onReject,
+}) {
   return (
     <div style={styles.overlay}>
       <aside style={styles.detailCard}>
@@ -397,6 +499,26 @@ function ProfessionalDetailPanel({ professional, onClose, onViewDocument }) {
 
         {professional.certificateName && (
           <p style={styles.fileNameText}>{professional.certificateName}</p>
+        )}
+
+        {professional.status === "Pending" && (
+          <div style={styles.detailActions}>
+            <button
+              type="button"
+              onClick={() => onReject(professional)}
+              style={styles.rejectButton}
+            >
+              Reject
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onApprove(professional)}
+              style={styles.approveButton}
+            >
+              Approve
+            </button>
+          </div>
         )}
       </aside>
     </div>
@@ -739,5 +861,34 @@ const styles = {
     fontSize: "11px",
     color: "#777777",
     wordBreak: "break-word",
+  },
+
+  detailActions: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "10px",
+    marginTop: "24px",
+  },
+
+  rejectButton: {
+    height: "44px",
+    borderRadius: "24px",
+    border: "1.5px solid #6658ff",
+    backgroundColor: "#ffffff",
+    color: "#6658ff",
+    fontSize: "15px",
+    fontWeight: "700",
+    cursor: "pointer",
+  },
+
+  approveButton: {
+    height: "44px",
+    borderRadius: "24px",
+    border: "none",
+    backgroundColor: "#6658ff",
+    color: "#ffffff",
+    fontSize: "15px",
+    fontWeight: "700",
+    cursor: "pointer",
   },
 };
