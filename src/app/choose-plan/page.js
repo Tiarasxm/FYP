@@ -1,46 +1,51 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import Navbar from "@/app/components/Navbar";
+import { defaultSubscription } from "@/lib/defaultWebsiteContent";
 
-const plans = [
-  {
-    id: "free",
-    title: "Free",
-    price: "$0",
-    description: "Everything you need to start training, at no cost.",
-    features: [
-      "Public workout plans",
-      "Workout tracking",
-      "Meal and water logging",
-      "Community feed",
-      "Progress analytics",
-    ],
-    premium: false,
-  },
-  {
-    id: "priority",
-    title: "Priority",
-    price: "$7.99",
-    description:
-      "Unlock every plan plus direct support from certified fitness professionals.",
-    features: [
-      "Everything in Free",
-      "All workout plans including private",
-      "Message fitness professionals",
-      "Personalised plans on request",
-      "Priority support",
-    ],
-    premium: true,
-  },
-];
+function getPlanKind(title) {
+  const normalized = (title || "").trim().toLowerCase();
+
+  if (normalized === "free") {
+    return "free";
+  }
+
+  if (normalized === "priority") {
+    return "priority";
+  }
+
+  return null;
+}
 
 export default function ChoosePlanPage() {
   const router = useRouter();
+  const [subscription, setSubscription] = useState(defaultSubscription);
+  const [contentLoading, setContentLoading] = useState(true);
   const [selected, setSelected] = useState("free");
   const [loading, setLoading] = useState(false);
+
+  async function fetchSubscriptionContent() {
+    const { data, error } = await supabase
+      .from("website_content")
+      .select("content")
+      .eq("section_key", "subscription")
+      .maybeSingle();
+
+    if (error) {
+      console.error("Fetch subscription content error:", error.message);
+    }
+
+    setSubscription(data?.content || defaultSubscription);
+    setContentLoading(false);
+  }
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- setState calls happen after network awaits, not synchronously
+    fetchSubscriptionContent();
+  }, []);
 
   async function handleContinue() {
     setLoading(true);
@@ -125,58 +130,68 @@ export default function ChoosePlanPage() {
             Choose a plan to continue
           </h2>
 
-          <div className="mt-12 flex flex-col md:flex-row justify-center gap-8">
-            {plans.map((plan) => (
-              <button
-                key={plan.id}
-                type="button"
-                onClick={() => setSelected(plan.id)}
-                className={`w-[310px] min-h-[390px] bg-white rounded-[22px] p-8 text-left transition-all ${
-                  selected === plan.id
-                    ? "border-2 border-[#6c5cff] shadow-md"
-                    : plan.premium
-                    ? "border-2 border-gray-200"
-                    : "border-2 border-transparent"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <h3 className="text-[22px] font-bold">{plan.title}</h3>
-                  {selected === plan.id && (
-                    <span className="w-5 h-5 rounded-full bg-[#6c5cff] flex items-center justify-center">
-                      <CheckIcon />
-                    </span>
-                  )}
-                </div>
+          {contentLoading ? (
+            <p className="mt-12 text-gray-500">Loading plans...</p>
+          ) : (
+            <div className="mt-12 flex flex-col md:flex-row justify-center gap-8">
+              {(subscription.plans || []).map((plan, index) => {
+                const kind = getPlanKind(plan.title);
+                const id = kind || `plan-${index}`;
+                const premium = kind === "priority";
 
-                <p className="mt-3 text-[12px] leading-5 text-gray-500">
-                  {plan.description}
-                </p>
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setSelected(id)}
+                    className={`w-[310px] min-h-[390px] bg-white rounded-[22px] p-8 text-left transition-all ${
+                      selected === id
+                        ? "border-2 border-[#6c5cff] shadow-md"
+                        : premium
+                        ? "border-2 border-gray-200"
+                        : "border-2 border-transparent"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-[22px] font-bold">{plan.title}</h3>
+                      {selected === id && (
+                        <span className="w-5 h-5 rounded-full bg-[#6c5cff] flex items-center justify-center">
+                          <CheckIcon />
+                        </span>
+                      )}
+                    </div>
 
-                <div className="mt-10 flex items-end">
-                  <p className="text-[32px] font-medium">{plan.price}</p>
-                  {plan.premium && (
-                    <span className="ml-2 mb-2 text-gray-500">/month</span>
-                  )}
-                </div>
+                    <p className="mt-3 text-[12px] leading-5 text-gray-500">
+                      {plan.description}
+                    </p>
 
-                <div className="h-px bg-gray-200 my-5" />
+                    <div className="mt-10 flex items-end">
+                      <p className="text-[32px] font-medium">{plan.price}</p>
+                      {premium && (
+                        <span className="ml-2 mb-2 text-gray-500">/month</span>
+                      )}
+                    </div>
 
-                <ul className="space-y-4 text-[13px]">
-                  {plan.features.map((feature, i) => (
-                    <li key={i} className="flex items-center gap-3">
-                      <TickIcon />
-                      <span>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-              </button>
-            ))}
-          </div>
+                    <div className="h-px bg-gray-200 my-5" />
+
+                    <ul className="space-y-4 text-[13px]">
+                      {(plan.features || []).map((feature, i) => (
+                        <li key={i} className="flex items-center gap-3">
+                          <TickIcon />
+                          <span>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           <button
             type="button"
             onClick={handleContinue}
-            disabled={loading}
+            disabled={loading || contentLoading}
             className="mt-12 px-14 h-[48px] bg-[#6c5cff] text-white rounded-xl text-[14px] font-semibold hover:bg-[#5b4bea] disabled:opacity-60"
           >
             {loading ? "Please wait..." : "Continue"}
