@@ -5,52 +5,12 @@ import { useRouter } from "next/navigation";
 import AdminSidebar from "../components/AdminSidebar";
 import { supabase } from "@/lib/supabase";
 import { createAuditLog } from "@/lib/adminAuditLog";
-
-const defaultHero = {
-  titleLine1: "",
-  titleLine2: "",
-  subtitle: "",
-  image_url: null,
-  avatar_group_url: null,
-};
-
-const defaultFeatures = {
-  sectionLabel: "Features",
-  title: "",
-  image_url: null,
-  items: Array.from({ length: 6 }, () => ({
-    title: "",
-    text: "",
-  })),
-};
-
-const defaultSubscription = {
-  sectionLabel: "Subscription Plans",
-  title: "",
-  plans: [
-    {
-      title: "Free",
-      price: "$0",
-      description: "",
-      features: ["", "", "", "", "", ""],
-    },
-    {
-      title: "Premium",
-      price: "$7.99",
-      description: "",
-      features: ["", "", "", "", "", ""],
-    },
-  ],
-};
-
-const defaultFaq = {
-  title: "FAQs",
-  items: [
-    { question: "", answer: "" },
-    { question: "", answer: "" },
-    { question: "", answer: "" },
-  ],
-};
+import {
+  defaultHero,
+  defaultFeatures,
+  defaultSubscription,
+  defaultFaq,
+} from "@/lib/defaultWebsiteContent";
 
 export default function AdminWebsitePage() {
   const router = useRouter();
