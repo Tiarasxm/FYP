@@ -15,8 +15,6 @@ export default function AdminReviewsPage() {
   const [tierFilter, setTierFilter] = useState("All Tier");
   const [ratingFilter, setRatingFilter] = useState("All Rating");
   const [sortFilter, setSortFilter] = useState("Latest");
-  const [mediaFilter, setMediaFilter] = useState("All Media");
-  const [analysisFilter, setAnalysisFilter] = useState("All Analysis");
   const [searchKeyword, setSearchKeyword] = useState("");
 
   const [selectedReview, setSelectedReview] = useState(null);
@@ -27,7 +25,7 @@ export default function AdminReviewsPage() {
     const { data, error } = await supabase
       .from("reviews")
       .select(
-        "review_id, reviewer_id, rating, feedback, media_path, ai_analysis, submitted_at, profiles!reviews_reviewer_id_fkey(full_name, email, user_type)"
+        "review_id, reviewer_id, rating, feedback, submitted_at, profiles!reviews_reviewer_id_fkey(full_name, email, user_type)"
       )
       .order("submitted_at", { ascending: false });
 
@@ -46,8 +44,6 @@ export default function AdminReviewsPage() {
       tier: review.profiles?.user_type || "-",
       rating: review.rating,
       feedback: review.feedback,
-      media_path: review.media_path,
-      ai_analysis: review.ai_analysis,
       submitted_at: review.submitted_at,
     }));
 
@@ -68,24 +64,6 @@ export default function AdminReviewsPage() {
     fetchReviews();
   }, [router]);
 
-  function handleViewMedia(review) {
-    if (!review.media_path) {
-      alert("No media uploaded.");
-      return;
-    }
-
-    const { data } = supabase.storage
-      .from("review-media")
-      .getPublicUrl(review.media_path);
-
-    if (!data?.publicUrl) {
-      alert("Unable to open media.");
-      return;
-    }
-
-    window.open(data.publicUrl, "_blank", "noopener,noreferrer");
-  }
-
   const filteredReviews = useMemo(() => {
     let result = [...reviews];
 
@@ -96,21 +74,6 @@ export default function AdminReviewsPage() {
     if (ratingFilter !== "All Rating") {
       const ratingNumber = Number(ratingFilter.replace(" Stars", ""));
       result = result.filter((review) => Number(review.rating) === ratingNumber);
-    }
-
-    if (mediaFilter === "With Media") {
-      result = result.filter((review) => review.media_path);
-    }
-
-    if (mediaFilter === "Without Media") {
-      result = result.filter((review) => !review.media_path);
-    }
-
-    if (analysisFilter !== "All Analysis") {
-      result = result.filter(
-        (review) =>
-          normalizeAnalysis(review.ai_analysis) === analysisFilter
-      );
     }
 
     const keyword = searchKeyword.trim().toLowerCase();
@@ -135,15 +98,7 @@ export default function AdminReviewsPage() {
     });
 
     return result;
-  }, [
-    reviews,
-    tierFilter,
-    ratingFilter,
-    sortFilter,
-    mediaFilter,
-    analysisFilter,
-    searchKeyword,
-  ]);
+  }, [reviews, tierFilter, ratingFilter, sortFilter, searchKeyword]);
 
   if (!allowed) {
     return null;
@@ -197,27 +152,6 @@ export default function AdminReviewsPage() {
                 <option>Oldest</option>
               </select>
 
-              <select
-                style={styles.select}
-                value={mediaFilter}
-                onChange={(event) => setMediaFilter(event.target.value)}
-              >
-                <option>All Media</option>
-                <option>With Media</option>
-                <option>Without Media</option>
-              </select>
-
-              <select
-                style={styles.select}
-                value={analysisFilter}
-                onChange={(event) => setAnalysisFilter(event.target.value)}
-              >
-                <option>All Analysis</option>
-                <option>Positive</option>
-                <option>Negative</option>
-                <option>Neutral</option>
-              </select>
-
               <div style={styles.searchBox}>
                 <SearchIcon />
 
@@ -239,8 +173,6 @@ export default function AdminReviewsPage() {
             <div style={{ ...styles.cell, flex: 1.15 }}>Rating</div>
             <div style={{ ...styles.cell, flex: 1.7 }}>Feedback</div>
             <div style={{ ...styles.cell, flex: 1.05 }}>Submitted</div>
-            <div style={{ ...styles.cell, flex: 1 }}>Media</div>
-            <div style={{ ...styles.cell, flex: 1.05 }}>AI Analysis</div>
           </div>
 
           {loading ? (
@@ -280,32 +212,6 @@ export default function AdminReviewsPage() {
                 <div style={{ ...styles.rowCell, flex: 1.05 }}>
                   {formatDateTime(review.submitted_at)}
                 </div>
-
-                <div
-                  style={{ ...styles.rowCell, flex: 1 }}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleViewMedia(review)}
-                    style={{
-                      ...styles.mediaButton,
-                      ...(review.media_path ? styles.mediaButtonActive : {}),
-                    }}
-                  >
-                    View
-                  </button>
-                </div>
-
-                <div
-                  style={{
-                    ...styles.rowCell,
-                    flex: 1.05,
-                    color: getAnalysisColor(review.ai_analysis),
-                  }}
-                >
-                  {normalizeAnalysis(review.ai_analysis)}
-                </div>
               </div>
             ))
           ) : (
@@ -318,14 +224,13 @@ export default function AdminReviewsPage() {
         <ReviewDetailPanel
           review={selectedReview}
           onClose={() => setSelectedReview(null)}
-          onViewMedia={handleViewMedia}
         />
       )}
     </main>
   );
 }
 
-function ReviewDetailPanel({ review, onClose, onViewMedia }) {
+function ReviewDetailPanel({ review, onClose }) {
   return (
     <div style={styles.overlay}>
       <aside style={styles.detailCard}>
@@ -362,28 +267,6 @@ function ReviewDetailPanel({ review, onClose, onViewMedia }) {
         <p style={styles.detailLine}>
           <strong>Submitted:</strong> {formatDateTime(review.submitted_at)}
         </p>
-
-        <div style={styles.documentRow}>
-          <strong>Documents:</strong>
-
-          <button
-            type="button"
-            onClick={() => onViewMedia(review)}
-            style={{
-              ...styles.mediaButton,
-              ...(review.media_path ? styles.mediaButtonActive : {}),
-            }}
-          >
-            View
-          </button>
-        </div>
-
-        <p style={styles.detailLine}>
-          <strong>AI Analysis:</strong>{" "}
-          <span style={{ color: getAnalysisColor(review.ai_analysis) }}>
-            {normalizeAnalysis(review.ai_analysis)}
-          </span>
-        </p>
       </aside>
     </div>
   );
@@ -400,31 +283,6 @@ function renderStars(rating) {
   const emptyStars = "☆".repeat(5 - number);
 
   return filledStars + emptyStars;
-}
-
-function normalizeAnalysis(value) {
-  if (!value) return "Neutral";
-
-  const lowerValue = value.toLowerCase();
-
-  if (lowerValue === "positive") return "Positive";
-  if (lowerValue === "negative") return "Negative";
-
-  return "Neutral";
-}
-
-function getAnalysisColor(value) {
-  const analysis = normalizeAnalysis(value);
-
-  if (analysis === "Positive") {
-    return "#4caf50";
-  }
-
-  if (analysis === "Negative") {
-    return "#ef4444";
-  }
-
-  return "#888888";
 }
 
 function truncateText(text, maxLength) {
@@ -610,23 +468,6 @@ const styles = {
     fontSize: "12px",
   },
 
-  mediaButton: {
-    width: "74px",
-    height: "30px",
-    borderRadius: "7px",
-    border: "1px solid #cfcfcf",
-    backgroundColor: "#ffffff",
-    color: "#999999",
-    fontSize: "12px",
-    fontWeight: "700",
-    cursor: "pointer",
-  },
-
-  mediaButtonActive: {
-    color: "#6658ff",
-    border: "1px solid #6658ff",
-  },
-
   emptyMessage: {
     padding: "36px 10px",
     textAlign: "center",
@@ -684,14 +525,6 @@ const styles = {
     fontSize: "14px",
     lineHeight: "18px",
     margin: "0 0 10px",
-  },
-
-  documentRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-    fontSize: "14px",
-    margin: "14px 0 10px",
   },
 
   fileNameText: {
