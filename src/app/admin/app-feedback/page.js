@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import AdminSidebar from "../components/AdminSidebar";
 import { supabase } from "@/lib/supabase";
@@ -21,6 +21,11 @@ export default function AdminAppFeedbackPage() {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState("candidates");
   const [feedbackList, setFeedbackList] = useState([]);
+
+  const [ratingFilter, setRatingFilter] = useState("All Ratings");
+  const [statusFilter, setStatusFilter] = useState("All Statuses");
+  const [sortFilter, setSortFilter] = useState("Newest");
+  const [searchKeyword, setSearchKeyword] = useState("");
 
   useEffect(() => {
     const isAdminLoggedIn = localStorage.getItem("adminLoggedIn");
@@ -134,6 +139,60 @@ export default function AdminAppFeedbackPage() {
     updateStatus(row, "submitted");
   }
 
+  const displayedFeedback = useMemo(() => {
+    if (view !== "all") {
+      return feedbackList;
+    }
+
+    let result = [...feedbackList];
+
+    if (ratingFilter !== "All Ratings") {
+      const ratingNumber = Number(ratingFilter);
+      result = result.filter((row) => Number(row.rating) === ratingNumber);
+    }
+
+    if (statusFilter !== "All Statuses") {
+      result = result.filter(
+        (row) => (row.status || "").toLowerCase() === statusFilter.toLowerCase()
+      );
+    }
+
+    const keyword = searchKeyword.trim().toLowerCase();
+
+    if (keyword) {
+      result = result.filter((row) => {
+        return (
+          row.name?.toLowerCase().includes(keyword) ||
+          row.email?.toLowerCase().includes(keyword) ||
+          row.feedback_text?.toLowerCase().includes(keyword)
+        );
+      });
+    }
+
+    result.sort((a, b) => {
+      if (sortFilter === "Highest Rating") {
+        return Number(b.rating || 0) - Number(a.rating || 0);
+      }
+
+      if (sortFilter === "Lowest Rating") {
+        return Number(a.rating || 0) - Number(b.rating || 0);
+      }
+
+      const dateA = new Date(a.created_at || 0).getTime();
+      const dateB = new Date(b.created_at || 0).getTime();
+
+      return sortFilter === "Oldest" ? dateA - dateB : dateB - dateA;
+    });
+
+    return result;
+  }, [feedbackList, view, ratingFilter, statusFilter, sortFilter, searchKeyword]);
+
+  const hasActiveFilters =
+    view === "all" &&
+    (ratingFilter !== "All Ratings" ||
+      statusFilter !== "All Statuses" ||
+      searchKeyword.trim().length > 0);
+
   if (!allowed) {
     return null;
   }
@@ -148,7 +207,7 @@ export default function AdminAppFeedbackPage() {
             <h2 style={styles.title}>
               App Feedback{" "}
               <span style={styles.count}>
-                ({loading ? "..." : formatNumber(feedbackList.length)})
+                ({loading ? "..." : formatNumber(displayedFeedback.length)})
               </span>
             </h2>
 
@@ -177,6 +236,57 @@ export default function AdminAppFeedbackPage() {
             </div>
           </div>
 
+          {view === "all" && (
+            <div style={styles.filters}>
+              <select
+                style={styles.select}
+                value={ratingFilter}
+                onChange={(event) => setRatingFilter(event.target.value)}
+              >
+                <option>All Ratings</option>
+                <option>5</option>
+                <option>4</option>
+                <option>3</option>
+                <option>2</option>
+                <option>1</option>
+              </select>
+
+              <select
+                style={styles.select}
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+              >
+                <option>All Statuses</option>
+                <option>Submitted</option>
+                <option>Approved</option>
+                <option>Rejected</option>
+              </select>
+
+              <select
+                style={styles.select}
+                value={sortFilter}
+                onChange={(event) => setSortFilter(event.target.value)}
+              >
+                <option>Newest</option>
+                <option>Oldest</option>
+                <option>Highest Rating</option>
+                <option>Lowest Rating</option>
+              </select>
+
+              <div style={styles.searchBox}>
+                <SearchIcon />
+
+                <input
+                  type="text"
+                  placeholder="Search"
+                  value={searchKeyword}
+                  onChange={(event) => setSearchKeyword(event.target.value)}
+                  style={styles.searchInput}
+                />
+              </div>
+            </div>
+          )}
+
           <div style={styles.tableHeader}>
             <div style={{ ...styles.cell, flex: 1.3 }}>Name</div>
             <div style={{ ...styles.cell, flex: 1.1 }}>Rating</div>
@@ -189,8 +299,8 @@ export default function AdminAppFeedbackPage() {
 
           {loading ? (
             <div style={styles.emptyMessage}>Loading feedback...</div>
-          ) : feedbackList.length > 0 ? (
-            feedbackList.map((row) => (
+          ) : displayedFeedback.length > 0 ? (
+            displayedFeedback.map((row) => (
               <div key={row.id} style={styles.tableRow}>
                 <div style={{ ...styles.rowCell, flex: 1.3 }}>
                   {row.name}
@@ -279,7 +389,11 @@ export default function AdminAppFeedbackPage() {
               </div>
             ))
           ) : (
-            <div style={styles.emptyMessage}>No feedback found</div>
+            <div style={styles.emptyMessage}>
+              {hasActiveFilters
+                ? "No feedback matches your filters"
+                : "No feedback found"}
+            </div>
           )}
         </div>
       </section>
@@ -342,6 +456,25 @@ function formatDateTime(value) {
 
 function formatNumber(value) {
   return Number(value).toLocaleString();
+}
+
+function SearchIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#8f8f8f"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ marginRight: "8px", flexShrink: 0 }}
+    >
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3" />
+    </svg>
+  );
 }
 
 const styles = {
@@ -414,6 +547,45 @@ const styles = {
     backgroundColor: "#ffffff",
     color: "#6658ff",
     boxShadow: "0 2px 6px rgba(0, 0, 0, 0.08)",
+  },
+
+  filters: {
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+    marginBottom: "20px",
+  },
+
+  select: {
+    height: "38px",
+    borderRadius: "8px",
+    border: "1px solid #cfcfcf",
+    padding: "0 10px",
+    fontSize: "14px",
+    backgroundColor: "#ffffff",
+    cursor: "pointer",
+  },
+
+  searchBox: {
+    height: "38px",
+    width: "145px",
+    borderRadius: "8px",
+    border: "1px solid #cfcfcf",
+    display: "flex",
+    alignItems: "center",
+    padding: "0 10px",
+    boxSizing: "border-box",
+    backgroundColor: "#ffffff",
+  },
+
+  searchInput: {
+    border: "none",
+    outline: "none",
+    width: "100%",
+    fontSize: "14px",
+    backgroundColor: "transparent",
   },
 
   tableHeader: {
