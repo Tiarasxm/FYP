@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import AdminSidebar from "../components/AdminSidebar";
 import { supabase } from "@/lib/supabase";
 import { createAuditLog } from "@/lib/adminAuditLog";
@@ -168,6 +167,58 @@ export default function AdminReportsPage() {
     setSelectedReport(null);
   }
 
+  async function handleRestrictUser(report) {
+    const name = report.reported_user_name || shortId(report.reported_user_id);
+
+    const confirmed = window.confirm(
+      `Restrict ${name}? They will not be able to log in.`
+    );
+
+    if (!confirmed) return;
+
+    const { data: updatedProfile, error: updateError } = await supabase
+      .from("profiles")
+      .update({
+        status: "suspended",
+      })
+      .eq("id", report.reported_user_id)
+      .select();
+
+    if (updateError) {
+      alert(updateError.message);
+      return;
+    }
+
+    if (!updatedProfile || updatedProfile.length === 0) {
+      alert("Failed to restrict user: no matching profile was found.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("reports")
+      .update({
+        status: "removed",
+      })
+      .eq("report_id", report.report_id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    await createAuditLog({
+      action: "restrict_user",
+      target: report.report_id,
+      targetType: "user",
+    });
+
+    setReports((currentReports) =>
+      currentReports.filter((item) => item.report_id !== report.report_id)
+    );
+
+    setSelectedReport(null);
+  }
+
   const filteredReports = useMemo(() => {
     let result = [...reports];
 
@@ -323,13 +374,20 @@ export default function AdminReportsPage() {
           onClose={() => setSelectedReport(null)}
           onDismiss={handleDismiss}
           onRemovePost={handleRemovePost}
+          onRestrictUser={handleRestrictUser}
         />
       )}
     </main>
   );
 }
 
-function ReportDetailPanel({ report, onClose, onDismiss, onRemovePost }) {
+function ReportDetailPanel({
+  report,
+  onClose,
+  onDismiss,
+  onRemovePost,
+  onRestrictUser,
+}) {
   const contentType = report.content_type?.toLowerCase();
   const isPost = contentType === "post";
   const isUser = contentType === "user";
@@ -388,18 +446,13 @@ function ReportDetailPanel({ report, onClose, onDismiss, onRemovePost }) {
           )}
 
           {isUser && (
-            <Link
-              href="/admin/users"
-              style={{
-                ...styles.removeButton,
-                textDecoration: "none",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
+            <button
+              type="button"
+              onClick={() => onRestrictUser(report)}
+              style={styles.removeButton}
             >
-              View User
-            </Link>
+              Restrict User
+            </button>
           )}
         </div>
       </aside>
