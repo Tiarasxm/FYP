@@ -2,7 +2,7 @@ export const defaultHero = {
   titleLine1: "Train smarter.",
   titleLine2: "See real results.",
   subtitle:
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do dolor sit tincidunt ut labore et dolore magna aliqua. Dolor sit amet, consectetur adipiscing elit.",
+    "Structured workout plans, nutrition tracking and progress insights in one app, with guidance from certified fitness professionals when you need it.",
   image_url: null,
   avatar_group_url: null,
 };
@@ -14,27 +14,27 @@ export const defaultFeatures = {
   items: [
     {
       title: "Personalised Plans",
-      text: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do.",
+      text: "Follow structured workout plans built by certified fitness professionals and matched to your goals.",
     },
     {
       title: "Workout Tracking",
-      text: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do.",
+      text: "Log every set, rep and weight as you train, so nothing gets lost between sessions.",
     },
     {
       title: "Progress Analytics",
-      text: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do.",
+      text: "Watch your training volume, streaks and achievements build up over weeks and months.",
     },
     {
       title: "Nutrition Support",
-      text: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do.",
+      text: "Log meals and water intake to keep your nutrition working alongside your training.",
     },
     {
       title: "Streaks & Rewards",
-      text: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do.",
+      text: "Earn achievements and climb the leaderboard as you stay consistent.",
     },
     {
       title: "Community Support",
-      text: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do.",
+      text: "Share your progress, follow other members, and stay motivated together.",
     },
   ],
 };
@@ -46,27 +46,26 @@ export const defaultSubscription = {
     {
       title: "Free",
       price: "$0",
-      description:
-        "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do.",
+      description: "Everything you need to start training, at no cost.",
       features: [
-        "Basic workouts",
+        "Public workout plans",
         "Workout tracking",
-        "Community Access",
-        "Workout tracking",
+        "Meal and water logging",
+        "Community feed",
+        "Progress analytics",
       ],
     },
     {
       title: "Priority",
       price: "$7.99",
       description:
-        "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do.",
+        "Unlock every plan plus direct support from certified fitness professionals.",
       features: [
-        "Workout tracking",
-        "Basic workouts",
-        "Workout tracking",
-        "Basic workouts",
-        "Workout tracking",
-        "Basic workouts",
+        "Everything in Free",
+        "All workout plans including private",
+        "Message fitness professionals",
+        "Personalised plans on request",
+        "Priority support",
       ],
     },
   ],
