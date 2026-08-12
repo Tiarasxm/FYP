@@ -99,7 +99,7 @@ export default function LoginPage() {
 
     const { data: profile, error } = await supabase
       .from("profiles")
-      .select("user_type")
+      .select("user_type, status")
       .eq("id", userId)
       .single();
 
@@ -110,7 +110,28 @@ export default function LoginPage() {
       return;
     }
 
+    const normalizedStatus = (profile.status || "").trim().toLowerCase();
+
+    if (normalizedStatus === "suspended") {
+      alert("This account has been restricted. Please contact support.");
+      await supabase.auth.signOut();
+      setLoading(false);
+      return;
+    }
+
+    if (normalizedStatus === "deleted") {
+      alert("This account has been deactivated.");
+      await supabase.auth.signOut();
+      setLoading(false);
+      return;
+    }
+
     const type = profile.user_type;
+
+    if (normalizedStatus === "incomplete" && type === "Fitness professional") {
+      router.push("/fitness-profile");
+      return;
+    }
 
     if (type === "Free") {
       router.push("/choose-plan");
