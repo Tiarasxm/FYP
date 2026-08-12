@@ -40,6 +40,9 @@ alter table public.profiles
 add column if not exists avatar_url text;
 
 alter table public.profiles
+add column if not exists bio text default '';
+
+alter table public.profiles
 add column if not exists activity_level text;
 
 alter table public.profiles
