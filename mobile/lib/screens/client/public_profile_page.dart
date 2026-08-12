@@ -30,6 +30,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
   bool _isPrivate = false;
   bool _isLoading = true;
   bool _isFollowSaving = false;
+  bool _isBioSaving = false;
   String? _error;
 
   String? get _targetUserId =>
@@ -66,7 +67,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
       final profileRow = await _supabase
           .from('profiles')
           .select(
-            'id, full_name, email, gender, user_type, status, avatar_url, is_private, created_at',
+            'id, full_name, email, gender, user_type, status, avatar_url, bio, is_private, created_at',
           )
           .eq('id', userId)
           .maybeSingle();
@@ -91,14 +92,14 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
             metadata?['picture']?.toString();
       }
 
-      var bio = '';
+      var bio = profileRow['bio']?.toString() ?? '';
       if (profile.userType.toLowerCase() == 'fitness professional') {
         final professional = await _supabase
             .from('fitness_professional')
             .select('display_name, bio')
             .eq('profile_id', userId)
             .maybeSingle();
-        bio = professional?['bio']?.toString() ?? '';
+        bio = professional?['bio']?.toString() ?? bio;
       }
 
       final postRows = await _supabase
@@ -305,6 +306,67 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
     }
   }
 
+  Future<void> _editBio() async {
+    if (!_isOwnProfile || _isBioSaving) return;
+
+    var draftBio = _bio;
+    final updatedBio = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Edit Bio'),
+        content: TextFormField(
+          initialValue: _bio,
+          autofocus: true,
+          maxLength: 160,
+          maxLines: 5,
+          minLines: 3,
+          onChanged: (value) => draftBio = value,
+          decoration: const InputDecoration(
+            hintText: 'Tell others about yourself...',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              draftBio.trim(),
+            ),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (updatedBio == null || updatedBio == _bio) return;
+
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    setState(() => _isBioSaving = true);
+    try {
+      await _supabase
+          .from('profiles')
+          .update({'bio': updatedBio})
+          .eq('id', userId);
+      if (!mounted) return;
+      setState(() => _bio = updatedBio);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bio updated successfully.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to update bio: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _isBioSaving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -506,9 +568,27 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
             ),
           ],
           const SizedBox(height: 20),
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: Text('About', style: TextStyle(fontWeight: FontWeight.w600)),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'About',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              if (_isOwnProfile)
+                TextButton.icon(
+                  onPressed: _isBioSaving ? null : _editBio,
+                  icon: _isBioSaving
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.edit_outlined, size: 17),
+                  label: const Text('Edit'),
+                ),
+            ],
           ),
           const SizedBox(height: 5),
           Align(
