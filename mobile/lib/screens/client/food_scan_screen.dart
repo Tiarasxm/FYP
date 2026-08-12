@@ -240,8 +240,7 @@ class _FoodScanScreenState extends State<FoodScanScreen> {
                 child: CircularProgressIndicator(color: Colors.white),
               )
             else
-              _cameraPreview(),
-
+              _cameraPreviewCover(),
             if (_isBusy)
               Container(
                 color: Colors.black.withOpacity(0.35),
@@ -255,7 +254,7 @@ class _FoodScanScreenState extends State<FoodScanScreen> {
     );
   }
 
-  Widget _cameraPreview() {
+  Widget _cameraPreviewCover() {
     final controller = _cameraController!;
 
     if (!controller.value.isInitialized) {
@@ -264,8 +263,49 @@ class _FoodScanScreenState extends State<FoodScanScreen> {
       );
     }
 
-    return Center(
-      child: CameraPreview(controller),
+    final previewSize = controller.value.previewSize;
+
+    if (previewSize == null) {
+      return SizedBox.expand(
+        child: FittedBox(
+          fit: BoxFit.cover,
+          alignment: Alignment.center,
+          child: SizedBox(
+            width: 400,
+            height: 700,
+            child: CameraPreview(controller),
+          ),
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final orientation = MediaQuery.of(context).orientation;
+
+        final previewWidth = orientation == Orientation.portrait
+            ? previewSize.height
+            : previewSize.width;
+        final previewHeight = orientation == Orientation.portrait
+            ? previewSize.width
+            : previewSize.height;
+
+        return SizedBox(
+          width: constraints.maxWidth,
+          height: constraints.maxHeight,
+          child: ClipRect(
+            child: FittedBox(
+              fit: BoxFit.cover,
+              alignment: Alignment.center,
+              child: SizedBox(
+                width: previewWidth,
+                height: previewHeight,
+                child: CameraPreview(controller),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -314,7 +354,6 @@ class _FoodScanScreenState extends State<FoodScanScreen> {
       child: Row(
         children: [
           const SizedBox(width: 32),
-
           IconButton(
             onPressed: _isBusy ? null : _pickFromGallery,
             icon: Icon(
@@ -322,9 +361,7 @@ class _FoodScanScreenState extends State<FoodScanScreen> {
               color: _isBusy ? Colors.white24 : AppColors.textMuted,
             ),
           ),
-
           const Spacer(),
-
           GestureDetector(
             onTap: _isBusy ? null : _takePhoto,
             child: Container(
@@ -343,9 +380,7 @@ class _FoodScanScreenState extends State<FoodScanScreen> {
               ),
             ),
           ),
-
           const Spacer(),
-
           const SizedBox(width: 80),
         ],
       ),
