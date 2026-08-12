@@ -36,7 +36,7 @@ export default function AdminReportsPage() {
     const { data, error } = await supabase
       .from("reports")
       .select(
-        "report_id, reporter_id, content_type, report_type, status, submitted_at"
+        "report_id, reporter_id, reported_user_id, post_id, content_type, report_type, details, status, submitted_at"
       )
       .eq("status", "pending")
       .order("submitted_at", { ascending: false });
@@ -84,11 +84,33 @@ export default function AdminReportsPage() {
 
   async function handleRemove(report) {
     const isComment = report.content_type?.toLowerCase() === "comment";
-    const actionText = isComment ? "Remove comment?" : "Remove post?";
+    const actionText = isComment
+      ? "Remove this comment? This will permanently delete it and cannot be undone."
+      : "Remove this post? This will permanently delete it and cannot be undone.";
 
     const confirmed = window.confirm(actionText);
 
     if (!confirmed) return;
+
+    const contentTable = isComment ? "post_comments" : "posts";
+
+    const { data: deletedContent, error: deleteError } = await supabase
+      .from(contentTable)
+      .delete()
+      .eq("id", report.post_id)
+      .select();
+
+    if (deleteError) {
+      alert(deleteError.message);
+      return;
+    }
+
+    if (!deletedContent || deletedContent.length === 0) {
+      alert(
+        "Failed to remove content: no matching post or comment was found."
+      );
+      return;
+    }
 
     const { error } = await supabase
       .from("reports")
@@ -293,6 +315,10 @@ function ReportDetailPanel({ report, onClose, onDismiss, onRemove }) {
 
         <p style={styles.detailLine}>
           <strong>Report Type:</strong> {report.report_type}
+        </p>
+
+        <p style={styles.detailParagraph}>
+          <strong>Details:</strong> {report.details || "-"}
         </p>
 
         <p style={styles.detailLine}>
