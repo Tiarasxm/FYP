@@ -64,17 +64,6 @@ export default function AdminSidebar() {
             </div>
           </Link>
 
-          <Link href="/admin/plans" style={styles.linkReset}>
-            <div
-              style={{
-                ...styles.navItem,
-                ...(isActive("/admin/plans") ? styles.activeNavItem : {}),
-              }}
-            >
-              Plans
-            </div>
-          </Link>
-
           <Link href="/admin/reviews" style={styles.linkReset}>
             <div
               style={{
