@@ -148,8 +148,9 @@ export default function WelcomePage() {
               </p>
 
               <a
-                href="/ShapeRush.apk"
-                download
+                href="https://github.com/Tiarasxm/FYP/releases/latest/download/ShapeRush.apk"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="mt-8 w-full h-[44px] bg-[#6c5cff] text-white rounded-lg text-[13px] font-semibold flex items-center justify-center gap-3 hover:bg-[#5b4bea]"
               >
                 Download APK
