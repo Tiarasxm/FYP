@@ -356,7 +356,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final meta = isRestDay
         ? 'Rest Day'
-        : '~45 min • $exerciseCount exercises';
+        : '$exerciseCount exercises';
 
     if (!mounted) return;
 

@@ -117,7 +117,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
             weekNumber: weekNumber,
             dayNumber: dayNumber,
             title: dayName,
-            duration: '~45 min',
+            
             exerciseCount: exercises.length,
             isRestDay: isRestDay,
             exercises: exercises,
@@ -511,7 +511,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                       Text(
                         currentDay.isRestDay
                             ? 'Rest Day'
-                            : '${currentDay.exercises.length} exercises • ${currentDay.duration}',
+                            : '${currentDay.exercises.length} exercises',
                         style: TextStyle(
                           fontSize: 13,
                           color: AppColors.textSecondary,

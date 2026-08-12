@@ -330,7 +330,7 @@ class _FitnessPlanScreenState extends State<FitnessPlanScreen> {
       return '$planName • Rest Day';
     }
 
-    return '$planName • ~45 min • ${_exercises.length} exercises';
+    return '$planName • ${_exercises.length} exercises';
   }
 
   String _exerciseMeta(Map<String, dynamic> exercise) {

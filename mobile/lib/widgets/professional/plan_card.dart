@@ -47,7 +47,7 @@ class PlanCard extends StatelessWidget {
                 const SizedBox(height: 8),
 
                 Text(
-                  '${plan.days} Days • ${plan.duration}',
+                  '${plan.days} Days',
                   style: const TextStyle(
                     fontSize: 13,
                     color: AppColors.textSecondary,

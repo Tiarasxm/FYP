@@ -140,7 +140,7 @@ class _EditPlanState extends State<EditPlan> {
       return weeks == 1 ? '1 week' : '$weeks weeks';
     }
 
-    return widget.plan.duration;
+    return '4 weeks';
   }
 
   void _goToSchedule() {

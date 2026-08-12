@@ -325,7 +325,7 @@ class _ProfessionalDetailScreenState extends State<ProfessionalDetailScreen> {
           ),
           const SizedBox(height: 4),
           const Text(
-            '30 Days • ~45 min',
+            '30 Days',
             style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
           ),
           const SizedBox(height: 10),

@@ -266,7 +266,7 @@ class _ChatScreenState extends State<ChatScreen> {
     String title = 'Workout Plan';
     String? planId;
     int days = 0;
-    String duration = '~45 min';
+    
     List<String> tags = [];
     bool isPersonalized = false;
 
@@ -276,7 +276,7 @@ class _ChatScreenState extends State<ChatScreen> {
         planId = data['plan_id'];
         title = data['title'] ?? 'Workout Plan';
         days = data['days'] ?? 0;
-        duration = data['duration'] ?? '~45 min';
+        
         tags = (data['tags'] as List?)?.map((t) => t.toString()).toList() ?? [];
         isPersonalized = data['is_personalized'] == true;
       } catch (_) {
@@ -305,7 +305,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             if (days > 0) ...[              const SizedBox(height: 8),
               Text(
-                '$days Days • $duration',
+                '$days Days',
                 style: TextStyle(
                   fontSize: 12,
                   color: AppColors.textSecondary,

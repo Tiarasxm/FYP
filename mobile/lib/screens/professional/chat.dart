@@ -178,7 +178,7 @@ class _ChatState extends State<Chat> {
           planId: selectedPlan.freePlanId ?? '',
           title: selectedPlan.title,
           days: selectedPlan.days,
-          duration: selectedPlan.duration,
+          duration: '${selectedPlan.days} Days',
           tags: selectedPlan.tags,
           clientId: widget.clientId,
         );
@@ -751,7 +751,7 @@ class _PlanMessageBubble extends StatelessWidget {
     String? planId;
     String title = 'Workout Plan';
     int days = 0;
-    String duration = '~45 min';
+    
     List<String> tags = [];
 
     if (content != null && content!.isNotEmpty) {
@@ -760,7 +760,7 @@ class _PlanMessageBubble extends StatelessWidget {
         planId = data['plan_id'];
         title = data['title'] ?? 'Workout Plan';
         days = data['days'] ?? 0;
-        duration = data['duration'] ?? '~45 min';
+        
         tags = (data['tags'] as List?)?.map((t) => t.toString()).toList() ?? [];
       } catch (_) {}
     }
@@ -769,7 +769,7 @@ class _PlanMessageBubble extends StatelessWidget {
       freePlanId: planId,
       title: title,
       days: days,
-      duration: duration,
+      
       tags: tags,
       workoutDays: [],
     );
@@ -787,7 +787,7 @@ class _PlanMessageBubble extends StatelessWidget {
     // Parse plan details from JSON content
     String title = 'Workout Plan';
     int days = 0;
-    String duration = '~45 min';
+    
     List<String> tags = [];
 
     if (content != null && content!.isNotEmpty) {
@@ -795,7 +795,7 @@ class _PlanMessageBubble extends StatelessWidget {
         final data = jsonDecode(content!) as Map<String, dynamic>;
         title = data['title'] ?? 'Workout Plan';
         days = data['days'] ?? 0;
-        duration = data['duration'] ?? '~45 min';
+        
         tags = (data['tags'] as List?)?.map((t) => t.toString()).toList() ?? [];
       } catch (_) {
         title = content!;
@@ -826,7 +826,7 @@ class _PlanMessageBubble extends StatelessWidget {
             if (days > 0) ...[
               const SizedBox(height: 8),
               Text(
-                '$days Days • $duration',
+                '$days Days',
                 style: TextStyle(
                   fontSize: 12,
                   color: AppColors.textSecondary,

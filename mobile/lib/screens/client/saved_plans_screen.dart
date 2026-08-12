@@ -506,7 +506,7 @@ class _SavedPlansScreenState extends State<SavedPlansScreen> {
             ),
             const SizedBox(height: 6),
             Text(
-              '$duration • ~45 min',
+              duration,
               style: const TextStyle(
                 fontSize: 13,
                 color: AppColors.textSecondary,

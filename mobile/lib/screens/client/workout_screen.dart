@@ -615,9 +615,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     return '${durationWeeks * 7} Days';
   }
 
-  String _sessionLengthText(Map<String, dynamic> plan) {
-    return '~45 min';
-  }
 
   int? _parseInt(dynamic value) {
     if (value == null) return null;
@@ -1357,7 +1354,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   }) {
     final title = _planTitle(plan);
     final duration = _durationText(plan);
-    final sessionLength = _sessionLengthText(plan);
     final tags = _planTags(plan);
     final visibility =
         plan['visibility']?.toString().trim().toLowerCase() ?? 'public';
@@ -1435,7 +1431,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             const SizedBox(height: 6),
 
             Text(
-              '$duration • $sessionLength',
+              duration,
               style: const TextStyle(
                 fontSize: 13,
                 color: AppColors.textSecondary,

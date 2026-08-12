@@ -23,7 +23,7 @@ class WorkoutDay {
   final int weekNumber;
   final int dayNumber;
   final String title;
-  final String duration;
+  
   final int exerciseCount;
   final bool isRestDay;
   final List<Exercise> exercises;
@@ -33,7 +33,7 @@ class WorkoutDay {
     this.weekNumber = 1,
     required this.dayNumber,
     required this.title,
-    required this.duration,
+    
     required this.exerciseCount,
     this.isRestDay = false,
     required this.exercises,
@@ -44,7 +44,7 @@ class WorkoutPlan {
   final String? freePlanId;
   final String title;
   final int days;
-  final String duration;
+  
   final int? durationWeeks;
   final String visibility;
   final List<String> tags;
@@ -54,7 +54,7 @@ class WorkoutPlan {
     this.freePlanId,
     required this.title,
     required this.days,
-    required this.duration,
+   
     this.durationWeeks,
     this.visibility = 'Public',
     required this.tags,

@@ -7,13 +7,13 @@ WorkoutPlan buildMockPlan({
   return WorkoutPlan(
     title: title,
     days: days,
-    duration: '~45 min',
+    
     tags: const ['Full Body', 'Fat Loss', 'Strength'],
     workoutDays: const [
       WorkoutDay(
         dayNumber: 1,
         title: 'Day 1: Full Body Strength',
-        duration: '~45 min',
+        
         exerciseCount: 6,
         exercises: [
           Exercise(name: 'Barbell Squats', detail: '3 × 10-12 • 60s rest'),

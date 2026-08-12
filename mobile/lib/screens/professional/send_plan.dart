@@ -47,7 +47,7 @@ class _SendPlanState extends State<SendPlan> {
           freePlanId: row['free_plan_id'],
           title: row['plan_name'] ?? 'Untitled',
           days: durationWeeks * 7,
-          duration: '~45 min',
+          
           durationWeeks: durationWeeks,
           visibility: row['visibility'] ?? 'public',
           tags: tags,
@@ -270,7 +270,7 @@ class _SelectablePlanCard extends StatelessWidget {
                 const SizedBox(height: 8),
 
                 Text(
-                  '${plan.days} Days • ${plan.duration}',
+                  '${plan.days} Days',
                   style: TextStyle(
                     fontSize: 12,
                     color: AppColors.textSecondary,

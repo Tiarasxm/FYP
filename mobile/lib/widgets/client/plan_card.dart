@@ -63,7 +63,7 @@ class PlanCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            '${plan.duration} • ${plan.sessionLength}',
+            '${plan.duration}',
             style: const TextStyle(
               fontSize: 13,
               color: AppColors.textSecondary,

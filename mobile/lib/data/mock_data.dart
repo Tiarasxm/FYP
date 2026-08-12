@@ -22,7 +22,7 @@ class MockData {
   static const int kcalGoal = 500;
 
   static const String todaysPlanTitle = 'Full Body Strength';
-  static const String todaysPlanMeta = '~45 min • 6 exercises';
+  static const String todaysPlanMeta = '6 exercises';
 
   static const List<MenuItem> homeMenu = [
     MenuItem(label: 'Progress', icon: Icons.track_changes),
@@ -44,7 +44,7 @@ class MockData {
   static WorkoutPlan activePlan() => WorkoutPlan(
         title: '30-Day Full Body Fat Burn',
         duration: '30 Days',
-        sessionLength: '~45 min',
+        
         tags: const ['Full Body', 'Fat Loss', 'Strength'],
         active: true,
         bookmarked: true,
@@ -55,28 +55,28 @@ class MockData {
         WorkoutPlan(
           title: '30-Day Full Body Fat Burn',
           duration: '30 Days',
-          sessionLength: '~45 min',
+          
           tags: const ['Full Body', 'Fat Loss', 'Strength'],
           categories: const ['Strength', 'Weight Loss'],
         ),
         WorkoutPlan(
           title: 'Beginner HIIT',
           duration: '30 Days',
-          sessionLength: '~45 min',
+          
           tags: const ['Full Body', 'Fat Loss', 'Strength'],
           categories: const ['HIIT', 'Weight Loss'],
         ),
         WorkoutPlan(
           title: 'Morning Yoga',
           duration: '30 Days',
-          sessionLength: '~45 min',
+          
           tags: const ['Full Body', 'Fat Loss', 'Strength'],
           categories: const ['Nutrition'],
         ),
         WorkoutPlan(
           title: 'Upper Body Blast',
           duration: '30 Days',
-          sessionLength: '~45 min',
+          
           tags: const ['Full Body', 'Fat Loss', 'Strength'],
           categories: const ['Strength'],
         ),
@@ -116,7 +116,7 @@ class MockData {
 
   // Fitness plan
   static const String currentDayLabel = 'Day 1: Full Body Strength';
-  static const String currentDayMeta = '~45 min • 6 exercises';
+  static const String currentDayMeta = '6 exercises';
 
   static const List<Exercise> dayExercises = [
     Exercise(name: 'Barbell Squats', sets: 3, reps: '10-12'),
@@ -288,7 +288,7 @@ class MockData {
         WorkoutPlan(
           title: '30-Day Full Body Fat Burn',
           duration: '30 Days',
-          sessionLength: '~45 min',
+          
           tags: const ['Full Body', 'Fat Loss', 'Strength'],
           bookmarked: true,
           createdBy: 'ShapeRush',
@@ -296,7 +296,7 @@ class MockData {
         WorkoutPlan(
           title: 'Morning Yoga',
           duration: '30 Days',
-          sessionLength: '~45 min',
+          
           tags: const ['Full Body', 'Fat Loss', 'Strength'],
           bookmarked: true,
           createdBy: 'ShapeRush',
@@ -304,7 +304,7 @@ class MockData {
         WorkoutPlan(
           title: "Elise's Fitness Plan",
           duration: '30 Days',
-          sessionLength: '~45 min',
+          
           tags: const ['Full Body', 'Fat Loss', 'Strength'],
           bookmarked: true,
           createdBy: 'Wade Warren',

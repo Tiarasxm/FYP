@@ -305,7 +305,7 @@ class _ProfessionalHomeState extends State<ProfessionalHome> {
       freePlanId: row['free_plan_id']?.toString(),
       title: row['plan_name']?.toString() ?? 'Untitled Plan',
       days: days,
-      duration: '~45 min',
+      
       durationWeeks: durationWeeks,
       visibility: visibility,
       tags: tags,
