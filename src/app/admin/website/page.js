@@ -127,6 +127,36 @@ export default function AdminWebsitePage() {
     alert("Updated successfully.");
   }
 
+  async function resetSection(sectionKey, defaultContent, setSection) {
+    const confirmed = window.confirm(
+      "Reset this section to the original content? Your current changes will be lost."
+    );
+
+    if (!confirmed) return;
+
+    const { error } = await supabase
+      .from("website_content")
+      .delete()
+      .eq("section_key", sectionKey);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setSection(defaultContent);
+
+    await createAuditLog({
+      action: "reset_website_content",
+      target: sectionKey,
+      targetType: "website_section",
+    });
+
+    await fetchWebsiteContent();
+
+    alert("Section reset to default.");
+  }
+
   async function handleImageUpload({
     file,
     folder,
@@ -293,7 +323,10 @@ export default function AdminWebsitePage() {
                     }
                   />
 
-                  <UpdateButton onClick={() => saveSection("hero", hero)} />
+                  <SectionActions
+                    onSave={() => saveSection("hero", hero)}
+                    onReset={() => resetSection("hero", defaultHero, setHero)}
+                  />
                 </section>
               )}
 
@@ -372,8 +405,11 @@ export default function AdminWebsitePage() {
                     </div>
                   ))}
 
-                  <UpdateButton
-                    onClick={() => saveSection("features", features)}
+                  <SectionActions
+                    onSave={() => saveSection("features", features)}
+                    onReset={() =>
+                      resetSection("features", defaultFeatures, setFeatures)
+                    }
                   />
                 </section>
               )}
@@ -485,8 +521,15 @@ export default function AdminWebsitePage() {
                     </div>
                   ))}
 
-                  <UpdateButton
-                    onClick={() => saveSection("subscription", subscription)}
+                  <SectionActions
+                    onSave={() => saveSection("subscription", subscription)}
+                    onReset={() =>
+                      resetSection(
+                        "subscription",
+                        defaultSubscription,
+                        setSubscription
+                      )
+                    }
                   />
                 </section>
               )}
@@ -586,7 +629,10 @@ export default function AdminWebsitePage() {
                     </div>
                   ))}
 
-                  <UpdateButton onClick={() => saveSection("faq", faq)} />
+                  <SectionActions
+                    onSave={() => saveSection("faq", faq)}
+                    onReset={() => resetSection("faq", defaultFaq, setFaq)}
+                  />
                 </section>
               )}
             </>
@@ -694,6 +740,24 @@ function UpdateButton({ onClick }) {
     <button type="button" onClick={onClick} style={styles.updateButton}>
       Update
     </button>
+  );
+}
+
+function SectionActions({ onSave, onReset }) {
+  return (
+    <div style={styles.actionsRow}>
+      <button type="button" onClick={onReset} style={styles.secondaryButton}>
+        Reset to default
+      </button>
+
+      <button
+        type="button"
+        onClick={onSave}
+        style={{ ...styles.updateButton, marginTop: 0, width: "auto", flex: 1 }}
+      >
+        Update
+      </button>
+    </div>
   );
 }
 
@@ -917,6 +981,24 @@ const styles = {
     fontWeight: "700",
     cursor: "pointer",
     marginTop: "8px",
+  },
+
+  actionsRow: {
+    display: "flex",
+    gap: "10px",
+    marginTop: "8px",
+  },
+
+  secondaryButton: {
+    flex: 1,
+    height: "40px",
+    border: "1px solid #cccccc",
+    borderRadius: "10px",
+    backgroundColor: "#ffffff",
+    color: "#555555",
+    fontSize: "13px",
+    fontWeight: "700",
+    cursor: "pointer",
   },
 
   planBlock: {
