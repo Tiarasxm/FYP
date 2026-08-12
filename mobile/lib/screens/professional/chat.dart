@@ -865,23 +865,28 @@ class _PlanMessageBubble extends StatelessWidget {
 
             const SizedBox(height: 14),
 
-            SizedBox(
-              width: double.infinity,
-              height: 38,
-              child: ElevatedButton(
-                onPressed: () => _viewPlan(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+            GestureDetector(
+              onTap: () => _viewPlan(context),
+              child: Container(
+                width: double.infinity,
+                height: 48,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Text(
                   'View Plan',
+                  textAlign: TextAlign.center,
+                  strutStyle: StrutStyle(
+                    forceStrutHeight: true,
+                    height: 1.0,
+                  ),
                   style: TextStyle(
+                    fontSize: 15,
+                    height: 1.0,
                     fontWeight: FontWeight.w800,
+                    color: Colors.white,
                   ),
                 ),
               ),
