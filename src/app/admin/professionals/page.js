@@ -278,11 +278,15 @@ export default function AdminProfessionalsPage() {
                   {professional.shortId}
                 </div>
 
-                <div style={{ ...styles.rowCell, flex: 1.6 }}>
+                <div
+                  style={{ ...styles.rowCell, ...styles.truncatedCell, flex: 1.6 }}
+                >
                   {professional.name}
                 </div>
 
-                <div style={{ ...styles.rowCell, flex: 2.4 }}>
+                <div
+                  style={{ ...styles.rowCell, ...styles.truncatedCell, flex: 2.4 }}
+                >
                   {professional.email}
                 </div>
 
@@ -591,12 +595,20 @@ const styles = {
 
   cell: {
     fontWeight: "500",
+    minWidth: 0,
   },
 
   rowCell: {
     fontSize: "15px",
     display: "flex",
     alignItems: "center",
+    minWidth: 0,
+  },
+
+  truncatedCell: {
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
 
   restrictButton: {
