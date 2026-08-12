@@ -24,6 +24,12 @@ class _FoodScanResultScreenState extends State<FoodScanResultScreen> {
   final SupabaseClient _client = Supabase.instance.client;
 
   static const String _mealImageBucket = 'meal-images';
+  static const List<String> _mealTypes = [
+    'Breakfast',
+    'Lunch',
+    'Dinner',
+    'Snack',
+  ];
 
   bool _isScanning = true;
   bool _isLogging = false;
@@ -40,20 +46,10 @@ class _FoodScanResultScreenState extends State<FoodScanResultScreen> {
 
   final List<_IngredientDraft> _ingredients = [];
 
-  static const _mealTypes = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
-
   @override
   void initState() {
     super.initState();
     _loadAndScanImage();
-  }
-
-  @override
-  void dispose() {
-    for (final ingredient in _ingredients) {
-      ingredient.dispose();
-    }
-    super.dispose();
   }
 
   Future<void> _loadAndScanImage() async {
@@ -69,7 +65,9 @@ class _FoodScanResultScreenState extends State<FoodScanResultScreen> {
       await _scanFood();
     } catch (error) {
       if (!mounted) return;
+
       _showMessage('Failed to load image: $error');
+
       setState(() {
         _isScanning = false;
       });
@@ -84,7 +82,6 @@ class _FoodScanResultScreenState extends State<FoodScanResultScreen> {
 
     return 'image/jpeg';
   }
-
 
   Future<void> _scanFood() async {
     final bytes = _imageBytes;
@@ -148,10 +145,6 @@ class _FoodScanResultScreenState extends State<FoodScanResultScreen> {
   }
 
   void _applyScanResult(Map<String, dynamic> data) {
-    for (final ingredient in _ingredients) {
-      ingredient.dispose();
-    }
-
     final rawIngredients = data['ingredients'];
     final newIngredients = <_IngredientDraft>[];
 
@@ -293,240 +286,6 @@ class _FoodScanResultScreenState extends State<FoodScanResultScreen> {
     return 'jpg';
   }
 
-
-  Future<void> _editTextValue({
-    required String title,
-    required String initialValue,
-    required ValueChanged<String> onSaved,
-    TextInputType keyboardType = TextInputType.text,
-  }) async {
-    final controller = TextEditingController(text: initialValue);
-
-    final value = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
-          ),
-          child: Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(20),
-            decoration: const BoxDecoration(
-              color: AppColors.card,
-              borderRadius: BorderRadius.all(Radius.circular(20)),
-            ),
-            child: SafeArea(
-              top: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: controller,
-                    keyboardType: keyboardType,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: AppColors.cardMuted,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  PrimaryButton(
-                    label: 'Save',
-                    onPressed: () {
-                      Navigator.of(sheetContext).pop(controller.text.trim());
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-
-    controller.dispose();
-
-    if (value == null || value.isEmpty) return;
-
-    setState(() {
-      onSaved(value);
-    });
-  }
-
-  void _editFoodName() {
-    _editTextValue(
-      title: 'Edit Food Name',
-      initialValue: _foodName,
-      onSaved: (value) {
-        _foodName = value;
-      },
-    );
-  }
-
-  void _editCalories() {
-    _editTextValue(
-      title: 'Edit Calories',
-      initialValue: '$_calories',
-      keyboardType: TextInputType.number,
-      onSaved: (value) {
-        _calories = int.tryParse(value) ?? _calories;
-      },
-    );
-  }
-
-  void _editMacro(String label) {
-    int currentValue;
-
-    switch (label) {
-      case 'Protein':
-        currentValue = _proteinG;
-        break;
-      case 'Carbs':
-        currentValue = _carbsG;
-        break;
-      case 'Fat':
-        currentValue = _fatG;
-        break;
-      default:
-        currentValue = 0;
-    }
-
-    _editTextValue(
-      title: 'Edit $label',
-      initialValue: '$currentValue',
-      keyboardType: TextInputType.number,
-      onSaved: (value) {
-        final number = int.tryParse(value);
-
-        if (number == null) return;
-
-        if (label == 'Protein') _proteinG = number;
-        if (label == 'Carbs') _carbsG = number;
-        if (label == 'Fat') _fatG = number;
-      },
-    );
-  }
-
-  Future<void> _editIngredient(int index) async {
-    if (index < 0 || index >= _ingredients.length) return;
-
-    final item = _ingredients[index];
-    final nameController = TextEditingController(text: item.name);
-    final kcalController = TextEditingController(text: '${item.caloriesKcal}');
-
-    final result = await showModalBottomSheet<_IngredientDraft>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
-          ),
-          child: Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(20),
-            decoration: const BoxDecoration(
-              color: AppColors.card,
-              borderRadius: BorderRadius.all(Radius.circular(20)),
-            ),
-            child: SafeArea(
-              top: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Edit Ingredient',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: nameController,
-                    decoration: InputDecoration(
-                      labelText: 'Name',
-                      filled: true,
-                      fillColor: AppColors.cardMuted,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: kcalController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'Calories',
-                      filled: true,
-                      fillColor: AppColors.cardMuted,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  PrimaryButton(
-                    label: 'Save',
-                    onPressed: () {
-                      Navigator.of(sheetContext).pop(
-                        _IngredientDraft(
-                          name: nameController.text.trim(),
-                          caloriesKcal:
-                              int.tryParse(kcalController.text.trim()) ?? 0,
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-
-    nameController.dispose();
-    kcalController.dispose();
-
-    if (result == null) return;
-
-    setState(() {
-      item.name = result.name;
-      item.caloriesKcal = result.caloriesKcal;
-      result.dispose();
-    });
-  }
-
-  void _deleteIngredient(int index) {
-    if (index < 0 || index >= _ingredients.length) return;
-
-    setState(() {
-      final removed = _ingredients.removeAt(index);
-      removed.dispose();
-    });
-  }
-
   void _showMessage(String message) {
     if (!mounted) return;
 
@@ -553,108 +312,77 @@ class _FoodScanResultScreenState extends State<FoodScanResultScreen> {
                     padding: const EdgeInsets.all(AppSpacing.screenPadding),
                     children: [
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
-                            child: GestureDetector(
-                              onTap: _editFoodName,
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      _foodName,
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                  ),
-                                  const Icon(
-                                    Icons.edit,
-                                    size: 14,
-                                    color: AppColors.textMuted,
-                                  ),
-                                ],
+                            child: Text(
+                              _foodName,
+                              style: const TextStyle(
+                                fontSize: 24,
+                                height: 1.25,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textPrimary,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 12),
                           _mealTypeDropdown(),
                         ],
                       ),
-                      const SizedBox(height: 6),
-                      GestureDetector(
-                        onTap: _editCalories,
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '$_calories',
-                              style: const TextStyle(
-                                fontSize: 26,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            const Padding(
-                              padding: EdgeInsets.only(bottom: 4),
-                              child: Text(
-                                'kcal',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            const Padding(
-                              padding: EdgeInsets.only(bottom: 6),
-                              child: Icon(
-                                Icons.edit,
-                                size: 12,
-                                color: AppColors.textMuted,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 14),
+
+                      const SizedBox(height: 18),
+
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Expanded(
-                            child: _macroBox(
-                              'Protein',
-                              '${_proteinG}g',
-                              () => _editMacro('Protein'),
+                          Text(
+                            '$_calories',
+                            style: const TextStyle(
+                              fontSize: 34,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textPrimary,
                             ),
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _macroBox(
-                              'Carbs',
-                              '${_carbsG}g',
-                              () => _editMacro('Carbs'),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _macroBox(
-                              'Fat',
-                              '${_fatG}g',
-                              () => _editMacro('Fat'),
+                          const SizedBox(width: 6),
+                          const Padding(
+                            padding: EdgeInsets.only(bottom: 7),
+                            child: Text(
+                              'kcal',
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 20),
+
+                      const SizedBox(height: 18),
+
+                      Row(
+                        children: [
+                          Expanded(child: _macroBox('Protein', '${_proteinG}g')),
+                          const SizedBox(width: 10),
+                          Expanded(child: _macroBox('Carbs', '${_carbsG}g')),
+                          const SizedBox(width: 10),
+                          Expanded(child: _macroBox('Fat', '${_fatG}g')),
+                        ],
+                      ),
+
+                      const SizedBox(height: 24),
+
                       const Text(
                         'Identified Ingredients',
                         style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
                           color: AppColors.textMuted,
                         ),
                       ),
-                      const SizedBox(height: 8),
+
+                      const SizedBox(height: 12),
+
                       if (_ingredients.isEmpty)
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 12),
@@ -667,8 +395,8 @@ class _FoodScanResultScreenState extends State<FoodScanResultScreen> {
                           ),
                         )
                       else
-                        for (var i = 0; i < _ingredients.length; i++)
-                          _ingredientRow(_ingredients[i], i),
+                        for (final ingredient in _ingredients)
+                          _ingredientRow(ingredient),
                     ],
                   ),
           ),
@@ -738,8 +466,8 @@ class _FoodScanResultScreenState extends State<FoodScanResultScreen> {
                     'AI Food Scan',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
                       color: Colors.white,
                     ),
                   ),
@@ -755,112 +483,95 @@ class _FoodScanResultScreenState extends State<FoodScanResultScreen> {
 
   Widget _mealTypeDropdown() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       decoration: BoxDecoration(
         color: AppColors.cardMuted,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: _mealType,
-          icon: const Icon(Icons.keyboard_arrow_down, size: 16),
+          isDense: true,
+          icon: const Icon(Icons.keyboard_arrow_down, size: 18),
+          borderRadius: BorderRadius.circular(14),
+          dropdownColor: AppColors.card,
           style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
             color: AppColors.textPrimary,
           ),
           items: [
             for (final type in _mealTypes)
-              DropdownMenuItem(value: type, child: Text(type)),
+              DropdownMenuItem(
+                value: type,
+                child: Text(type),
+              ),
           ],
           onChanged: (value) {
-            if (value != null) {
-              setState(() {
-                _mealType = value;
-              });
-            }
+            if (value == null) return;
+
+            setState(() {
+              _mealType = value;
+            });
           },
         ),
       ),
     );
   }
 
-  Widget _macroBox(String label, String value, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.cardMuted,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 11,
-                color: AppColors.textSecondary,
-              ),
+  Widget _macroBox(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.cardMuted,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w500,
             ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                const Icon(Icons.edit, size: 11, color: AppColors.textMuted),
-              ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _ingredientRow(_IngredientDraft item, int index) {
+  Widget _ingredientRow(_IngredientDraft item) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
         children: [
           Expanded(
             child: Text(
               item.name,
               style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
               ),
             ),
           ),
           Text(
             '${item.caloriesKcal} kcal',
             style: const TextStyle(
-              fontSize: 12,
+              fontSize: 13,
               color: AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: () => _editIngredient(index),
-            child: const Icon(
-              Icons.edit,
-              size: 12,
-              color: AppColors.textMuted,
-            ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: () => _deleteIngredient(index),
-            child: const Icon(
-              Icons.delete_outline,
-              size: 14,
-              color: AppColors.textMuted,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -877,13 +588,4 @@ class _IngredientDraft {
     required this.name,
     required this.caloriesKcal,
   });
-
-  Map<String, dynamic> toJson() {
-    return {
-      'name': name,
-      'calories_kcal': caloriesKcal,
-    };
-  }
-
-  void dispose() {}
 }

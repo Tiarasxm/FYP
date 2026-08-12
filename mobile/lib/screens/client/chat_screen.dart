@@ -28,11 +28,88 @@ class _ChatScreenState extends State<ChatScreen> {
   List<ChatMessageModel> _messages = [];
   bool _loading = true;
   RealtimeChannel? _channel;
+  RealtimeChannel? _profileChannel;
+
+  String? _professionalAvatarUrl;
 
   @override
   void initState() {
     super.initState();
+    _professionalAvatarUrl = widget.professional.avatarUrl;
     _initChat();
+    _loadProfessionalAvatar();
+  }
+
+  Future<void> _loadProfessionalAvatar() async {
+    final profId = widget.professional.profileId;
+
+    if (profId == null || profId.isEmpty) return;
+
+    try {
+      final profile = await Supabase.instance.client
+          .from('profiles')
+          .select('avatar_url')
+          .eq('id', profId)
+          .maybeSingle();
+
+      final avatarUrl = profile?['avatar_url']?.toString().trim();
+
+      if (!mounted) return;
+
+      setState(() {
+        _professionalAvatarUrl =
+            avatarUrl != null && avatarUrl.isNotEmpty ? avatarUrl : null;
+      });
+
+      _subscribeToProfessionalProfile(profId);
+    } catch (e) {
+      debugPrint('Error loading professional avatar: $e');
+    }
+  }
+
+  void _subscribeToProfessionalProfile(String profId) {
+    if (_profileChannel != null) return;
+
+    _profileChannel = Supabase.instance.client
+        .channel('public:profiles:client_chat:$profId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'profiles',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: profId,
+          ),
+          callback: (payload) {
+            final avatarUrl = payload.newRecord['avatar_url']?.toString().trim();
+
+            if (!mounted) return;
+
+            setState(() {
+              _professionalAvatarUrl =
+                  avatarUrl != null && avatarUrl.isNotEmpty ? avatarUrl : null;
+            });
+          },
+        )
+        .subscribe();
+  }
+
+  Widget _avatar(String? avatarUrl, {double radius = 14}) {
+    final hasAvatar = avatarUrl != null && avatarUrl.trim().isNotEmpty;
+
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: AppColors.primarySoft,
+      backgroundImage: hasAvatar ? NetworkImage(avatarUrl) : null,
+      child: hasAvatar
+          ? null
+          : const Icon(
+              Icons.person,
+              size: 14,
+              color: AppColors.primary,
+            ),
+    );
   }
 
   Future<void> _initChat() async {
@@ -106,6 +183,9 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     if (_channel != null) _chatService.unsubscribe(_channel!);
+    if (_profileChannel != null) {
+      Supabase.instance.client.removeChannel(_profileChannel!);
+    }
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -141,7 +221,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 10),
-                          child: _messageBubble(msg.content ?? '', isMe),
+                          child: _messageBubble(
+                            msg.content ?? '',
+                            isMe,
+                            avatarUrl: _professionalAvatarUrl,
+                          ),
                         );
                       },
                     ),
@@ -166,10 +250,14 @@ class _ChatScreenState extends State<ChatScreen> {
               shape: const CircleBorder(),
             ),
           ),
+          const SizedBox(width: 8),
+          _avatar(_professionalAvatarUrl, radius: 20),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               widget.professional.name,
-              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
@@ -226,18 +314,14 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _messageBubble(String text, bool isMe) {
+  Widget _messageBubble(String text, bool isMe, {String? avatarUrl}) {
     return Row(
       mainAxisAlignment:
           isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         if (!isMe) ...[
-          const CircleAvatar(
-            radius: 14,
-            backgroundColor: AppColors.primarySoft,
-            child: Icon(Icons.person, size: 14, color: AppColors.primary),
-          ),
+          _avatar(avatarUrl, radius: 14),
           const SizedBox(width: 8),
         ],
         Flexible(

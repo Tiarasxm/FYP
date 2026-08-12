@@ -503,7 +503,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final data = await client
         .from('fitness_professional')
         .select(
-          'profile_id, display_name, bio, experience, specializations, approved, profiles!inner(full_name)',
+          'profile_id, display_name, bio, experience, specializations, approved, profiles!inner(full_name, avatar_url)',
         )
         .eq('approved', true);
 
@@ -550,10 +550,30 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           ? (ratingTotals[profileId] ?? 0) / reviewCount
           : 0.0;
 
-      row['avg_rating'] = avgRating;
-      row['review_count'] = reviewCount;
+      final profile = row['profiles'] is Map
+          ? Map<String, dynamic>.from(row['profiles'] as Map)
+          : <String, dynamic>{};
 
-      pros.add(Professional.fromSupabase(row));
+      final displayName = row['display_name']?.toString().trim();
+      final fullName = profile['full_name']?.toString().trim();
+      final avatarUrl = profile['avatar_url']?.toString().trim();
+
+      pros.add(
+        Professional(
+          profileId: profileId,
+          name: displayName != null && displayName.isNotEmpty
+              ? displayName
+              : fullName != null && fullName.isNotEmpty
+                  ? fullName
+                  : 'Fitness Professional',
+          specialties: row['specializations']?.toString() ?? '',
+          rating: double.parse(avgRating.toStringAsFixed(1)),
+          reviewCount: reviewCount,
+          yearsExp: _parseInt(row['experience']) ?? 0,
+          bio: row['bio']?.toString(),
+          avatarUrl: avatarUrl != null && avatarUrl.isNotEmpty ? avatarUrl : null,
+        ),
+      );
     }
 
     if (!mounted) return;
@@ -1552,13 +1572,20 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         ),
         child: Row(
           children: [
-            const CircleAvatar(
+            CircleAvatar(
               radius: 24,
               backgroundColor: AppColors.primarySoft,
-              child: Icon(
-                Icons.person,
-                color: AppColors.primary,
-              ),
+              backgroundImage: professional.avatarUrl != null &&
+                      professional.avatarUrl!.trim().isNotEmpty
+                  ? NetworkImage(professional.avatarUrl!)
+                  : null,
+              child: professional.avatarUrl == null ||
+                      professional.avatarUrl!.trim().isEmpty
+                  ? const Icon(
+                      Icons.person,
+                      color: AppColors.primary,
+                    )
+                  : null,
             ),
 
             const SizedBox(width: 12),

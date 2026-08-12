@@ -77,7 +77,7 @@ class _ProfessionalDetailScreenState extends State<ProfessionalDetailScreen> {
                 reviewCount: professional.reviewCount,
                 yearsExp: professional.yearsExp,
                 bio: professional.bio,
-                avatarUrl: (url != null && url.isNotEmpty) ? url : null,
+                avatarUrl: (url != null && url.isNotEmpty) ? url : professional.avatarUrl,
               );
             });
           },
@@ -166,6 +166,7 @@ class _ProfessionalDetailScreenState extends State<ProfessionalDetailScreen> {
           reviewCount: reviewCount,
           yearsExp: professional.yearsExp,
           bio: professional.bio,
+          avatarUrl: professional.avatarUrl,
         );
       });
     } catch (e) {
@@ -226,10 +227,12 @@ class _ProfessionalDetailScreenState extends State<ProfessionalDetailScreen> {
               CircleAvatar(
                 radius: 44,
                 backgroundColor: AppColors.primarySoft,
-                backgroundImage: professional.avatarUrl != null
+                backgroundImage: professional.avatarUrl != null &&
+                        professional.avatarUrl!.trim().isNotEmpty
                     ? NetworkImage(professional.avatarUrl!)
                     : null,
-                child: professional.avatarUrl == null
+                child: professional.avatarUrl == null ||
+                        professional.avatarUrl!.trim().isEmpty
                     ? const Icon(Icons.person, size: 44, color: AppColors.primary)
                     : null,
               ),
