@@ -13,6 +13,7 @@ class ActiveWorkoutScreen extends StatefulWidget {
   final String planTitle;
   final String planDayId;
   final String dayLabel;
+  final bool isPersonalized;
 
   const ActiveWorkoutScreen({
     super.key,
@@ -20,6 +21,7 @@ class ActiveWorkoutScreen extends StatefulWidget {
     required this.planTitle,
     required this.planDayId,
     required this.dayLabel,
+    this.isPersonalized = false,
   });
 
   @override
@@ -64,13 +66,21 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
     });
 
     try {
-      final response = await Supabase.instance.client
-          .from('plan_exercises')
-          .select(
-            'plan_exercise_id, exercise_id, sets, rep_min, rep_max, rest_sec, order_index, exercise_library(name, muscle_group)',
-          )
-          .eq('plan_day_id', widget.planDayId)
-          .order('order_index');
+      final response = widget.isPersonalized
+          ? await Supabase.instance.client
+              .from('personalized_plan_exercises')
+              .select(
+                'personalized_plan_exercise_id, exercise_id, sets, rep_min, rep_max, rest_sec, order_index, exercise_library(name, muscle_group)',
+              )
+              .eq('personalized_plan_day_id', widget.planDayId)
+              .order('order_index')
+          : await Supabase.instance.client
+              .from('plan_exercises')
+              .select(
+                'plan_exercise_id, exercise_id, sets, rep_min, rep_max, rest_sec, order_index, exercise_library(name, muscle_group)',
+              )
+              .eq('plan_day_id', widget.planDayId)
+              .order('order_index');
 
       final rows = List<Map<String, dynamic>>.from(response as List);
 
@@ -201,16 +211,14 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
 
     try {
       final durationSeconds = DateTime.now().difference(_startedAt).inSeconds;
-      final durationMin = durationSeconds <= 0
-          ? 1
-          : (durationSeconds / 60).ceil();
+      final durationMin = durationSeconds <= 0 ? 1 : (durationSeconds / 60).ceil();
 
       final logRow = await Supabase.instance.client
           .from('workout_logs')
           .insert({
             'profile_id': userId,
-            'free_plan_id': widget.planId,
-            'personalized_plan_id': null,
+            'free_plan_id': widget.isPersonalized ? null : widget.planId,
+            'personalized_plan_id': widget.isPersonalized ? widget.planId : null,
             'plan_day_id': widget.planDayId,
             'performed_at': DateTime.now().toIso8601String(),
             'duration_min': durationMin,

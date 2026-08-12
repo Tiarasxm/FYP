@@ -36,6 +36,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _todayPlanTitle = 'No active plan';
   String _todayPlanMeta = 'Choose a plan from Workout tab';
+  String? _upNextPlanTitle;
+  String? _upNextPlanMeta;
   bool _hasActiveWorkoutDay = false;
   bool _completedToday = false;
   bool _isRestDayPending = false;
@@ -44,7 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _heartRate = 0;
   DateTime? _heartRateMeasuredAt;
   int _kcalBurned = 0;
-  int _kcalGoal = 500;
+  final int _kcalGoal = 500;
   double _todayVolumeKg = 0;
 
   final List<MenuItem> _homeMenu = const [
@@ -173,6 +175,27 @@ class _HomeScreenState extends State<HomeScreen> {
         .subscribe();
   }
 
+  DateTime _dateOnly(DateTime value) {
+    final local = value.toLocal();
+    return DateTime(local.year, local.month, local.day);
+  }
+
+  Map<String, dynamic> _selectCalendarDay({
+    required List<Map<String, dynamic>> dayRows,
+    required DateTime? activeStartedAt,
+  }) {
+    final today = _dateOnly(DateTime.now());
+    final startDate = activeStartedAt == null ? today : _dateOnly(activeStartedAt);
+    final elapsedDays = today.difference(startDate).inDays;
+    final index = elapsedDays < 0 ? 0 : elapsedDays;
+
+    if (index < dayRows.length) {
+      return dayRows[index];
+    }
+
+    return dayRows.last;
+  }
+
   Future<void> _loadActivePlan(SupabaseClient client, String userId) async {
     final savedResponse = await client
         .from('saved_plans')
@@ -191,8 +214,12 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    final freePlanId = savedRows.first['free_plan_id']?.toString();
-    final personalizedPlanId = savedRows.first['personalized_plan_id']?.toString();
+    final activeSavedRow = savedRows.first;
+    final freePlanId = activeSavedRow['free_plan_id']?.toString();
+    final personalizedPlanId = activeSavedRow['personalized_plan_id']?.toString();
+    final activeStartedAt =
+        DateTime.tryParse(activeSavedRow['saved_at']?.toString() ?? '');
+
     final isPersonalized = personalizedPlanId != null && personalizedPlanId.isNotEmpty;
     final planId = isPersonalized ? personalizedPlanId : freePlanId;
 
@@ -208,10 +235,12 @@ class _HomeScreenState extends State<HomeScreen> {
           .select('personalized_plan_id, plan_name, duration_weeks, status')
           .eq('personalized_plan_id', planId)
           .maybeSingle();
+
       if (plan == null) {
         _clearActivePlan();
         return;
       }
+
       planName = plan['plan_name']?.toString();
     } else {
       final plan = await client
@@ -246,7 +275,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final daysResponse = isPersonalized
         ? await client
             .from('personalized_plan_days')
-            .select('personalized_plan_day_id, week_number, day_number, day_name, is_rest_day')
+            .select(
+              'personalized_plan_day_id, week_number, day_number, day_name, is_rest_day',
+            )
             .eq('personalized_plan_id', planId)
             .order('week_number', ascending: true)
             .order('day_number', ascending: true)
@@ -290,6 +321,8 @@ class _HomeScreenState extends State<HomeScreen> {
         _activePlanDayId = null;
         _todayPlanTitle = activePlanTitle;
         _todayPlanMeta = 'No days in this plan yet';
+        _upNextPlanTitle = null;
+        _upNextPlanMeta = null;
         _hasActiveWorkoutDay = false;
         _completedToday = false;
         _isRestDayPending = false;
@@ -298,40 +331,33 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    final now = DateTime.now();
-    final startOfDay = DateTime(now.year, now.month, now.day);
-    final endOfDay = startOfDay.add(const Duration(days: 1));
-
-    final todayLogsResponse = await client
-        .from('workout_logs')
-        .select('workout_log_id')
-        .eq('profile_id', userId)
-        .eq(isPersonalized ? 'personalized_plan_id' : 'free_plan_id', planId)
-        .gte('performed_at', startOfDay.toUtc().toIso8601String())
-        .lt('performed_at', endOfDay.toUtc().toIso8601String());
-
-    final completedToday = (todayLogsResponse as List).isNotEmpty;
-
-    final completedLogsResponse = await client
-        .from('workout_logs')
-        .select('plan_day_id')
-        .eq('profile_id', userId)
-        .eq(isPersonalized ? 'personalized_plan_id' : 'free_plan_id', planId)
-        .not('plan_day_id', 'is', null);
-
-    final completedDayIds = List<Map<String, dynamic>>.from(
-      completedLogsResponse as List,
-    ).map((row) => row['plan_day_id']?.toString()).whereType<String>().toSet();
-
-    final selectedDay = dayRows.firstWhere(
-      (day) => !completedDayIds.contains(day['plan_day_id']?.toString()),
-      orElse: () => dayRows.last,
+    final selectedDay = _selectCalendarDay(
+      dayRows: dayRows,
+      activeStartedAt: activeStartedAt,
     );
 
     final planDayId = selectedDay['plan_day_id']?.toString();
     final dayNumber = selectedDay['day_number']?.toString() ?? '1';
     final dayName = selectedDay['day_name']?.toString().trim();
     final isRestDay = selectedDay['is_rest_day'] == true;
+
+    final now = DateTime.now();
+    final startOfDay = DateTime(now.year, now.month, now.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1));
+
+    bool completedToday = false;
+    if (planDayId != null && planDayId.isNotEmpty) {
+      final todayLogsResponse = await client
+          .from('workout_logs')
+          .select('workout_log_id')
+          .eq('profile_id', userId)
+          .eq(isPersonalized ? 'personalized_plan_id' : 'free_plan_id', planId)
+          .eq('plan_day_id', planDayId)
+          .gte('performed_at', startOfDay.toUtc().toIso8601String())
+          .lt('performed_at', endOfDay.toUtc().toIso8601String());
+
+      completedToday = (todayLogsResponse as List).isNotEmpty;
+    }
 
     int exerciseCount = 0;
 
@@ -354,9 +380,48 @@ class _HomeScreenState extends State<HomeScreen> {
         : 'Day $dayNumber: $dayName';
     final title = '$activePlanTitle - $dayTitle';
 
-    final meta = isRestDay
-        ? 'Rest Day'
-        : '$exerciseCount exercises';
+    final meta = isRestDay ? 'Rest Day' : '$exerciseCount exercises';
+
+    String? upNextTitle;
+    String? upNextMeta;
+
+    if (completedToday) {
+      final currentIndex = dayRows.indexOf(selectedDay);
+      final nextIndex = currentIndex < 0 ? -1 : currentIndex + 1;
+
+      if (nextIndex >= 0 && nextIndex < dayRows.length) {
+        final nextDay = dayRows[nextIndex];
+        final nextDayId = nextDay['plan_day_id']?.toString();
+        final nextDayNumber = nextDay['day_number']?.toString() ?? '${nextIndex + 1}';
+        final nextDayName = nextDay['day_name']?.toString().trim();
+        final nextIsRestDay = nextDay['is_rest_day'] == true;
+
+        final nextDayTitle = nextDayName == null || nextDayName.isEmpty
+            ? 'Day $nextDayNumber'
+            : 'Day $nextDayNumber: $nextDayName';
+
+        upNextTitle = '$activePlanTitle - $nextDayTitle';
+
+        if (nextIsRestDay || nextDayId == null || nextDayId.isEmpty) {
+          upNextMeta = 'Rest Day';
+        } else {
+          final nextExercisesResponse = isPersonalized
+              ? await client
+                  .from('personalized_plan_exercises')
+                  .select('personalized_plan_exercise_id')
+                  .eq('personalized_plan_day_id', nextDayId)
+              : await client
+                  .from('plan_exercises')
+                  .select('plan_exercise_id')
+                  .eq('plan_day_id', nextDayId);
+
+          upNextMeta = '${(nextExercisesResponse as List).length} exercises';
+        }
+      } else {
+        upNextTitle = 'All plan days completed';
+        upNextMeta = 'Great job! You finished this plan.';
+      }
+    }
 
     if (!mounted) return;
 
@@ -365,6 +430,8 @@ class _HomeScreenState extends State<HomeScreen> {
       _activePlanDayId = planDayId;
       _todayPlanTitle = title;
       _todayPlanMeta = meta;
+      _upNextPlanTitle = upNextTitle;
+      _upNextPlanMeta = upNextMeta;
       _hasActiveWorkoutDay =
           planDayId != null && planDayId.isNotEmpty && !isRestDay;
       _completedToday = completedToday;
@@ -464,6 +531,8 @@ class _HomeScreenState extends State<HomeScreen> {
       _activePlanDayId = null;
       _todayPlanTitle = 'No active plan';
       _todayPlanMeta = 'Choose a plan from Workout tab';
+      _upNextPlanTitle = null;
+      _upNextPlanMeta = null;
       _hasActiveWorkoutDay = false;
       _completedToday = false;
       _isRestDayPending = false;
@@ -524,7 +593,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openFitnessPlan() {
-    if (_activePlanId == null || _activePlanDayId == null) {
+    if (_activePlanId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please choose an active plan from Workout tab first.'),
@@ -768,12 +837,16 @@ class _HomeScreenState extends State<HomeScreen> {
     final showRestDay = hasPlan && !_completedToday && _isRestDayPending;
 
     final String headline = showCompleted
-        ? "Workout Complete! 🎉"
+        ? 'Completed'
         : showRestDay
             ? 'Rest Day'
             : "Today's Workout";
 
-    final String buttonLabel = (showCompleted || showRestDay) ? 'View Plan' : 'Start';
+    final String buttonLabel = showCompleted
+        ? 'View Plan'
+        : showRestDay
+            ? 'View Plan'
+            : 'Start';
 
     return SectionCard(
       color: AppColors.primarySoft,
@@ -793,10 +866,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 color: AppColors.primary,
               ),
             ),
-
             const SizedBox(width: 14),
           ],
-
           Expanded(
             child: _isLoading
                 ? const Text(
@@ -816,26 +887,29 @@ class _HomeScreenState extends State<HomeScreen> {
                           fontWeight: FontWeight.w800,
                         ),
                       ),
-
                       const SizedBox(height: 2),
-
                       Text(
-                        showCompleted ? 'Up next: $_todayPlanTitle' : _todayPlanTitle,
+                        showCompleted
+                            ? (_upNextPlanTitle == null
+                                ? 'Up next: No scheduled workout'
+                                : 'Up next: $_upNextPlanTitle')
+                            : _todayPlanTitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w800,
-                          color: _hasActiveWorkoutDay
+                          color: _hasActiveWorkoutDay || showCompleted
                               ? AppColors.textPrimary
                               : AppColors.textSecondary,
                         ),
                       ),
-
                       Text(
                         showRestDay
                             ? 'Recovery day • no workout scheduled'
-                            : _todayPlanMeta,
+                            : showCompleted
+                                ? (_upNextPlanMeta ?? 'Workout finished for today')
+                                : _todayPlanMeta,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -846,9 +920,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
           ),
-
           const SizedBox(width: 10),
-
           ElevatedButton(
             onPressed: _isLoading ? null : _openFitnessPlan,
             child: Row(
