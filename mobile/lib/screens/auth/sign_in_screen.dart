@@ -188,6 +188,12 @@ class _SignInScreenState extends State<SignInScreen> {
       final String status =
           profile['status']?.toString().trim().toLowerCase() ?? 'active';
 
+      if (status == 'suspended') {
+        await supabase.auth.signOut();
+        showError('This account has been restricted. Please contact support.');
+        return;
+      }
+
       if (status == 'deleted') {
         await supabase.auth.signOut();
         showError('This account has been deleted.');
