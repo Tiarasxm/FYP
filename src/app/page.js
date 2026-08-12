@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import Navbar from "@/app/components/Navbar";
+import Footer from "@/app/components/Footer";
 import {
   defaultHero,
   defaultFeatures,
@@ -293,41 +294,7 @@ export default function HomePage() {
         ))}
       </section>
 
-      {/* Footer */}
-      <footer className="bg-white px-10 md:px-12 py-16 grid grid-cols-1 md:grid-cols-4 gap-12">
-        <div>
-          <h2 className="text-[34px] font-bold">ShapeRush</h2>
-
-          <p className="mt-5 text-[14px] leading-6 text-gray-500">
-            Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
-            dolor sit tincidunt ut labore et dolore magna aliqua. Dolor sit
-            amet, consectetur adipiscing elit.
-          </p>
-
-          <p className="mt-5 text-gray-500">©2026 by ShapeRush</p>
-        </div>
-
-        <FooterColumn
-          title="Address"
-          lines={["641 Clementi Road,", "Singapore 556431"]}
-        />
-
-        <div>
-          <p className="text-[#6c5cff] text-[14px] mb-5">Legal</p>
-
-          <div className="space-y-3 text-[15px]">
-            <Link href="/privacy-policy" className="block">
-              Privacy Policy
-            </Link>
-
-            <Link href="/terms-and-conditions" className="block">
-              Terms and Conditions
-            </Link>
-          </div>
-        </div>
-
-        <FooterColumn title="Contact Us" lines={["shaperush@gmail.com"]} />
-      </footer>
+      <Footer />
     </main>
   );
 }
@@ -475,20 +442,6 @@ function FAQItem({ question, answer }) {
         <p className="mt-4 text-[14px] leading-6 text-gray-500">{answer}</p>
       )}
     </details>
-  );
-}
-
-function FooterColumn({ title, lines }) {
-  return (
-    <div>
-      <p className="text-[#6c5cff] text-[14px] mb-5">{title}</p>
-
-      <div className="space-y-3 text-[15px]">
-        {lines.map((line) => (
-          <p key={line}>{line}</p>
-        ))}
-      </div>
-    </div>
   );
 }
 
