@@ -482,8 +482,7 @@ const styles = {
   },
 
   tableHeader: {
-    display: "grid",
-    gridTemplateColumns: "90px 200px 250px 230px 110px 120px",
+    display: "flex",
     alignItems: "center",
     borderBottom: "1px solid #d8d8d8",
     padding: "0 10px 30px",
@@ -497,8 +496,7 @@ const styles = {
   },
 
   tableRow: {
-    display: "grid",
-    gridTemplateColumns: "90px 200px 250px 230px 110px 120px",
+    display: "flex",
     alignItems: "center",
     minHeight: "82px",
     borderBottom: "1px solid #d8d8d8",
@@ -507,12 +505,38 @@ const styles = {
     fontSize: "15px",
   },
 
-  idColumn: {},
-  nameColumn: {},
-  emailColumn: {},
-  specializationColumn: {},
-  statusColumn: {},
+  idColumn: {
+    flex: "0 0 70px",
+    minWidth: 0,
+  },
+  nameColumn: {
+    flex: 1.5,
+    minWidth: 0,
+    paddingRight: "14px",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  emailColumn: {
+    flex: 1.9,
+    minWidth: 0,
+    paddingRight: "14px",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  specializationColumn: {
+    flex: 1.6,
+    minWidth: 0,
+    paddingRight: "14px",
+  },
+  statusColumn: {
+    flex: "0 0 100px",
+    minWidth: 0,
+  },
   actionColumn: {
+    flex: "0 0 130px",
+    minWidth: 0,
     display: "flex",
     justifyContent: "flex-end",
   },
