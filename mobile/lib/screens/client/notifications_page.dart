@@ -29,8 +29,18 @@ class _NotificationsPageState extends State<NotificationsPage> {
   @override
   void initState() {
     super.initState();
-    NotificationService.instance.requestPermissions();
+    _requestPermissions();
     _loadNotificationSettings();
+  }
+
+  Future<void> _requestPermissions() async {
+    final granted = await NotificationService.instance.requestPermissions();
+    if (!granted && mounted) {
+      _showMessage(
+        'Notification or exact-alarm permission not granted. Reminders may not fire.',
+        isError: true,
+      );
+    }
   }
 
   Future<void> _loadNotificationSettings() async {
@@ -130,14 +140,19 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }
 
     for (final reminder in reminders) {
-      if (reminder.enabled) {
-        await NotificationService.instance.scheduleReminder(
-          reminderId: reminder.id,
-          type: reminder.type,
-          time: reminder.time,
-        );
-      } else {
-        await NotificationService.instance.cancelReminder(reminder.id);
+      try {
+        if (reminder.enabled) {
+          await NotificationService.instance.scheduleReminder(
+            reminderId: reminder.id,
+            type: reminder.type,
+            time: reminder.time,
+          );
+        } else {
+          await NotificationService.instance.cancelReminder(reminder.id);
+        }
+      } catch (error) {
+        debugPrint('NotificationsPage: failed to sync reminder ${reminder.id}: $error');
+        _showMessage('Failed to schedule "${reminder.type}": $error', isError: true);
       }
     }
   }

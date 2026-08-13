@@ -5,6 +5,7 @@ import '../../theme/app_theme.dart';
 class SubScreenScaffold extends StatelessWidget {
   final String title;
   final List<Widget> children;
+  final Widget? header;
   final Widget? bottomButton;
   final Widget? trailing;
 
@@ -12,6 +13,7 @@ class SubScreenScaffold extends StatelessWidget {
     super.key,
     required this.title,
     required this.children,
+    this.header,
     this.bottomButton,
     this.trailing,
   });
@@ -55,6 +57,17 @@ class SubScreenScaffold extends StatelessWidget {
                 ],
               ),
             ),
+
+            if (header != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.screenPadding,
+                  0,
+                  AppSpacing.screenPadding,
+                  0,
+                ),
+                child: header,
+              ),
 
             Expanded(
               child: ListView(

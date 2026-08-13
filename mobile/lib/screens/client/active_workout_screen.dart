@@ -75,14 +75,14 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
           ? await Supabase.instance.client
               .from('personalized_plan_exercises')
               .select(
-                'personalized_plan_exercise_id, exercise_id, sets, rep_min, rep_max, rest_sec, order_index, exercise_library(name, muscle_group)',
+                'personalized_plan_exercise_id, exercise_id, sets, rep_min, rep_max, rest_sec, order_index, exercise_library(name, muscle_group, instructions)',
               )
               .eq('personalized_plan_day_id', widget.planDayId)
               .order('order_index')
           : await Supabase.instance.client
               .from('plan_exercises')
               .select(
-                'plan_exercise_id, exercise_id, sets, rep_min, rep_max, rest_sec, order_index, exercise_library(name, muscle_group)',
+                'plan_exercise_id, exercise_id, sets, rep_min, rep_max, rest_sec, order_index, exercise_library(name, muscle_group, instructions)',
               )
               .eq('plan_day_id', widget.planDayId)
               .order('order_index');
@@ -135,6 +135,49 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
   String _exerciseName(Map<String, dynamic> exercise) {
     final library = exercise['exercise_library'] as Map<String, dynamic>?;
     return library?['name']?.toString() ?? 'Exercise';
+  }
+
+  String _exerciseInstructions(Map<String, dynamic> exercise) {
+    final library = exercise['exercise_library'] as Map<String, dynamic>?;
+    final instructions = library?['instructions']?.toString().trim() ?? '';
+    return instructions.isNotEmpty ? instructions : 'No instructions available for this exercise.';
+  }
+
+  void _showExerciseInstructions(Map<String, dynamic> exercise) {
+    final name = _exerciseName(exercise);
+    final instructions = _exerciseInstructions(exercise);
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Text(
+          name,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        content: SingleChildScrollView(
+          child: Text(
+            instructions,
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   String _exerciseMeta(Map<String, dynamic> exercise) {
@@ -275,7 +318,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
             'free_plan_id': widget.isPersonalized ? null : widget.planId,
             'personalized_plan_id': widget.isPersonalized ? widget.planId : null,
             'plan_day_id': widget.planDayId,
-            'performed_at': DateTime.now().toIso8601String(),
+            'performed_at': DateTime.now().toUtc().toIso8601String(),
             'duration_min': durationMin,
             'source': 'active_plan',
           })
@@ -323,7 +366,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
 
       if (!mounted) return;
 
-      Navigator.of(context).pushReplacement(
+      Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => WorkoutCompleteScreen(
             dayLabel: widget.dayLabel,
@@ -367,6 +410,12 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
           ),
         ),
       ),
+      header: _restRemaining > 0
+          ? Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _restTimerBanner(),
+            )
+          : null,
       bottomButton: PrimaryButton(
         label: _isFinishing ? 'Saving...' : 'Finish Workout',
         onPressed: _isFinishing ? null : _finishWorkout,
@@ -390,12 +439,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
         else
           for (var i = 0; i < _exercises.length; i++) ...[
             _exerciseCard(i),
-            const SizedBox(height: 14),
-          ],
-
-          if (_restRemaining > 0) ...[
-            const SizedBox(height: 8),
-            _restTimerBanner(),
+            if (i < _exercises.length - 1) const SizedBox(height: 14),
           ],
       ],
     );
@@ -451,10 +495,13 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                   ],
                 ),
               ),
-              const Icon(
-                Icons.help_outline,
-                size: 18,
-                color: AppColors.textMuted,
+              GestureDetector(
+                onTap: () => _showExerciseInstructions(exercise),
+                child: const Icon(
+                  Icons.help_outline,
+                  size: 18,
+                  color: AppColors.textMuted,
+                ),
               ),
             ],
           ),

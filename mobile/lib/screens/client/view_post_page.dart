@@ -560,7 +560,7 @@ class _FollowButton extends StatefulWidget {
 
 class _FollowButtonState extends State<_FollowButton> {
   final _supabase = Supabase.instance.client;
-  bool _isFollowing = false;
+  String _followStatus = 'none';
   bool _isLoading = true;
 
   @override
@@ -579,13 +579,13 @@ class _FollowButtonState extends State<_FollowButton> {
     try {
       final row = await _supabase
           .from('follows')
-          .select('following_id')
+          .select('status')
           .eq('follower_id', userId)
           .eq('following_id', widget.targetUserId)
           .maybeSingle();
       if (mounted) {
         setState(() {
-          _isFollowing = row != null;
+          _followStatus = row?['status']?.toString() ?? 'none';
           _isLoading = false;
         });
       }
@@ -598,27 +598,35 @@ class _FollowButtonState extends State<_FollowButton> {
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null || _isLoading) return;
 
-    final previous = _isFollowing;
-    setState(() => _isFollowing = !previous);
+    final previous = _followStatus;
+    setState(() => _isLoading = true);
     try {
-      if (previous) {
-        await _supabase
-            .from('follows')
-            .delete()
-            .eq('follower_id', userId)
-            .eq('following_id', widget.targetUserId);
+      if (previous == 'accepted' || previous == 'pending') {
+        await _supabase.rpc('unfollow', params: {'p_target_uuid': widget.targetUserId});
+        if (mounted) setState(() => _followStatus = 'none');
       } else {
-        await _supabase.from('follows').insert({
-          'follower_id': userId,
-          'following_id': widget.targetUserId,
-        });
+        final result = await _supabase.rpc(
+          'request_follow',
+          params: {'p_target_uuid': widget.targetUserId},
+        );
+        final status = result?.toString() ?? 'accepted';
+        if (mounted) {
+          setState(() => _followStatus = status);
+          if (status == 'pending') {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Follow request sent.')),
+            );
+          }
+        }
       }
     } catch (error) {
       if (!mounted) return;
-      setState(() => _isFollowing = previous);
+      setState(() => _followStatus = previous);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Unable to update follow: $error')),
       );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -627,14 +635,24 @@ class _FollowButtonState extends State<_FollowButton> {
     if (_supabase.auth.currentUser?.id == widget.targetUserId) {
       return const SizedBox.shrink();
     }
+
+    final isFollowing = _followStatus == 'accepted';
+    final isPending = _followStatus == 'pending';
+    final label = isFollowing
+        ? 'Following'
+        : isPending
+            ? 'Requested'
+            : 'Follow';
+    final bgColor = (isFollowing || isPending) ? AppColors.border : AppColors.primary;
+    final fgColor = (isFollowing || isPending) ? AppColors.textPrimary : Colors.white;
+
     return ElevatedButton(
       onPressed: _isLoading ? null : _toggleFollow,
       style: ElevatedButton.styleFrom(
-        backgroundColor:
-            _isFollowing ? AppColors.border : AppColors.primary,
-        foregroundColor: _isFollowing ? AppColors.textPrimary : Colors.white,
+        backgroundColor: bgColor,
+        foregroundColor: fgColor,
       ),
-      child: Text(_isFollowing ? 'Following' : 'Follow'),
+      child: Text(label),
     );
   }
 }

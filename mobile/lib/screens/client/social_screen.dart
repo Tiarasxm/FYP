@@ -151,19 +151,23 @@ class _SocialScreenState extends State<SocialScreen> {
 
     try {
       List<String>? allowedUserIds;
+      final currentUserId = _supabase.auth.currentUser?.id;
+      if (currentUserId == null) throw Exception('You must be signed in.');
+
+      // Always fetch accepted following IDs (needed for both tabs)
+      final followRows = await _supabase
+          .from('follows')
+          .select('following_id')
+          .eq('follower_id', currentUserId)
+          .eq('status', 'accepted');
+      final acceptedFollowingIds = (followRows as List<dynamic>)
+          .map((row) => (row as Map<String, dynamic>)['following_id']?.toString())
+          .whereType<String>()
+          .toSet();
+
       if (selectedTab == 1) {
-        final currentUserId = _supabase.auth.currentUser?.id;
-        if (currentUserId == null) throw Exception('You must be signed in.');
-
-        final followRows = await _supabase
-            .from('follows')
-            .select('following_id')
-            .eq('follower_id', currentUserId);
-        allowedUserIds = (followRows as List<dynamic>)
-            .map((row) => (row as Map<String, dynamic>)['following_id']?.toString())
-            .whereType<String>()
-            .toList();
-
+        // Following tab: only posts from accepted follows
+        allowedUserIds = acceptedFollowingIds.toList();
         if (allowedUserIds.isEmpty) {
           if (mounted) setState(() => _posts = []);
           return;
@@ -179,7 +183,45 @@ class _SocialScreenState extends State<SocialScreen> {
       }
 
       final postRows = await query.order('created_at', ascending: false);
-      final rows = postRows as List<dynamic>;
+      var rows = postRows as List<dynamic>;
+
+      // For Feed tab: filter out posts from private accounts the user doesn't follow
+      if (selectedTab == 0) {
+        final postUserIds = rows
+            .map((row) => (row as Map<String, dynamic>)['user_id']?.toString())
+            .whereType<String>()
+            .toSet()
+            .toList();
+
+        if (postUserIds.isNotEmpty) {
+          final profileRows = await _supabase
+              .from('profiles')
+              .select('id, is_private')
+              .inFilter('id', postUserIds);
+
+          final privateUserIds = <String>{};
+          for (final item in profileRows as List<dynamic>) {
+            final row = item as Map<String, dynamic>;
+            final id = row['id']?.toString();
+            if (id != null && row['is_private'] == true) {
+              privateUserIds.add(id);
+            }
+          }
+
+          if (privateUserIds.isNotEmpty) {
+            rows = rows.where((item) {
+              final row = item as Map<String, dynamic>;
+              final userId = row['user_id']?.toString();
+              // Show post if user is not private, or if I follow them (accepted)
+              return userId == null ||
+                  !privateUserIds.contains(userId) ||
+                  acceptedFollowingIds.contains(userId) ||
+                  userId == currentUserId;
+            }).toList();
+          }
+        }
+      }
+
       final userIds = rows
           .map((row) => (row as Map<String, dynamic>)['user_id']?.toString())
           .whereType<String>()
@@ -217,7 +259,6 @@ class _SocialScreenState extends State<SocialScreen> {
       final likeCounts = <String, int>{};
       final commentCounts = <String, int>{};
       final likedPostIds = <String>{};
-      final currentUserId = _supabase.auth.currentUser?.id;
       if (postIds.isNotEmpty) {
         final likeRows = await _supabase
             .from('post_likes')

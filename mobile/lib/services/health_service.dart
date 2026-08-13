@@ -25,8 +25,8 @@ class HealthService {
   static final List<HealthDataType> _dataTypes = [
     HealthDataType.STEPS,
     HealthDataType.HEART_RATE,
+    HealthDataType.TOTAL_CALORIES_BURNED,
     HealthDataType.ACTIVE_ENERGY_BURNED,
-    HealthDataType.BASAL_ENERGY_BURNED,
   ];
 
   static final List<HealthDataAccess> _permissions = [
@@ -179,6 +179,8 @@ class HealthService {
         endTime: dayEnd,
       );
 
+      debugPrint('HealthService: heart rate data points: ${heartRateData.length}');
+
       if (heartRateData.isNotEmpty) {
         heartRateData.sort((a, b) => b.dateTo.compareTo(a.dateTo));
         final latestPoint = heartRateData.first;
@@ -193,37 +195,43 @@ class HealthService {
     }
 
     try {
+      final caloriesData = await _health.getHealthDataFromTypes(
+        types: [HealthDataType.TOTAL_CALORIES_BURNED],
+        startTime: dayStart,
+        endTime: dayEnd,
+      );
+
+      debugPrint('HealthService: total calories data points: ${caloriesData.length}');
+
+      for (final point in caloriesData) {
+        final value = point.value;
+        debugPrint('HealthService: total calories value type: ${value.runtimeType}');
+        if (value is NumericHealthValue) {
+          calories += value.numericValue.toDouble();
+        }
+      }
+    } catch (e) {
+      debugPrint('HealthService: total calories fetch failed: $e');
+    }
+
+    try {
       final activeCaloriesData = await _health.getHealthDataFromTypes(
         types: [HealthDataType.ACTIVE_ENERGY_BURNED],
         startTime: dayStart,
         endTime: dayEnd,
       );
 
+      debugPrint('HealthService: active calories data points: ${activeCaloriesData.length}');
+
       for (final point in activeCaloriesData) {
         final value = point.value;
+        debugPrint('HealthService: active calories value type: ${value.runtimeType}');
         if (value is NumericHealthValue) {
           calories += value.numericValue.toDouble();
         }
       }
     } catch (e) {
       debugPrint('HealthService: active calories fetch failed: $e');
-    }
-
-    try {
-      final basalCaloriesData = await _health.getHealthDataFromTypes(
-        types: [HealthDataType.BASAL_ENERGY_BURNED],
-        startTime: dayStart,
-        endTime: dayEnd,
-      );
-
-      for (final point in basalCaloriesData) {
-        final value = point.value;
-        if (value is NumericHealthValue) {
-          calories += value.numericValue.toDouble();
-        }
-      }
-    } catch (e) {
-      debugPrint('HealthService: basal calories fetch failed: $e');
     }
 
     return HealthDailyMetrics(

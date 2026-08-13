@@ -24,6 +24,7 @@ class _ProfessionalMessagesState extends State<ProfessionalMessages> {
 
   RealtimeChannel? _profilesChannel;
   RealtimeChannel? _messagesChannel;
+  RealtimeChannel? _tagsChannel;
 
   final List<String> _filterOptions = ['All', 'New', 'Consult', 'Follow-up', 'Urgent', 'Weight Loss'];
 
@@ -33,6 +34,21 @@ class _ProfessionalMessagesState extends State<ProfessionalMessages> {
     _loadRooms();
     _subscribeToProfileChanges();
     _subscribeToNewMessages();
+    _subscribeToTagChanges();
+  }
+
+  void _subscribeToTagChanges() {
+    _tagsChannel = Supabase.instance.client
+        .channel('chat_tags_pro_messages')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'chat_tags',
+          callback: (_) {
+            _loadTags();
+          },
+        )
+        .subscribe();
   }
 
   @override
@@ -42,6 +58,9 @@ class _ProfessionalMessagesState extends State<ProfessionalMessages> {
     }
     if (_messagesChannel != null) {
       Supabase.instance.client.removeChannel(_messagesChannel!);
+    }
+    if (_tagsChannel != null) {
+      Supabase.instance.client.removeChannel(_tagsChannel!);
     }
     super.dispose();
   }

@@ -207,7 +207,7 @@ begin
     where caller.id = auth.uid()
       and caller.steps_leaderboard_visible is true
       and coalesce(caller.status, 'active') <> 'deleted'
-      and coalesce(caller.user_type, 'free') in ('free', 'priority')
+      and lower(coalesce(caller.user_type, 'free')) in ('free', 'priority')
   ) then
     return;
   end if;
@@ -227,7 +227,7 @@ begin
    and d.metric_date <= p_end_date
   where p.steps_leaderboard_visible is true
     and coalesce(p.status, 'active') <> 'deleted'
-    and coalesce(p.user_type, 'free') in ('free', 'priority')
+    and lower(coalesce(p.user_type, 'free')) in ('free', 'priority')
   group by p.id, p.full_name
   order by total_steps desc, display_name asc;
 end;
@@ -1678,6 +1678,41 @@ begin
     where pubname = 'supabase_realtime' and tablename = 'chat_rooms'
   ) then
     alter publication supabase_realtime add table public.chat_rooms;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'chat_tags'
+  ) then
+    alter publication supabase_realtime add table public.chat_tags;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'free_plans'
+  ) then
+    alter publication supabase_realtime add table public.free_plans;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'saved_plans'
+  ) then
+    alter publication supabase_realtime add table public.saved_plans;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'workout_logs'
+  ) then
+    alter publication supabase_realtime add table public.workout_logs;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'workout_exercises'
+  ) then
+    alter publication supabase_realtime add table public.workout_exercises;
   end if;
 end;
 $$;

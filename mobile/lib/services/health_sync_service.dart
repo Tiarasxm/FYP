@@ -36,10 +36,16 @@ class HealthSyncService {
     int daysBack = 35,
   }) async {
     final connected = await isConnected(userId);
-    if (!connected) return;
+    if (!connected) {
+      debugPrint('HealthSyncService: not connected, skipping sync');
+      return;
+    }
 
-    final hasPermissions = await HealthService.hasPermissions();
-    if (!hasPermissions) return;
+    final granted = await HealthService.requestPermissions();
+    if (!granted) {
+      debugPrint('HealthSyncService: permissions not granted, skipping sync');
+      return;
+    }
 
     try {
       final now = DateTime.now();
@@ -47,7 +53,14 @@ class HealthSyncService {
 
       final metrics = await HealthService.fetchMetricsForRange(start, now);
 
-      if (metrics.isEmpty) return;
+      if (metrics.isEmpty) {
+        debugPrint('HealthSyncService: no metrics returned from Health Connect');
+        return;
+      }
+
+      for (final m in metrics) {
+        debugPrint('HealthSyncService: date=${m.date} steps=${m.steps} hr=${m.heartRate} kcal=${m.caloriesBurned}');
+      }
 
       final client = Supabase.instance.client;
       final nowIso = DateTime.now().toUtc().toIso8601String();
@@ -72,6 +85,8 @@ class HealthSyncService {
       await client
           .from('daily_health_metrics')
           .upsert(rows, onConflict: 'profile_id,metric_date');
+
+      debugPrint('HealthSyncService: upserted ${rows.length} rows to daily_health_metrics');
 
       await client
           .from('wearable_connections')

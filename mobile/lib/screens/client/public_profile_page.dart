@@ -26,6 +26,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
   String? _avatarUrl;
   int _followers = 0;
   int _following = 0;
+  String _followStatus = 'none'; // 'none', 'pending', 'accepted', 'declined'
   bool _isFollowing = false;
   bool _isPrivate = false;
   bool _isLoading = true;
@@ -164,20 +165,26 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
 
       final followerRows = await _supabase
           .from('follows')
-          .select('follower_id')
+          .select('follower_id, status')
           .eq('following_id', userId);
       final followingRows = await _supabase
           .from('follows')
           .select('following_id')
           .eq('follower_id', userId);
 
+      var followStatus = 'none';
       var isFollowing = false;
       if (!_isOwnProfile && currentUserId != null) {
-        isFollowing = (followerRows as List<dynamic>).any(
+        final matchingRows = (followerRows as List<dynamic>).where(
           (item) =>
               (item as Map<String, dynamic>)['follower_id']?.toString() ==
               currentUserId,
         );
+        if (matchingRows.isNotEmpty) {
+          final row = matchingRows.first as Map<String, dynamic>;
+          followStatus = row['status']?.toString() ?? 'accepted';
+          isFollowing = followStatus == 'accepted';
+        }
       }
 
       if (!mounted) return;
@@ -188,6 +195,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
         _posts = posts;
         _followers = (followerRows as List<dynamic>).length;
         _following = (followingRows as List<dynamic>).length;
+        _followStatus = followStatus;
         _isFollowing = isFollowing;
         _isPrivate = profileRow['is_private'] == true;
       });
@@ -203,32 +211,33 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
     final targetUserId = _targetUserId;
     if (currentUserId == null || targetUserId == null || _isFollowSaving) return;
 
-    final previous = _isFollowing;
+    final previousStatus = _followStatus;
+    final wasFollowing = _isFollowing;
     setState(() {
       _isFollowSaving = true;
-      _isFollowing = !previous;
-      _followers += previous ? -1 : 1;
     });
 
     try {
-      if (previous) {
-        await _supabase
-            .from('follows')
-            .delete()
-            .eq('follower_id', currentUserId)
-            .eq('following_id', targetUserId);
+      if (previousStatus == 'accepted' || previousStatus == 'pending') {
+        await _supabase.rpc('unfollow', params: {'p_target_uuid': targetUserId});
       } else {
-        await _supabase.from('follows').insert({
-          'follower_id': currentUserId,
-          'following_id': targetUserId,
-        });
+        final result = await _supabase.rpc(
+          'request_follow',
+          params: {'p_target_uuid': targetUserId},
+        );
+        final status = result?.toString() ?? 'accepted';
+        if (mounted && status == 'pending') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Follow request sent.')),
+          );
+        }
       }
       await _loadProfile();
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _isFollowing = previous;
-        _followers += previous ? 1 : -1;
+        _followStatus = previousStatus;
+        _isFollowing = wasFollowing;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Unable to update follow: $error')),
@@ -394,6 +403,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                     physics: const AlwaysScrollableScrollPhysics(),
                     slivers: [
                       SliverToBoxAdapter(child: _profileHeader()),
+                      if (!_postsArePrivate) ...[
                       SliverPadding(
                         padding: const EdgeInsets.fromLTRB(18, 0, 18, 24),
                         sliver: _posts.isEmpty
@@ -403,18 +413,8 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                                   child: Center(
                                     child: Column(
                                       children: [
-                                        if (_postsArePrivate)
-                                          const Icon(
-                                            Icons.lock_outline,
-                                            size: 38,
-                                            color: AppColors.textMuted,
-                                          ),
-                                        if (_postsArePrivate)
-                                          const SizedBox(height: 10),
                                         Text(
-                                          _postsArePrivate
-                                              ? 'This account is private.\nFollow this user to see their posts.'
-                                              : 'No posts yet.',
+                                          'No posts yet.',
                                           textAlign: TextAlign.center,
                                         ),
                                       ],
@@ -512,6 +512,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                                 ),
                               ),
                       ),
+                      ],
                     ],
                   ),
                 ),
@@ -542,15 +543,17 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
           ),
           const SizedBox(height: 12),
           Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 14),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              PublicProfileStat(value: '${_posts.length}', label: 'POSTS'),
-              PublicProfileStat(value: '$_followers', label: 'FOLLOWERS'),
-              PublicProfileStat(value: '$_following', label: 'FOLLOWING'),
-            ],
-          ),
+          if (!_isPrivate || _isOwnProfile || _isFollowing) ...[
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                PublicProfileStat(value: '${_posts.length}', label: 'POSTS'),
+                PublicProfileStat(value: '$_followers', label: 'FOLLOWERS'),
+                PublicProfileStat(value: '$_following', label: 'FOLLOWING'),
+              ],
+            ),
+          ],
           if (!_isOwnProfile) ...[
             const SizedBox(height: 14),
             SizedBox(
@@ -558,52 +561,77 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
               child: ElevatedButton(
                 onPressed: _isFollowSaving ? null : _toggleFollow,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _isFollowing
+                  backgroundColor: (_isFollowing || _followStatus == 'pending')
                       ? AppColors.border
                       : AppColors.primary,
-                  foregroundColor: _isFollowing ? AppColors.textPrimary : Colors.white,
+                  foregroundColor: (_isFollowing || _followStatus == 'pending')
+                      ? AppColors.textPrimary
+                      : Colors.white,
                 ),
-                child: Text(_isFollowing ? 'Following' : 'Follow'),
+                child: Text(
+                  _isFollowing
+                      ? 'Following'
+                      : _followStatus == 'pending'
+                          ? 'Requested'
+                          : 'Follow',
+                ),
               ),
             ),
           ],
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'About',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
+          if (_isPrivate && !_isOwnProfile && !_isFollowing) ...[
+            const SizedBox(height: 20),
+            Center(
+              child: Column(
+                children: [
+                  const Icon(Icons.lock_outline, size: 38, color: AppColors.textMuted),
+                  const SizedBox(height: 10),
+                  Text(
+                    'This account is private.\nFollow this user to see their profile.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                  ),
+                ],
               ),
-              if (_isOwnProfile)
-                TextButton.icon(
-                  onPressed: _isBioSaving ? null : _editBio,
-                  icon: _isBioSaving
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.edit_outlined, size: 17),
-                  label: const Text('Edit'),
-                ),
-            ],
-          ),
-          const SizedBox(height: 5),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              _bio.trim().isEmpty ? 'No bio available.' : _bio,
-              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
             ),
-          ),
-          const SizedBox(height: 22),
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: Text('Posts', style: TextStyle(fontWeight: FontWeight.w600)),
-          ),
-          const SizedBox(height: 10),
+          ] else ...[
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'About',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                if (_isOwnProfile)
+                  TextButton.icon(
+                    onPressed: _isBioSaving ? null : _editBio,
+                    icon: _isBioSaving
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.edit_outlined, size: 17),
+                    label: const Text('Edit'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 5),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                _bio.trim().isEmpty ? 'No bio available.' : _bio,
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+            ),
+            const SizedBox(height: 22),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Posts', style: TextStyle(fontWeight: FontWeight.w600)),
+            ),
+            const SizedBox(height: 10),
+          ],
         ],
       ),
     );

@@ -48,17 +48,34 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   List<Professional> _professionals = [];
   String _proSearchText = '';
+  RealtimeChannel? _plansChannel;
 
   @override
   void initState() {
     super.initState();
     _loadWorkoutData();
+    _subscribeToPlanChanges();
   }
 
   @override
   void dispose() {
+    _plansChannel?.unsubscribe();
     _planSearchController.dispose();
     super.dispose();
+  }
+
+  void _subscribeToPlanChanges() {
+    _plansChannel = Supabase.instance.client
+        .channel('free_plans_workout_changes')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'free_plans',
+          callback: (_) {
+            _loadWorkoutData();
+          },
+        )
+        .subscribe();
   }
 
   Future<void> _loadWorkoutData() async {
@@ -196,7 +213,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final visibility =
         activePlan?['visibility']?.toString().trim().toLowerCase() ?? 'public';
 
-    if (activePlan == null || (!_isPriority && visibility != 'public')) {
+    if (activePlan == null || visibility != 'public') {
       setState(() {
         _activePlanId = null;
         _activePlan = null;
@@ -294,30 +311,14 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     const selectFields =
         'free_plan_id, professional_id, plan_name, category, tag1, tag2, tag3, visibility, duration_weeks, status, created_at, target_activity_level, target_fitness_goal, fitness_professional(display_name, profiles!inner(full_name, avatar_url))';
 
-    if (_isPriority) {
-      response = await client
-          .from('free_plans')
-          .select(selectFields)
-          .or('status.is.null,status.neq.archived')
-          .order('created_at', ascending: false);
-    } else {
-      response = await client
-          .from('free_plans')
-          .select(selectFields)
-          .ilike('visibility', 'public')
-          .or('status.is.null,status.neq.archived')
-          .order('created_at', ascending: false);
-    }
+    response = await client
+        .from('free_plans')
+        .select(selectFields)
+        .ilike('visibility', 'public')
+        .or('status.is.null,status.neq.archived')
+        .order('created_at', ascending: false);
 
     final plans = List<Map<String, dynamic>>.from(response as List);
-
-    if (_isPriority) {
-      plans.removeWhere((plan) {
-        final visibility =
-            plan['visibility']?.toString().trim().toLowerCase() ?? '';
-        return visibility != 'public' && visibility != 'private';
-      });
-    }
 
     plans.sort((a, b) {
       final scoreA = _recommendationScore(a);

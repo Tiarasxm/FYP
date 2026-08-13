@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -8,6 +10,7 @@ import '../../widgets/client/calorie_ring.dart';
 import '../../widgets/client/section_card.dart';
 
 import 'achievements_screen.dart';
+import 'active_workout_screen.dart';
 import 'fitness_plan_screen.dart';
 import 'leaderboard_screen.dart';
 import 'log_meal_screen.dart';
@@ -22,7 +25,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _isLoading = true;
 
   String _userName = 'User';
@@ -30,9 +33,18 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _avatarUrl;
 
   RealtimeChannel? _profileChannel;
+  RealtimeChannel? _plansChannel;
+  RealtimeChannel? _savedPlansChannel;
+  RealtimeChannel? _workoutLogsChannel;
+  RealtimeChannel? _workoutExercisesChannel;
+  Timer? _healthRefreshTimer;
+  Timer? _volumeRefreshDebounce;
+  Timer? _midnightCheckTimer;
+  DateTime? _lastLoadedDate;
 
   String? _activePlanId;
   String? _activePlanDayId;
+  bool _isActivePlanPersonalized = false;
 
   String _todayPlanTitle = 'No active plan';
   String _todayPlanMeta = 'Choose a plan from Workout tab';
@@ -59,15 +71,135 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _loadHomeData();
+    WidgetsBinding.instance.addObserver(this);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadHomeData();
+    });
+
+    _healthRefreshTimer = Timer.periodic(
+      const Duration(minutes: 5),
+      (_) => _refreshHealthMetrics(),
+    );
+
+    _midnightCheckTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => _maybeRefreshForNewDay(),
+    );
+
+    _subscribeToPlanChanges();
+    _subscribeToSavedPlanChanges();
+    _subscribeToWorkoutExercisesChanges();
+  }
+
+  void _subscribeToWorkoutExercisesChanges() {
+    _workoutExercisesChannel = Supabase.instance.client
+        .channel('workout_exercises_home_changes')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'workout_exercises',
+          callback: (payload) {
+            _volumeRefreshDebounce?.cancel();
+            _volumeRefreshDebounce = Timer(
+              const Duration(milliseconds: 500),
+              () {
+                final client = Supabase.instance.client;
+                final userId = client.auth.currentUser?.id;
+                if (userId != null) {
+                  _loadTodayVolume(client, userId);
+                }
+              },
+            );
+          },
+        )
+        .subscribe();
+  }
+
+  void _subscribeToSavedPlanChanges() {
+    _savedPlansChannel = Supabase.instance.client
+        .channel('saved_plans_home_changes')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'saved_plans',
+          callback: (_) {
+            _loadHomeData();
+          },
+        )
+        .subscribe();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _maybeRefreshForNewDay();
+      _refreshHealthMetrics();
+    }
+  }
+
+  void _maybeRefreshForNewDay() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    if (_lastLoadedDate != null && _lastLoadedDate != today) {
+      debugPrint('HomeScreen: date changed, clearing and reloading home data');
+      if (mounted) {
+        setState(() {
+          _steps = 0;
+          _heartRate = 0;
+          _heartRateMeasuredAt = null;
+          _kcalBurned = 0;
+          _todayVolumeKg = 0;
+          _completedToday = false;
+          _lastLoadedDate = today;
+        });
+      }
+      _loadHomeData();
+      return;
+    }
+
+    if (_lastLoadedDate == null) {
+      _loadHomeData();
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _healthRefreshTimer?.cancel();
+    _midnightCheckTimer?.cancel();
+    _volumeRefreshDebounce?.cancel();
     if (_profileChannel != null) {
       Supabase.instance.client.removeChannel(_profileChannel!);
     }
+    if (_plansChannel != null) {
+      Supabase.instance.client.removeChannel(_plansChannel!);
+    }
+    if (_savedPlansChannel != null) {
+      Supabase.instance.client.removeChannel(_savedPlansChannel!);
+    }
+    if (_workoutLogsChannel != null) {
+      Supabase.instance.client.removeChannel(_workoutLogsChannel!);
+    }
+    if (_workoutExercisesChannel != null) {
+      Supabase.instance.client.removeChannel(_workoutExercisesChannel!);
+    }
     super.dispose();
+  }
+
+  void _subscribeToPlanChanges() {
+    _plansChannel = Supabase.instance.client
+        .channel('free_plans_home_changes')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'free_plans',
+          callback: (_) {
+            _loadHomeData();
+          },
+        )
+        .subscribe();
   }
 
   Future<void> _loadHomeData() async {
@@ -96,8 +228,10 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     } finally {
       if (mounted) {
+        final now = DateTime.now();
         setState(() {
           _isLoading = false;
+          _lastLoadedDate = DateTime(now.year, now.month, now.day);
         });
       }
     }
@@ -255,15 +389,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
       final visibility =
           plan['visibility']?.toString().trim().toLowerCase() ?? 'public';
-      final userType = await client
-          .from('profiles')
-          .select('user_type')
-          .eq('id', userId)
-          .maybeSingle()
-          .then((p) => p?['user_type']?.toString().trim().toLowerCase() ?? 'free');
-      final isPriority = userType == 'priority';
 
-      if (!isPriority && visibility != 'public') {
+      if (visibility != 'public') {
         _clearActivePlan();
         return;
       }
@@ -346,16 +473,44 @@ class _HomeScreenState extends State<HomeScreen> {
 
     bool completedToday = false;
     if (planDayId != null && planDayId.isNotEmpty) {
+      final windowStart = startOfDay.subtract(const Duration(days: 1));
+      final windowEnd = startOfDay.add(const Duration(days: 2));
+
       final todayLogsResponse = await client
           .from('workout_logs')
-          .select('workout_log_id')
+          .select('workout_log_id, performed_at')
           .eq('profile_id', userId)
           .eq(isPersonalized ? 'personalized_plan_id' : 'free_plan_id', planId)
           .eq('plan_day_id', planDayId)
-          .gte('performed_at', startOfDay.toUtc().toIso8601String())
-          .lt('performed_at', endOfDay.toUtc().toIso8601String());
+          .gte('performed_at', windowStart.toUtc().toIso8601String())
+          .lt('performed_at', windowEnd.toUtc().toIso8601String());
 
-      completedToday = (todayLogsResponse as List).isNotEmpty;
+      final logs = List<Map<String, dynamic>>.from(todayLogsResponse as List);
+
+      for (final log in logs) {
+        final raw = log['performed_at']?.toString();
+        if (raw == null || raw.isEmpty) continue;
+
+        DateTime? performedAt;
+        if (raw.contains('Z') || raw.contains('+') || raw.contains('-')) {
+          performedAt = DateTime.tryParse(raw)?.toLocal();
+        } else {
+          performedAt = DateTime.tryParse(raw);
+        }
+
+        if (performedAt == null) continue;
+
+        final localDate = DateTime(
+          performedAt.year,
+          performedAt.month,
+          performedAt.day,
+        );
+
+        if (localDate == startOfDay) {
+          completedToday = true;
+          break;
+        }
+      }
     }
 
     int exerciseCount = 0;
@@ -427,6 +582,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _activePlanId = planId;
       _activePlanDayId = planDayId;
+      _isActivePlanPersonalized = isPersonalized;
       _todayPlanTitle = title;
       _todayPlanMeta = meta;
       _upNextPlanTitle = upNextTitle;
@@ -440,26 +596,58 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadTodayVolume(SupabaseClient client, String userId) async {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
 
-    final startOfDay = DateTime(now.year, now.month, now.day);
-    final endOfDay = startOfDay.add(const Duration(days: 1));
+    // Fetch a 3-day window around today so we can filter by the user's local
+    // date regardless of whether performed_at is stored as timestamptz or
+    // timestamp. This also makes the dashboard correctly "reset" to 0 each day.
+    final windowStart = today.subtract(const Duration(days: 1));
+    final windowEnd = today.add(const Duration(days: 2));
 
     final logsResponse = await client
         .from('workout_logs')
-        .select('workout_log_id')
+        .select('workout_log_id, performed_at')
         .eq('profile_id', userId)
-        .gte('performed_at', startOfDay.toUtc().toIso8601String())
-        .lt('performed_at', endOfDay.toUtc().toIso8601String());
+        .gte('performed_at', windowStart.toUtc().toIso8601String())
+        .lt('performed_at', windowEnd.toUtc().toIso8601String());
 
     final logs = List<Map<String, dynamic>>.from(logsResponse as List);
 
-    final workoutLogIds = logs
-        .map((log) => log['workout_log_id']?.toString())
-        .where((id) => id != null && id.isNotEmpty)
-        .cast<String>()
-        .toList();
+    debugPrint('HomeScreen: _loadTodayVolume found ${logs.length} logs in 3-day window');
 
-    if (workoutLogIds.isEmpty) {
+    final todayLogIds = <String>[];
+
+    for (final log in logs) {
+      final id = log['workout_log_id']?.toString();
+      final raw = log['performed_at']?.toString();
+
+      if (id == null || id.isEmpty || raw == null || raw.isEmpty) continue;
+
+      DateTime? performedAt;
+
+      if (raw.contains('Z') || raw.contains('+') || raw.contains('-')) {
+        performedAt = DateTime.tryParse(raw)?.toLocal();
+      } else {
+        // Naive timestamp: assume it is local wall-clock time.
+        performedAt = DateTime.tryParse(raw);
+      }
+
+      if (performedAt == null) continue;
+
+      final localDate = DateTime(
+        performedAt.year,
+        performedAt.month,
+        performedAt.day,
+      );
+
+      if (localDate == today) {
+        todayLogIds.add(id);
+      }
+    }
+
+    debugPrint('HomeScreen: _loadTodayVolume found ${todayLogIds.length} logs for today');
+
+    if (todayLogIds.isEmpty) {
       if (!mounted) return;
 
       setState(() {
@@ -472,7 +660,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final exercisesResponse = await client
         .from('workout_exercises')
         .select('workout_log_id, reps, weight_kg')
-        .inFilter('workout_log_id', workoutLogIds);
+        .inFilter('workout_log_id', todayLogIds);
 
     final rows = List<Map<String, dynamic>>.from(exercisesResponse as List);
 
@@ -484,6 +672,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
       total += reps * weight;
     }
+
+    debugPrint('HomeScreen: _loadTodayVolume calculated $total kg from ${rows.length} rows');
 
     if (!mounted) return;
 
@@ -502,8 +692,21 @@ class _HomeScreenState extends State<HomeScreen> {
       _heartRate = _parseInt(row?['heart_rate']) ?? 0;
       _heartRateMeasuredAt =
           DateTime.tryParse(row?['heart_rate_measured_at']?.toString() ?? '');
-      _kcalBurned = _parseInt(row?['calories_burned']) ?? 0;
+      _kcalBurned = _parseDouble(row?['calories_burned'])?.round() ?? 0;
     });
+  }
+
+  Future<void> _refreshHealthMetrics() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      await HealthSyncService.syncTodayAndRecentDays(userId, daysBack: 1);
+    } catch (e) {
+      debugPrint('HomeScreen: health sync failed: $e');
+    }
+
+    await _loadTodayHealthMetrics(userId);
   }
 
   String? _relativeTimeText(DateTime? time) {
@@ -528,6 +731,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _activePlanId = null;
       _activePlanDayId = null;
+      _isActivePlanPersonalized = false;
       _todayPlanTitle = 'No active plan';
       _todayPlanMeta = 'Choose a plan from Workout tab';
       _upNextPlanTitle = null;
@@ -589,6 +793,48 @@ class _HomeScreenState extends State<HomeScreen> {
     ];
 
     return '${weekdays[now.weekday - 1]} ${now.day} ${months[now.month - 1]}';
+  }
+
+  void _openActiveWorkout() {
+    final planId = _activePlanId;
+    final planDayId = _activePlanDayId;
+
+    if (planId == null || planId.isEmpty || planDayId == null || planDayId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please choose an active plan from Workout tab first.'),
+        ),
+      );
+      return;
+    }
+
+    if (_isRestDayPending) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Today is a rest day.')),
+      );
+      return;
+    }
+
+    if (_completedToday) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You have already completed this workout.')),
+      );
+      return;
+    }
+
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute(
+            builder: (_) => ActiveWorkoutScreen(
+              planId: planId,
+              planTitle: _todayPlanTitle,
+              planDayId: planDayId,
+              dayLabel: _todayPlanTitle,
+              isPersonalized: _isActivePlanPersonalized,
+            ),
+          ),
+        )
+        .then((_) => _loadHomeData());
   }
 
   void _openFitnessPlan() {
@@ -841,9 +1087,9 @@ class _HomeScreenState extends State<HomeScreen> {
             : "Today's Workout";
 
     final String buttonLabel = showCompleted
-        ? 'View Plan'
+        ? 'View'
         : showRestDay
-            ? 'View Plan'
+            ? 'View'
             : 'Start';
 
     return SectionCard(
@@ -888,9 +1134,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 2),
                       Text(
                         showCompleted
-                            ? (_upNextPlanTitle == null
-                                ? 'Up next: No scheduled workout'
-                                : 'Up next: $_upNextPlanTitle')
+                            ? _todayPlanTitle
                             : _todayPlanTitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -906,7 +1150,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         showRestDay
                             ? 'Recovery day • no workout scheduled'
                             : showCompleted
-                                ? (_upNextPlanMeta ?? 'Workout finished for today')
+                                ? 'Workout completed'
                                 : _todayPlanMeta,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -920,7 +1164,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(width: 10),
           ElevatedButton(
-            onPressed: _isLoading ? null : _openFitnessPlan,
+            onPressed: _isLoading
+                ? null
+                : showCompleted || showRestDay
+                    ? _openFitnessPlan
+                    : _openActiveWorkout,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [

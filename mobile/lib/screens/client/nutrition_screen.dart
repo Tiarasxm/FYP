@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -19,7 +21,7 @@ class NutritionScreen extends StatefulWidget {
   State<NutritionScreen> createState() => _NutritionScreenState();
 }
 
-class _NutritionScreenState extends State<NutritionScreen> {
+class _NutritionScreenState extends State<NutritionScreen> with WidgetsBindingObserver {
   int _water = 0;
   int _waterGoal = 2000;
 
@@ -34,17 +36,61 @@ class _NutritionScreenState extends State<NutritionScreen> {
 
   List<Map<String, dynamic>> _mealLogs = [];
 
+  DateTime? _lastLoadedDate;
+  Timer? _midnightCheckTimer;
+
   RealtimeChannel? _profileChannel;
 
   @override
   void initState() {
     super.initState();
-    _loadNutritionData();
+    WidgetsBinding.instance.addObserver(this);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybeRefreshForNewDay();
+    });
+
+    _midnightCheckTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => _maybeRefreshForNewDay(),
+    );
+
     _subscribeToProfileChanges();
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _maybeRefreshForNewDay();
+    }
+  }
+
+  void _maybeRefreshForNewDay() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    if (_lastLoadedDate != null && _lastLoadedDate != today) {
+      debugPrint('NutritionScreen: date changed, clearing and reloading nutrition data');
+      if (mounted) {
+        setState(() {
+          _mealLogs = [];
+          _water = 0;
+          _lastLoadedDate = today;
+        });
+      }
+      _loadNutritionData(thenSetLastLoadedDate: false);
+      return;
+    }
+
+    if (_lastLoadedDate == null) {
+      _loadNutritionData(thenSetLastLoadedDate: true);
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _midnightCheckTimer?.cancel();
     _profileChannel?.unsubscribe();
     _profileChannel = null;
     super.dispose();
@@ -74,7 +120,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
         .subscribe();
   }
 
-  Future<void> _loadNutritionData() async {
+  Future<void> _loadNutritionData({bool thenSetLastLoadedDate = false}) async {
     await Future.wait([
       _loadMeals(),
       _loadWaterGoal(),
@@ -82,6 +128,13 @@ class _NutritionScreenState extends State<NutritionScreen> {
       _loadMembershipStatus(),
       _loadNutritionGoals(),
     ]);
+
+    if (thenSetLastLoadedDate && mounted) {
+      final now = DateTime.now();
+      setState(() {
+        _lastLoadedDate = DateTime(now.year, now.month, now.day);
+      });
+    }
   }
 
   Future<void> _loadNutritionGoals() async {
@@ -325,20 +378,38 @@ class _NutritionScreenState extends State<NutritionScreen> {
         throw Exception('User is not signed in.');
       }
 
+      final today = DateTime.now();
+      final localToday = DateTime(today.year, today.month, today.day);
+      final windowStart = localToday.subtract(const Duration(days: 1));
+      final windowEnd = localToday.add(const Duration(days: 2));
+
       final response = await client
           .from('meal_logs')
           .select(
             'meal_log_id, meal_type, food_name, ingredients, calories, protein_g, carbs_g, fat_g, image_url, logged_at',
           )
           .eq('profile_id', userId)
-          .gte('logged_at', _startOfTodayUtc.toIso8601String())
-          .lt('logged_at', _endOfTodayUtc.toIso8601String())
+          .gte('logged_at', windowStart.toUtc().toIso8601String())
+          .lt('logged_at', windowEnd.toUtc().toIso8601String())
           .order('logged_at', ascending: false);
+
+      final rows = List<Map<String, dynamic>>.from(response as List);
+
+      final todayRows = rows.where((row) {
+        final raw = row['logged_at']?.toString();
+        if (raw == null || raw.isEmpty) return false;
+        final localDate = _localDateFrom(raw);
+        return localDate == localToday;
+      }).toList();
+
+      debugPrint(
+        'NutritionScreen: _loadMeals fetched ${rows.length} rows, ${todayRows.length} for today $localToday',
+      );
 
       if (!mounted) return;
 
       setState(() {
-        _mealLogs = List<Map<String, dynamic>>.from(response as List);
+        _mealLogs = todayRows;
       });
     } catch (error) {
       _showMessage('Failed to load meals: $error');
@@ -382,6 +453,21 @@ class _NutritionScreenState extends State<NutritionScreen> {
     }
   }
 
+  DateTime _localDateFrom(String raw) {
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) {
+      return DateTime(1970);
+    }
+
+    final local = raw.contains('Z') ||
+            raw.contains('+') ||
+            raw.contains('-')
+        ? parsed.toLocal()
+        : parsed;
+
+    return DateTime(local.year, local.month, local.day);
+  }
+
   Future<int> _getTodayWaterTotalFromSupabase() async {
     final client = Supabase.instance.client;
     final userId = client.auth.currentUser?.id;
@@ -390,20 +476,33 @@ class _NutritionScreenState extends State<NutritionScreen> {
       throw Exception('User is not signed in.');
     }
 
+    final now = DateTime.now();
+    final localToday = DateTime(now.year, now.month, now.day);
+    final windowStart = localToday.subtract(const Duration(days: 1));
+    final windowEnd = localToday.add(const Duration(days: 2));
+
     final response = await client
         .from('water_logs')
-        .select('amount_ml')
+        .select('amount_ml, logged_at')
         .eq('profile_id', userId)
-        .gte('logged_at', _startOfTodayUtc.toIso8601String())
-        .lt('logged_at', _endOfTodayUtc.toIso8601String());
+        .gte('logged_at', windowStart.toUtc().toIso8601String())
+        .lt('logged_at', windowEnd.toUtc().toIso8601String());
 
     final rows = List<Map<String, dynamic>>.from(response as List);
 
     int total = 0;
 
     for (final row in rows) {
+      final raw = row['logged_at']?.toString();
+      if (raw == null || raw.isEmpty) continue;
+      final localDate = _localDateFrom(raw);
+      if (localDate != localToday) continue;
       total += _parseInt(row['amount_ml']) ?? 0;
     }
+
+    debugPrint(
+      'NutritionScreen: _getTodayWaterTotalFromSupabase fetched ${rows.length} rows, total $total ml for today $localToday',
+    );
 
     return total;
   }
@@ -666,11 +765,11 @@ class _NutritionScreenState extends State<NutritionScreen> {
     final goal = _goals.calories;
 
     final proteinFraction =
-        _isLoadingGoals ? 0.0 : _goals.proteinFraction;
+        _isLoadingGoals ? 0.0 : (_goals.calories > 0 ? (_proteinConsumed * 4) / _goals.calories : 0.0);
     final carbsFraction =
-        _isLoadingGoals ? 0.0 : _goals.carbsFraction;
+        _isLoadingGoals ? 0.0 : (_goals.calories > 0 ? (_carbsConsumed * 4) / _goals.calories : 0.0);
     final fatFraction =
-        _isLoadingGoals ? 0.0 : _goals.fatFraction;
+        _isLoadingGoals ? 0.0 : (_goals.calories > 0 ? (_fatConsumed * 9) / _goals.calories : 0.0);
 
     final goalText = _isLoadingGoals ? '-' : '$goal';
 

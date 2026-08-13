@@ -8,6 +8,7 @@ import 'manage_account_page.dart';
 import 'membership_page.dart';
 import 'wearable_devices_page.dart';
 import 'notifications_page.dart';
+import 'follow_requests_screen.dart';
 import 'feedback_page.dart';
 import 'faq_page.dart';
 import 'privacy_policy_page.dart';
@@ -605,6 +606,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ProfileMenuItem(
                       title: "My Profile",
                       onTap: _openMyProfilePage,
+                    ),
+                    ProfileMenuItem(
+                      title: "Follow Requests",
+                      onTap: () {
+                        _openPage(
+                          context,
+                          const FollowRequestsScreen(),
+                        );
+                      },
                     ),
                     ProfileMenuItem(
                       title: "Manage Account",

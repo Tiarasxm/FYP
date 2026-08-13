@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -18,8 +20,12 @@ class NotificationService {
 
     tz_data.initializeTimeZones();
     try {
-      tz.setLocalLocation(tz.getLocation(DateTime.now().timeZoneName));
-    } catch (_) {
+      final String localName = await FlutterTimezone.getLocalTimezone();
+      debugPrint('NotificationService: device timezone = $localName');
+      tz.setLocalLocation(tz.getLocation(localName));
+      debugPrint('NotificationService: tz.local = ${tz.local.name}');
+    } catch (e) {
+      debugPrint('NotificationService: failed to set local timezone: $e');
       // Fall back to UTC if the device timezone name is not recognized.
     }
 
@@ -36,7 +42,11 @@ class NotificationService {
       iOS: iosSettings,
     );
 
-    await _plugin.initialize(initSettings);
+    final didInit = await _plugin.initialize(initSettings);
+    debugPrint('NotificationService: initialize() returned $didInit');
+
+    await _createAndroidNotificationChannel();
+
     _initialized = true;
   }
 
@@ -52,6 +62,10 @@ class NotificationService {
           await androidImpl.requestNotificationsPermission();
       final exactAlarmGranted = await androidImpl.requestExactAlarmsPermission();
       granted = (notificationsGranted ?? true) && (exactAlarmGranted ?? true);
+
+      debugPrint(
+        'NotificationService: notificationsGranted=$notificationsGranted exactAlarmGranted=$exactAlarmGranted',
+      );
     }
 
     final iosImpl = _plugin.resolvePlatformSpecificImplementation<
@@ -67,6 +81,23 @@ class NotificationService {
     }
 
     return granted;
+  }
+
+  Future<void> _createAndroidNotificationChannel() async {
+    final androidImpl = _plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+
+    if (androidImpl == null) return;
+
+    const channel = AndroidNotificationChannel(
+      'reminders_channel',
+      'Reminders',
+      description: 'ShapeRush reminder notifications',
+      importance: Importance.high,
+    );
+
+    await androidImpl.createNotificationChannel(channel);
   }
 
   int _notificationIdFor(String reminderId) {
@@ -101,6 +132,21 @@ class NotificationService {
     }
   }
 
+  Future<bool> _canUseExactAlarms() async {
+    final androidImpl = _plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+    if (androidImpl == null) return false;
+    try {
+      final canSchedule = await androidImpl.canScheduleExactNotifications();
+      debugPrint('NotificationService: canScheduleExactNotifications = $canSchedule');
+      return canSchedule ?? false;
+    } catch (e) {
+      debugPrint('NotificationService: canScheduleExactNotifications error: $e');
+      return false;
+    }
+  }
+
   Future<void> scheduleReminder({
     required String reminderId,
     required String type,
@@ -111,26 +157,48 @@ class NotificationService {
     final id = _notificationIdFor(reminderId);
     final scheduledTime = _nextInstanceOfTime(time);
 
-    await _plugin.zonedSchedule(
-      id,
-      _titleForType(type),
-      _bodyForType(type),
-      scheduledTime,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'reminders_channel',
-          'Reminders',
-          channelDescription: 'ShapeRush reminder notifications',
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-        iOS: DarwinNotificationDetails(),
-      ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents: DateTimeComponents.time,
+    // Check if exact alarms are actually granted. On Android 14+,
+    // zonedSchedule with exactAllowWhileIdle silently fails (no exception)
+    // if the permission isn't granted, so we must check beforehand.
+    final canExact = await _canUseExactAlarms();
+    final scheduleMode = canExact
+        ? AndroidScheduleMode.exactAllowWhileIdle
+        : AndroidScheduleMode.inexactAllowWhileIdle;
+
+    debugPrint(
+      'NotificationService: scheduling reminder $id "$type" at '
+      '${scheduledTime.toIso8601String()} (${tz.local.name}) mode=$scheduleMode',
     );
+
+    try {
+      await _plugin.zonedSchedule(
+        id,
+        _titleForType(type),
+        _bodyForType(type),
+        scheduledTime,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'reminders_channel',
+            'Reminders',
+            channelDescription: 'ShapeRush reminder notifications',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+          iOS: DarwinNotificationDetails(),
+        ),
+        androidScheduleMode: scheduleMode,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.time,
+      );
+      debugPrint('NotificationService: reminder $id scheduled successfully');
+    } on PlatformException catch (e, stack) {
+      debugPrint(
+        'NotificationService: schedule failed (${e.code}): $e',
+      );
+      debugPrintStack(stackTrace: stack);
+      rethrow;
+    }
   }
 
   Future<void> cancelReminder(String reminderId) async {

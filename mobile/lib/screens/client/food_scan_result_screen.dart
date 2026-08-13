@@ -252,7 +252,7 @@ class _FoodScanResultScreenState extends State<FoodScanResultScreen> {
         'carbs_g': _carbsG,
         'fat_g': _fatG,
         'image_url': imageUrl,
-        'logged_at': DateTime.now().toIso8601String(),
+        'logged_at': DateTime.now().toUtc().toIso8601String(),
       });
 
       if (!mounted) return;

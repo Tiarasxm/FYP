@@ -253,6 +253,9 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
             ),
             child: Container(
               width: 430,
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.85,
+              ),
               padding: const EdgeInsets.fromLTRB(18, 10, 18, 24),
               decoration: const BoxDecoration(
                 color: Colors.white,
@@ -262,9 +265,10 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
               ),
               child: SafeArea(
                 top: false,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                     Container(
                       width: 34,
                       height: 3,
@@ -400,6 +404,7 @@ class _CreatePlanScheduleState extends State<CreatePlanSchedule> {
               ),
             ),
           ),
+        ),
         );
       },
     );

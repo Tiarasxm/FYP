@@ -362,7 +362,8 @@ class _ExerciseLibraryState extends State<ExerciseLibrary> {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) {
-        return Center(
+        return Align(
+          alignment: Alignment.bottomCenter,
           child: Container(
             width: 430,
             constraints: BoxConstraints(
@@ -862,7 +863,8 @@ class _EditExerciseSheetState extends State<_EditExerciseSheet> {
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom,
         ),
-        child: Center(
+        child: Align(
+          alignment: Alignment.bottomCenter,
           child: Container(
             width: 430,
             constraints: BoxConstraints(
@@ -1258,7 +1260,8 @@ class _ExerciseDetailSheet extends StatelessWidget {
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      child: Center(
+      child: Align(
+        alignment: Alignment.bottomCenter,
         child: Container(
           width: 430,
           constraints: BoxConstraints(

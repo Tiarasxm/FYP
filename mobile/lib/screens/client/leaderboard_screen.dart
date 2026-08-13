@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../services/health_sync_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/client/sub_screen_scaffold.dart';
 
@@ -56,6 +58,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         throw Exception('User is not signed in.');
       }
 
+      try {
+        await HealthSyncService.syncTodayAndRecentDays(userId, daysBack: 7);
+      } catch (e) {
+        debugPrint('Leaderboard: step sync failed: $e');
+      }
+
       final profile = await _client
           .from('profiles')
           .select('steps_leaderboard_visible')
@@ -82,6 +90,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           'p_end_date': _dateParam(_weekEnd),
         },
       );
+
+      debugPrint('Leaderboard: RPC returned ${response is List ? (response as List).length : 'non-list'} rows');
 
       final rows = List<Map<String, dynamic>>.from(response as List);
 
