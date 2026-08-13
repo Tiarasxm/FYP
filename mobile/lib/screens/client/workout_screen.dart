@@ -40,6 +40,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   List<Map<String, dynamic>> _availablePlans = [];
   Map<String, dynamic>? _activePlan;
   String? _activePlanId;
+  int _totalPlanDays = 0;
+  int _completedPlanDays = 0;
 
   Set<String> _savedPlanIds = {};
   int _savedPlanCount = 0;
@@ -206,6 +208,58 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       _activePlanId = activePlanId;
       _activePlan = activePlan;
     });
+
+    await _loadPlanCompletionStatus(client, userId, activePlanId);
+  }
+
+  Future<void> _loadPlanCompletionStatus(
+    SupabaseClient client,
+    String userId,
+    String planId,
+  ) async {
+    try {
+      final daysResponse = await client
+          .from('plan_days')
+          .select('plan_day_id')
+          .eq('free_plan_id', planId);
+
+      final dayIds = (daysResponse as List)
+          .map((row) => row['plan_day_id']?.toString())
+          .where((id) => id != null && id.isNotEmpty)
+          .cast<String>()
+          .toSet();
+
+      if (dayIds.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _totalPlanDays = 0;
+          _completedPlanDays = 0;
+        });
+        return;
+      }
+
+      final logsResponse = await client
+          .from('workout_logs')
+          .select('plan_day_id')
+          .eq('profile_id', userId)
+          .eq('free_plan_id', planId);
+
+      final completedDayIds = (logsResponse as List)
+          .map((row) => row['plan_day_id']?.toString())
+          .where((id) => id != null && id.isNotEmpty)
+          .cast<String>()
+          .toSet();
+
+      if (!mounted) return;
+
+      setState(() {
+        _totalPlanDays = dayIds.length;
+        _completedPlanDays =
+            dayIds.intersection(completedDayIds).length;
+      });
+    } catch (e) {
+      debugPrint('Error loading plan completion: $e');
+    }
   }
 
   Future<void> _loadSavedPlanStatus(
@@ -1281,6 +1335,54 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               fontSize: 13,
               fontWeight: FontWeight.w600,
             ),
+          ),
+        )
+      else if (_totalPlanDays > 0 &&
+          _completedPlanDays >= _totalPlanDays)
+        SectionCard(
+          color: AppColors.primarySoft,
+          radius: 16,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.celebration,
+                      color: AppColors.primary, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Plan Completed!',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'You have completed all $_totalPlanDays days of "${_activePlan!['plan_name']}". Select a new plan below to continue your journey.',
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextButton.icon(
+                onPressed: () {
+                  _openPlan(_activePlan!);
+                },
+                icon: const Icon(Icons.visibility_outlined, size: 16),
+                label: const Text('View Plan'),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  padding: EdgeInsets.zero,
+                ),
+              ),
+            ],
           ),
         )
       else

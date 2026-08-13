@@ -385,6 +385,13 @@ class _MembershipPageState extends State<MembershipPage> {
         'expires_at': endsAt.toIso8601String(),
       }).eq('profile_id', userId);
 
+      if (mounted) {
+        setState(() {
+          _isCancelling = true;
+          _priorityUntil = endsAt;
+        });
+      }
+
       _showMessage('Priority will end on $endsAtText.');
     } catch (error) {
       _showMessage('Failed to cancel membership: $error', isError: true);

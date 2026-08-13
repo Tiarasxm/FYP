@@ -101,11 +101,23 @@ function buildPrompt(correction: string, previousResult: unknown): string {
     correction.length > 0
       ? `
 
+IMPORTANT — USER CORRECTION MODE:
+The user has reviewed the previous analysis and provided a correction.
+You MUST re-analyze the image using the user's correction as the primary source of truth.
+
 Previous result JSON:
 ${JSON.stringify(previousResult ?? {})}
 
 User correction:
 ${correction}
+
+When applying the correction:
+- Recalculate ALL nutrition values (calories, protein, carbs, fat) together so they are internally consistent.
+- If the user says the portion is different, scale ALL values proportionally.
+- If the user identifies a different food, replace the food_name and recalculate everything from scratch.
+- If the user corrects specific ingredients, update the ingredients list and recalculate totals so the sum of ingredient calories matches the total calories_kcal.
+- Do NOT keep old values that contradict the correction. Every field must reflect the corrected analysis.
+- The relationship calories ≈ protein_g*4 + carbs_g*4 + fat_g*9 should approximately hold.
 `
       : "";
 
@@ -124,8 +136,10 @@ Rules:
 - Use integers only.
 - If the image is unclear, still make a reasonable estimate.
 - If the image does not contain food, return "Unknown Food" with 0 nutrition values.
-- ingredients should include visible main ingredients only.
-- If user correction is provided, use it to fix the previous result.
+- Ingredients should include visible main ingredients only.
+- The sum of ingredient calories should approximately match the total calories_kcal.
+- The relationship calories ≈ protein_g*4 + carbs_g*4 + fat_g*9 should approximately hold.
+- If user correction is provided, use it to fix the previous result. The correction takes priority over your initial assessment.
 - Do not return null values.
 
 Required JSON shape:

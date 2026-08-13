@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../services/chat_service.dart';
 import '../../services/membership_service.dart';
 import '../../theme/app_theme.dart';
 import 'home_screen.dart';
@@ -19,10 +21,53 @@ class _ClientShellState extends State<ClientShell> {
   int _index = 0;
   final List<int> _refreshVersions = List<int>.filled(5, 0);
 
+  int _totalUnread = 0;
+  RealtimeChannel? _messagesChannel;
+
   @override
   void initState() {
     super.initState();
     MembershipService.ensureCurrentPriorityStatus();
+    _loadUnreadCount();
+    _subscribeToNewMessages();
+  }
+
+  @override
+  void dispose() {
+    _messagesChannel?.unsubscribe();
+    super.dispose();
+  }
+
+  Future<void> _loadUnreadCount() async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) return;
+
+      final chatService = ChatService();
+      final rooms = await chatService.getChatRooms();
+
+      if (!mounted) return;
+
+      final total = rooms.fold<int>(0, (sum, room) => sum + room.unreadCount);
+
+      setState(() {
+        _totalUnread = total;
+      });
+    } catch (_) {}
+  }
+
+  void _subscribeToNewMessages() {
+    _messagesChannel = Supabase.instance.client
+        .channel('chat_messages_client_nav_badge')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'chat_messages',
+          callback: (_) {
+            _loadUnreadCount();
+          },
+        )
+        .subscribe();
   }
 
   List<Widget> get _screens => [
@@ -73,7 +118,7 @@ class _ClientShellState extends State<ClientShell> {
           unselectedFontSize: 11,
           showUnselectedLabels: true,
           elevation: 0,
-          items: const [
+          items: [
             BottomNavigationBarItem(
               icon: Icon(Icons.home_outlined),
               activeIcon: Icon(Icons.home),
@@ -90,9 +135,9 @@ class _ClientShellState extends State<ClientShell> {
               label: 'Nutrition',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.people_outline),
-              activeIcon: Icon(Icons.people),
-              label: 'Social',
+              icon: _chatNavIcon(),
+              activeIcon: _chatNavIcon(active: true),
+              label: 'Chat',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.person_outline),
@@ -102,6 +147,31 @@ class _ClientShellState extends State<ClientShell> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _chatNavIcon({bool active = false}) {
+    if (_totalUnread <= 0) {
+      return Icon(active ? Icons.chat_bubble : Icons.chat_bubble_outline);
+    }
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(active ? Icons.chat_bubble : Icons.chat_bubble_outline),
+        Positioned(
+          right: -2,
+          top: -2,
+          child: Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: Colors.red,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

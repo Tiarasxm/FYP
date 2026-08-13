@@ -33,6 +33,7 @@ class _FoodScanResultScreenState extends State<FoodScanResultScreen> {
 
   bool _isScanning = true;
   bool _isLogging = false;
+  bool _isFixing = false;
 
   Uint8List? _imageBytes;
 
@@ -83,7 +84,7 @@ class _FoodScanResultScreenState extends State<FoodScanResultScreen> {
     return 'image/jpeg';
   }
 
-  Future<void> _scanFood() async {
+  Future<void> _scanFood({String? fixDescription}) async {
     final bytes = _imageBytes;
 
     if (bytes == null || bytes.isEmpty) {
@@ -96,12 +97,31 @@ class _FoodScanResultScreenState extends State<FoodScanResultScreen> {
     });
 
     try {
+      final body = <String, dynamic>{
+        'imageBase64': base64Encode(bytes),
+        'mimeType': _imageMimeType,
+      };
+
+      if (fixDescription != null && fixDescription.isNotEmpty) {
+        body['correction'] = fixDescription;
+        body['previousResult'] = {
+          'food_name': _foodName,
+          'calories_kcal': _calories,
+          'protein_g': _proteinG,
+          'carbs_g': _carbsG,
+          'fat_g': _fatG,
+          'ingredients': _ingredients
+              .map((e) => {
+                    'name': e.name,
+                    'calories_kcal': e.caloriesKcal,
+                  })
+              .toList(),
+        };
+      }
+
       final response = await _client.functions.invoke(
         'ai-food-scan',
-        body: {
-          'imageBase64': base64Encode(bytes),
-          'mimeType': _imageMimeType,
-        },
+        body: body,
       );
 
       final Map<String, dynamic> data = _parseFunctionResponse(response.data);
@@ -407,18 +427,79 @@ class _FoodScanResultScreenState extends State<FoodScanResultScreen> {
               AppSpacing.screenPadding,
               16,
             ),
-            child: PrimaryButton(
-              label: scanning
-                  ? 'Scanning...'
-                  : _isLogging
-                      ? 'Logging...'
-                      : 'Log Meal',
-              onPressed: scanning || _isLogging ? null : _logMeal,
+            child: Row(
+              children: [
+                Expanded(
+                  child: PrimaryButton(
+                    label: scanning
+                        ? 'Scanning...'
+                        : _isLogging
+                            ? 'Logging...'
+                            : 'Log Meal',
+                    onPressed: scanning || _isLogging ? null : _logMeal,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: scanning || _isFixing
+                        ? null
+                        : _showFixDialog,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: BorderSide(color: AppColors.primary),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: Text(
+                      _isFixing ? 'Fixing...' : 'Fix',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _showFixDialog() async {
+    final description = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => const _FixResultsSheet(),
+    );
+
+    if (description == null || description.isEmpty) return;
+    if (!mounted) return;
+
+    await _rescanWithFix(description);
+  }
+
+  Future<void> _rescanWithFix(String description) async {
+    setState(() {
+      _isFixing = true;
+    });
+
+    await _scanFood(fixDescription: description);
+
+    if (mounted) {
+      setState(() {
+        _isFixing = false;
+      });
+      _showMessage('Results updated with your fix.');
+    }
   }
 
   Widget _imageHeader(BuildContext context) {
@@ -588,4 +669,106 @@ class _IngredientDraft {
     required this.name,
     required this.caloriesKcal,
   });
+}
+
+class _FixResultsSheet extends StatefulWidget {
+  const _FixResultsSheet();
+
+  @override
+  State<_FixResultsSheet> createState() => _FixResultsSheetState();
+}
+
+class _FixResultsSheetState extends State<_FixResultsSheet> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final description = _controller.text.trim();
+
+    if (description.isEmpty) return;
+
+    Navigator.of(context).pop(description);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Fix Results',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Describe what\'s wrong with the analysis so the AI can re-scan '
+            'with your corrections.',
+            style: TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _controller,
+            maxLines: 3,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _submit(),
+            decoration: InputDecoration(
+              hintText: 'e.g. This is a chicken salad, not a burger. '
+                  'The portion is smaller.',
+              hintStyle: const TextStyle(
+                fontSize: 13,
+                color: AppColors.textMuted,
+              ),
+              filled: true,
+              fillColor: AppColors.cardMuted,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _submit,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: const Text(
+                'Re-scan with Fix',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

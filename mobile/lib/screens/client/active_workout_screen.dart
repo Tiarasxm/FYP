@@ -35,6 +35,10 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
   final DateTime _startedAt = DateTime.now();
   Timer? _ticker;
 
+  Timer? _restTimer;
+  int _restRemaining = 0;
+  int _restTotal = 0;
+
   List<Map<String, dynamic>> _exercises = [];
   late Map<int, List<ExerciseSet>> _sets;
 
@@ -51,6 +55,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
   @override
   void dispose() {
     _ticker?.cancel();
+    _restTimer?.cancel();
     super.dispose();
   }
 
@@ -184,6 +189,56 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
     }
 
     return total;
+  }
+
+  void _startRestTimer(int restSec) {
+    _restTimer?.cancel();
+
+    if (restSec <= 0) return;
+
+    setState(() {
+      _restRemaining = restSec;
+      _restTotal = restSec;
+    });
+
+    _restTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      setState(() {
+        _restRemaining--;
+      });
+
+      if (_restRemaining <= 0) {
+        timer.cancel();
+        setState(() {
+          _restRemaining = 0;
+          _restTotal = 0;
+        });
+      }
+    });
+  }
+
+  void _skipRestTimer() {
+    _restTimer?.cancel();
+    setState(() {
+      _restRemaining = 0;
+      _restTotal = 0;
+    });
+  }
+
+  int? _exerciseRestSec(int exerciseIndex) {
+    if (exerciseIndex < 0 || exerciseIndex >= _exercises.length) return null;
+    return _parseInt(_exercises[exerciseIndex]['rest_sec']);
+  }
+
+  String _formatRestTime(int seconds) {
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    if (m <= 0) return '${s}s';
+    return '${m}m ${s.toString().padLeft(2, '0')}s';
   }
 
   Future<void> _finishWorkout() async {
@@ -337,6 +392,11 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
             _exerciseCard(i),
             const SizedBox(height: 14),
           ],
+
+          if (_restRemaining > 0) ...[
+            const SizedBox(height: 8),
+            _restTimerBanner(),
+          ],
       ],
     );
   }
@@ -412,7 +472,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
             ],
           ),
           const SizedBox(height: 6),
-          for (var s = 0; s < sets.length; s++) _setRow(sets[s], s),
+          for (var s = 0; s < sets.length; s++) _setRow(sets[s], s, index),
         ],
       ),
     );
@@ -425,7 +485,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
     letterSpacing: 0.5,
   );
 
-  Widget _setRow(ExerciseSet set, int number) {
+  Widget _setRow(ExerciseSet set, int number, int exerciseIndex) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -456,7 +516,16 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
           ),
           const SizedBox(width: 10),
           GestureDetector(
-            onTap: () => setState(() => set.done = !set.done),
+            onTap: () {
+              final wasDone = set.done;
+              setState(() => set.done = !set.done);
+              if (!wasDone && set.done) {
+                final restSec = _exerciseRestSec(exerciseIndex);
+                if (restSec != null && restSec > 0) {
+                  _startRestTimer(restSec);
+                }
+              }
+            },
             child: Container(
               width: 26,
               height: 26,
@@ -471,6 +540,78 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
               child: set.done
                   ? const Icon(Icons.check, size: 16, color: Colors.white)
                   : null,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _restTimerBanner() {
+    final progress = _restTotal > 0 ? _restRemaining / _restTotal : 0.0;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.timer, color: Colors.white, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Rest Timer',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  _formatRestTime(_restRemaining),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: SizedBox(
+              width: 60,
+              height: 6,
+              child: LinearProgressIndicator(
+                value: progress,
+                backgroundColor: Colors.white24,
+                valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: _skipRestTimer,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                'Skip',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
             ),
           ),
         ],

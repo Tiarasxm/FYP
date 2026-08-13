@@ -591,6 +591,9 @@ class _ChatState extends State<Chat> {
                           return _PlanMessageBubble(
                             isMe: isMe,
                             content: message.content,
+                            avatarText: initials,
+                            avatarUrl: _clientAvatarUrl,
+                            onAvatarTap: isMe ? null : _showCustomerProfile,
                           );
                         }
 
@@ -743,8 +746,17 @@ class _TextMessageBubble extends StatelessWidget {
 class _PlanMessageBubble extends StatelessWidget {
   final bool isMe;
   final String? content;
+  final String avatarText;
+  final String? avatarUrl;
+  final VoidCallback? onAvatarTap;
 
-  const _PlanMessageBubble({required this.isMe, this.content});
+  const _PlanMessageBubble({
+    required this.isMe,
+    this.content,
+    required this.avatarText,
+    this.avatarUrl,
+    this.onAvatarTap,
+  });
 
   void _viewPlan(BuildContext context) {
     // Parse plan details from JSON content
@@ -802,98 +814,123 @@ class _PlanMessageBubble extends StatelessWidget {
       }
     }
 
-    return Align(
-      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        width: 260,
-        margin: const EdgeInsets.only(bottom: 14),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.pageBg,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-              ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (!isMe) ...[
+          GestureDetector(
+            onTap: onAvatarTap,
+            child: CircleAvatar(
+              radius: 15,
+              backgroundColor: AppColors.textPrimary,
+              backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl!) : null,
+              child: avatarUrl == null
+                  ? Text(
+                      avatarText,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    )
+                  : null,
             ),
-
-            if (days > 0) ...[
-              const SizedBox(height: 8),
-              Text(
-                '$days Days',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w600,
+          ),
+          const SizedBox(width: 8),
+        ],
+        Flexible(
+          child: Container(
+            width: 260,
+            margin: const EdgeInsets.only(bottom: 14),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.pageBg,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-              ),
-            ],
 
-            if (tags.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: tags.map((tag) {
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
+                if (days > 0) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    '$days Days',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
                     ),
+                  ),
+                ],
+
+                if (tags.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: tags.map((tag) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border.all(color: AppColors.border),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          tag,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+
+                const SizedBox(height: 14),
+
+                GestureDetector(
+                  onTap: () => _viewPlan(context),
+                  child: Container(
+                    width: double.infinity,
+                    height: 48,
+                    alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: AppColors.border),
-                      borderRadius: BorderRadius.circular(12),
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    child: Text(
-                      tag,
+                    child: const Text(
+                      'View Plan',
+                      textAlign: TextAlign.center,
+                      strutStyle: StrutStyle(
+                        forceStrutHeight: true,
+                        height: 1.0,
+                      ),
                       style: TextStyle(
-                        fontSize: 10,
-                        color: AppColors.textSecondary,
+                        fontSize: 15,
+                        height: 1.0,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
                       ),
                     ),
-                  );
-                }).toList(),
-              ),
-            ],
-
-            const SizedBox(height: 14),
-
-            GestureDetector(
-              onTap: () => _viewPlan(context),
-              child: Container(
-                width: double.infinity,
-                height: 48,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Text(
-                  'View Plan',
-                  textAlign: TextAlign.center,
-                  strutStyle: StrutStyle(
-                    forceStrutHeight: true,
-                    height: 1.0,
-                  ),
-                  style: TextStyle(
-                    fontSize: 15,
-                    height: 1.0,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 }

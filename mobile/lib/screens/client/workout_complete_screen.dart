@@ -57,7 +57,7 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
     return _screenshotController.capture(pixelRatio: 2.5);
   }
 
-  Future<void> _handleShare(String label) async {
+  Future<void> _handleDownload() async {
     if (_isSharing) return;
     setState(() => _isSharing = true);
 
@@ -67,7 +67,7 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
       if (bytes == null) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not prepare the image to share.')),
+          const SnackBar(content: Text('Could not prepare the image to save.')),
         );
         return;
       }
@@ -78,21 +78,14 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
         mimeType: 'image/png',
       );
 
-      if (label == 'Download') {
-        await Share.shareXFiles(
-          [file],
-          fileNameOverrides: const ['shaperush_workout.png'],
-        );
-      } else {
-        await Share.shareXFiles(
-          [file],
-          text: _shareCaption,
-        );
-      }
+      await Share.shareXFiles(
+        [file],
+        fileNameOverrides: const ['shaperush_workout.png'],
+      );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to share: $error')),
+        SnackBar(content: Text('Unable to save: $error')),
       );
     } finally {
       if (mounted) setState(() => _isSharing = false);
@@ -126,11 +119,11 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
               Expanded(child: _summaryCard()),
               const SizedBox(height: 20),
               const Text(
-                'Share workout',
+                'Save workout',
                 style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
               ),
               const SizedBox(height: 12),
-              _shareRow(),
+              _downloadRow(),
               const SizedBox(height: 20),
               PrimaryButton(
                 label: 'Done',
@@ -253,50 +246,40 @@ class _WorkoutCompleteScreenState extends State<WorkoutCompleteScreen> {
     return Container(width: 1, height: 28, color: AppColors.border);
   }
 
-  Widget _shareRow() {
-    const items = [
-      (Icons.alternate_email, 'Twitter / X'),
-      (Icons.camera_alt_outlined, 'Instagram'),
-      (Icons.facebook, 'Facebook'),
-      (Icons.download_outlined, 'Download'),
-    ];
-
+  Widget _downloadRow() {
     return Row(
       children: [
-        for (final item in items)
-          Padding(
-            padding: const EdgeInsets.only(right: 18),
-            child: GestureDetector(
-              onTap: () => _handleShare(item.$2),
-              child: Column(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: AppColors.card,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: _isSharing
-                        ? const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Icon(item.$1, size: 20, color: AppColors.textPrimary),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    item.$2,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
+        GestureDetector(
+          onTap: _handleDownload,
+          child: Column(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: _isSharing
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.download_outlined,
+                        size: 20, color: AppColors.textPrimary),
               ),
-            ),
+              const SizedBox(height: 6),
+              const Text(
+                'Download',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
           ),
+        ),
       ],
     );
   }

@@ -834,10 +834,14 @@ class _NutritionScreenState extends State<NutritionScreen> {
       return SizedBox(
         width: double.infinity,
         child: ElevatedButton.icon(
-          onPressed: () {
-            Navigator.of(context).push(
+          onPressed: () async {
+            final result = await Navigator.of(context).push<bool>(
               MaterialPageRoute(builder: (_) => const FoodScanScreen()),
             );
+
+            if (result == true && mounted) {
+              await _loadMeals();
+            }
           },
           icon: const Icon(Icons.qr_code_scanner, size: 18),
           label: const Text('AI Food Scan'),

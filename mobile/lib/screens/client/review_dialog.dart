@@ -27,40 +27,10 @@ class _ReviewDialogState extends State<_ReviewDialog> {
   final _feedbackController = TextEditingController();
   int _rating = 0;
   bool _isSubmitting = false;
-  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadExistingReview();
-  }
-
-  Future<void> _loadExistingReview() async {
-    final myId = Supabase.instance.client.auth.currentUser?.id;
-    if (myId == null) {
-      setState(() => _isLoading = false);
-      return;
-    }
-
-    try {
-      final data = await Supabase.instance.client
-          .from('reviews')
-          .select('rating, feedback')
-          .eq('reviewer_id', myId)
-          .eq('professional_id', widget.professionalId)
-          .maybeSingle();
-
-      if (data != null && mounted) {
-        setState(() {
-          _rating = (data['rating'] as num?)?.toInt() ?? 0;
-          _feedbackController.text = data['feedback']?.toString() ?? '';
-        });
-      }
-    } catch (e) {
-      debugPrint('Error loading existing review: $e');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
   }
 
   @override
@@ -125,12 +95,7 @@ class _ReviewDialogState extends State<_ReviewDialog> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
         ),
-        child: _isLoading
-            ? const Padding(
-                padding: EdgeInsets.symmetric(vertical: 40),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            : Column(
+        child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
