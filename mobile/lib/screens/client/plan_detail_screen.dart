@@ -275,14 +275,14 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
               .select(
                 'sets, rep_min, rep_max, rest_sec, order_index, exercise_library(name, muscle_group)',
               )
-              .eq('personalized_plan_day_id', day['plan_day_id'] as String)
+              .eq('personalized_plan_day_id', day['plan_day_id'].toString())
               .order('order_index')
           : await Supabase.instance.client
               .from('plan_exercises')
               .select(
                 'sets, rep_min, rep_max, rest_sec, order_index, exercise_library(name, muscle_group)',
               )
-              .eq('plan_day_id', day['plan_day_id'] as String)
+              .eq('plan_day_id', day['plan_day_id'].toString())
               .order('order_index');
 
       if (!mounted) return;

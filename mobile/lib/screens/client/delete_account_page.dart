@@ -60,6 +60,49 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
         throw Exception("You must be signed in.");
       }
 
+      // ── Clean up all user data ──
+      // Social
+      await _safeDelete(client, 'post_likes', 'user_id', userId);
+      await _safeDelete(client, 'post_comments', 'user_id', userId);
+      await _safeDelete(client, 'posts', 'user_id', userId);
+      await _safeDelete(client, 'follows', 'follower_id', userId);
+      await _safeDelete(client, 'follows', 'following_id', userId);
+
+      // Chat: delete all messages in rooms where user is a participant, then rooms
+      await _deleteChatMessagesForRooms(client, userId, 'client_id');
+      await _safeDelete(client, 'chat_messages', 'sender_id', userId);
+      await _safeDelete(client, 'chat_rooms', 'client_id', userId);
+
+      // Plans & logs
+      await _safeDelete(client, 'saved_plans', 'profile_id', userId);
+      await _safeDelete(client, 'workout_logs', 'profile_id', userId);
+      await _safeDelete(client, 'meal_logs', 'profile_id', userId);
+      await _safeDelete(client, 'water_logs', 'profile_id', userId);
+      await _safeDelete(client, 'water_settings', 'profile_id', userId);
+
+      // Reviews & reports
+      await _safeDelete(client, 'reviews', 'reviewer_id', userId);
+      await _safeDelete(client, 'reports', 'reporter_id', userId);
+      await _safeDelete(client, 'reports', 'reported_user_id', userId);
+
+      // Notifications
+      await _safeDelete(client, 'notification_settings', 'profile_id', userId);
+      await _safeDelete(client, 'notification_reminders', 'profile_id', userId);
+
+      // Health
+      await _safeDelete(client, 'daily_health_metrics', 'profile_id', userId);
+      await _safeDelete(client, 'wearable_connections', 'profile_id', userId);
+
+      // Feedback
+      await _safeDelete(client, 'app_feedback', 'profile_id', userId);
+
+      // Priority
+      await _safeDelete(client, 'priority_user', 'profile_id', userId);
+
+      // Storage: delete avatar
+      await _safeDeleteStorage(client, 'profile-avatars', userId);
+
+      // Soft-delete the profile
       await client.from('profiles').update({
         'status': 'deleted',
       }).eq('id', userId);
@@ -91,6 +134,54 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
         });
       }
     }
+  }
+
+  Future<void> _safeDelete(
+    SupabaseClient client,
+    String table,
+    String column,
+    String userId,
+  ) async {
+    try {
+      await client.from(table).delete().eq(column, userId);
+    } catch (_) {
+      // Continue even if one table fails (e.g. RLS blocks or table missing)
+    }
+  }
+
+  Future<void> _deleteChatMessagesForRooms(
+    SupabaseClient client,
+    String userId,
+    String roomColumn,
+  ) async {
+    try {
+      final rooms = await client
+          .from('chat_rooms')
+          .select('id')
+          .eq(roomColumn, userId);
+
+      for (final room in rooms) {
+        final roomId = room['id'];
+        await client
+            .from('chat_messages')
+            .delete()
+            .eq('room_id', roomId);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _safeDeleteStorage(
+    SupabaseClient client,
+    String bucket,
+    String userId,
+  ) async {
+    try {
+      final files = await client.storage.from(bucket).list(path: userId);
+
+      for (final file in files) {
+        await client.storage.from(bucket).remove(['$userId/${file.name}']);
+      }
+    } catch (_) {}
   }
 
   @override

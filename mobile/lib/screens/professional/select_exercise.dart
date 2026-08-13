@@ -45,6 +45,8 @@ class _SelectExerciseState extends State<SelectExercise> {
               'exercise_id, professional_id, name, muscle_group, equipment, default_rep_min, default_rep_max, default_rest_sec')
           .order('name');
 
+      if (!mounted) return;
+
       setState(() {
         _exercises = (response as List<dynamic>)
             .map((row) => LibraryExercise(

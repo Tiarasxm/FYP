@@ -60,7 +60,7 @@ class ChatMessageModel {
       messageType: map['message_type'] ?? 'text',
       planId: map['plan_id'],
       isRead: map['is_read'] ?? false,
-      createdAt: DateTime.parse(map['created_at']),
+      createdAt: DateTime.tryParse(map['created_at']?.toString() ?? '') ?? DateTime.now(),
     );
   }
 }
