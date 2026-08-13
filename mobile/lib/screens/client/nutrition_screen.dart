@@ -835,11 +835,11 @@ class _NutritionScreenState extends State<NutritionScreen> {
         width: double.infinity,
         child: ElevatedButton.icon(
           onPressed: () async {
-            final result = await Navigator.of(context).push<bool>(
+            await Navigator.of(context).push<bool>(
               MaterialPageRoute(builder: (_) => const FoodScanScreen()),
             );
 
-            if (result == true && mounted) {
+            if (mounted) {
               await _loadMeals();
             }
           },

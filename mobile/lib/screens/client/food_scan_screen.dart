@@ -102,11 +102,15 @@ class _FoodScanScreenState extends State<FoodScanScreen> {
 
       if (!mounted) return;
 
-      Navigator.of(context).pushReplacement(
+      final result = await Navigator.of(context).push<bool>(
         MaterialPageRoute(
           builder: (_) => FoodScanResultScreen(imageFile: image),
         ),
       );
+
+      if (mounted) {
+        Navigator.of(context).pop(result);
+      }
     } catch (error) {
       if (!mounted) return;
 
@@ -138,11 +142,15 @@ class _FoodScanScreenState extends State<FoodScanScreen> {
 
       if (!mounted) return;
 
-      Navigator.of(context).pushReplacement(
+      final result = await Navigator.of(context).push<bool>(
         MaterialPageRoute(
           builder: (_) => FoodScanResultScreen(imageFile: image),
         ),
       );
+
+      if (mounted) {
+        Navigator.of(context).pop(result);
+      }
     } catch (error) {
       if (!mounted) return;
 

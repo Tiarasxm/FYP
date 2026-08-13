@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../services/health_service.dart';
+import '../../services/health_sync_service.dart';
 import '../../theme/app_theme.dart';
 import 'client_shell.dart';
 
@@ -30,6 +32,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   // Step 4 values
   String? _fitnessGoal;
+
+  // Step 5 values
+  bool _healthConnectConnected = false;
+  bool _isConnectingHealth = false;
 
   final List<String> _genderOptions = ['Male', 'Female', 'Other'];
 
@@ -69,7 +75,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _nextPage() {
-    if (_currentPage < 3) {
+    if (_currentPage < 4) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
@@ -98,6 +104,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         return _activityLevel != null;
       case 3:
         return _fitnessGoal != null;
+      case 4:
+        return true;
       default:
         return false;
     }
@@ -196,6 +204,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   _buildStep2(),
                   _buildStep3(),
                   _buildStep4(),
+                  _buildStep5(),
                 ],
               ),
             ),
@@ -561,8 +570,220 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
+  Widget _buildStep5() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 12, 28, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Connect Your Devices',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Sync your fitness data for better insights. You can change this later in Settings.',
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 24),
+          _buildDeviceCard(
+            icon: Icons.health_and_safety_outlined,
+            title: 'Health Connect',
+            subtitle: 'Sync steps, heart rate and calories from Android Health Connect. Mi Fitness and other wearable apps sync through Health Connect automatically.',
+            connected: _healthConnectConnected,
+            isConnecting: _isConnectingHealth,
+            onTap: _connectHealthConnect,
+          ),
+          const Spacer(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeviceCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool connected,
+    required bool isConnecting,
+    VoidCallback? onTap,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: connected ? AppColors.primarySoft : AppColors.cardMuted,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: connected ? AppColors.primary : Colors.transparent,
+          width: 1.2,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              icon,
+              size: 22,
+              color: AppColors.primary,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          if (isConnecting)
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.primary,
+              ),
+            )
+          else if (connected)
+            const Icon(
+              Icons.check_circle,
+              color: AppColors.primary,
+              size: 24,
+            )
+          else if (onTap != null)
+            ElevatedButton(
+              onPressed: onTap,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text(
+                'Connect',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _connectHealthConnect() async {
+    setState(() => _isConnectingHealth = true);
+
+    try {
+      final available = await HealthService.isAvailable();
+
+      if (!available) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Health Connect is not available on this device. Please install it from the Play Store.',
+            ),
+          ),
+        );
+        await HealthService.installHealthConnect();
+        return;
+      }
+
+      final granted = await HealthService.requestPermissions();
+
+      if (!granted) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Permission was not granted. You can connect later in Settings.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+
+      if (userId == null) return;
+
+      final now = DateTime.now().toUtc().toIso8601String();
+
+      await supabase.from('wearable_connections').upsert(
+        {
+          'profile_id': userId,
+          'provider': 'google_fit',
+          'is_connected': true,
+          'connected_at': now,
+          'updated_at': now,
+        },
+        onConflict: 'profile_id,provider',
+      );
+
+      await HealthSyncService.syncTodayAndRecentDays(userId);
+
+      if (!mounted) return;
+
+      setState(() {
+        _healthConnectConnected = true;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Health Connect connected. Syncing your data...'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to connect: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isConnectingHealth = false);
+      }
+    }
+  }
+
   Widget _buildBottomBar() {
-    final isLastStep = _currentPage == 3;
+    final isLastStep = _currentPage == 4;
+    final isWearableStep = _currentPage == 4;
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 12, 28, 28),
       child: Column(
@@ -570,7 +791,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(4, (index) {
+            children: List.generate(5, (index) {
               return Container(
                 width: 8,
                 height: 8,
@@ -617,6 +838,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ),
             ),
           ),
+          if (isWearableStep) ...[
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: _isLoading ? null : _submitOnboarding,
+              child: const Text(
+                'Skip for now',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

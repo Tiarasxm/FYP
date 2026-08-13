@@ -6,19 +6,21 @@ import '../../theme/app_theme.dart';
 
 class CalorieRing extends StatelessWidget {
   final int value;
-  final int goal;
+  final int? goal;
   final double size;
 
   const CalorieRing({
     super.key,
     required this.value,
-    required this.goal,
+    this.goal,
     this.size = 150,
   });
 
   @override
   Widget build(BuildContext context) {
-    final progress = goal == 0 ? 0.0 : (value / goal).clamp(0.0, 1.0);
+    final progress = goal == null || goal == 0
+        ? 0.0
+        : (value / goal!).clamp(0.0, 1.0);
     return SizedBox(
       width: size,
       height: size,
@@ -39,14 +41,15 @@ class CalorieRing extends StatelessWidget {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    TextSpan(
-                      text: ' /$goal',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AppColors.textMuted,
-                        fontWeight: FontWeight.w600,
+                    if (goal != null)
+                      TextSpan(
+                        text: ' /$goal',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textMuted,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),

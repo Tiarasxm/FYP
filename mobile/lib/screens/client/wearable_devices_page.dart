@@ -24,8 +24,8 @@ class _WearableDevicesPageState extends State<WearableDevicesPage> {
   final List<_DeviceConfig> devices = const [
     _DeviceConfig(
       provider: 'google_fit',
-      title: 'Google Fit / Health Connect',
-      subtitle: 'Sync steps, heart rate and calories from Android Health Connect.',
+      title: 'Health Connect',
+      subtitle: 'Sync steps, heart rate and calories from Android Health Connect. Mi Fitness and other wearable apps sync through Health Connect automatically.',
       icon: Icons.health_and_safety_outlined,
     ),
   ];

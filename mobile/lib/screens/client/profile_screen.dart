@@ -28,6 +28,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String userType = 'free';
   String avatarUrl = '';
 
+  DateTime? _priorityUntil;
+  bool _isCancelling = false;
+
   int completedExercises = 0;
   int dayStreak = 0;
   int followers = 0;
@@ -62,6 +65,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       final stats = await _loadProfileStats(user.id);
 
+      final userTypeValue =
+          profile['user_type']?.toString().trim().toLowerCase() ?? 'free';
+
+      DateTime? priorityUntil;
+      bool isCancelling = false;
+
+      if (userTypeValue == 'priority') {
+        final priorityResponse = await client
+            .from('priority_user')
+            .select('subscribed_at, expires_at')
+            .eq('profile_id', user.id)
+            .maybeSingle();
+
+        final expiresAt =
+            DateTime.tryParse(priorityResponse?['expires_at']?.toString() ?? '');
+
+        if (expiresAt != null) {
+          priorityUntil = expiresAt;
+          isCancelling = expiresAt.isAfter(DateTime.now());
+        } else {
+          final subscribedAt =
+              DateTime.tryParse(priorityResponse?['subscribed_at']?.toString() ?? '');
+          if (subscribedAt != null) {
+            priorityUntil = DateTime(
+              subscribedAt.year,
+              subscribedAt.month + 1,
+              subscribedAt.day,
+            );
+          }
+        }
+      }
+
       if (!mounted) return;
 
       setState(() {
@@ -69,6 +104,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         email = profile['email']?.toString().trim() ?? user.email ?? '';
         userType = profile['user_type']?.toString().trim() ?? 'free';
         avatarUrl = profile['avatar_url']?.toString().trim() ?? '';
+        _priorityUntil = priorityUntil;
+        _isCancelling = isCancelling;
 
         if (fullName.isEmpty) {
           fullName = email.isNotEmpty ? email.split('@').first : 'User';
@@ -307,6 +344,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return userType.toLowerCase() == 'priority' ? 'PRIORITY' : 'FREE';
   }
 
+  String _formatDate(DateTime date) {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -471,8 +516,66 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                               ),
                               const SizedBox(height: 6),
-                              Text(
-                                "Cancel Priority and return\nto the free plan.",
+                              if (_isCancelling)
+                                Text(
+                                  _priorityUntil != null
+                                      ? "Your subscription ends on ${_formatDate(_priorityUntil!)}. Renew to keep your benefits."
+                                      : "Your subscription is being cancelled.",
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 13,
+                                  ),
+                                )
+                              else
+                                Text(
+                                  _priorityUntil != null
+                                      ? "Next billing date: ${_formatDate(_priorityUntil!)}"
+                                      : "Manage your Priority subscription.",
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        ElevatedButton(
+                          onPressed: () {
+                            _openPage(
+                              context,
+                              const MembershipPage(),
+                            );
+                          },
+                          child: Text(_isCancelling ? "Renew" : "Manage"),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ] else if (userType.toLowerCase() == 'free') ...[
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "Upgrade to Priority",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              const Text(
+                                "Unlock advanced features, additional insights and enhanced membership benefits.",
                                 style: TextStyle(
                                   color: AppColors.textSecondary,
                                   fontSize: 13,
@@ -488,7 +591,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               const MembershipPage(),
                             );
                           },
-                          child: const Text("Cancel"),
+                          child: const Text("Upgrade"),
                         ),
                       ],
                     ),

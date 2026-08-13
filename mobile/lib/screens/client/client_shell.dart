@@ -19,7 +19,7 @@ class ClientShell extends StatefulWidget {
 
 class _ClientShellState extends State<ClientShell> {
   int _index = 0;
-  final List<int> _refreshVersions = List<int>.filled(5, 0);
+  late final List<Widget> _screens;
 
   int _totalUnread = 0;
   RealtimeChannel? _messagesChannel;
@@ -27,6 +27,13 @@ class _ClientShellState extends State<ClientShell> {
   @override
   void initState() {
     super.initState();
+    _screens = [
+      const HomeScreen(),
+      const WorkoutScreen(),
+      const NutritionScreen(),
+      const SocialScreen(),
+      const ProfileScreen(),
+    ];
     MembershipService.ensureCurrentPriorityStatus();
     _loadUnreadCount();
     _subscribeToNewMessages();
@@ -70,22 +77,11 @@ class _ClientShellState extends State<ClientShell> {
         .subscribe();
   }
 
-  List<Widget> get _screens => [
-        HomeScreen(key: ValueKey('home-${_refreshVersions[0]}')),
-        WorkoutScreen(key: ValueKey('workout-${_refreshVersions[1]}')),
-        NutritionScreen(key: ValueKey('nutrition-${_refreshVersions[2]}')),
-        SocialScreen(key: ValueKey('social-${_refreshVersions[3]}')),
-        ProfileScreen(key: ValueKey('profile-${_refreshVersions[4]}')),
-      ];
-
   void _selectTab(int index) {
     if (index == _index) return;
 
     setState(() {
       _index = index;
-      if (index != 4) {
-        _refreshVersions[index]++;
-      }
     });
   }
 

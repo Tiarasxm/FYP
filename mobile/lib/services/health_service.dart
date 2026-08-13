@@ -26,9 +26,11 @@ class HealthService {
     HealthDataType.STEPS,
     HealthDataType.HEART_RATE,
     HealthDataType.ACTIVE_ENERGY_BURNED,
+    HealthDataType.BASAL_ENERGY_BURNED,
   ];
 
   static final List<HealthDataAccess> _permissions = [
+    HealthDataAccess.READ,
     HealthDataAccess.READ,
     HealthDataAccess.READ,
     HealthDataAccess.READ,
@@ -191,20 +193,37 @@ class HealthService {
     }
 
     try {
-      final caloriesData = await _health.getHealthDataFromTypes(
+      final activeCaloriesData = await _health.getHealthDataFromTypes(
         types: [HealthDataType.ACTIVE_ENERGY_BURNED],
         startTime: dayStart,
         endTime: dayEnd,
       );
 
-      for (final point in caloriesData) {
+      for (final point in activeCaloriesData) {
         final value = point.value;
         if (value is NumericHealthValue) {
           calories += value.numericValue.toDouble();
         }
       }
     } catch (e) {
-      debugPrint('HealthService: calories fetch failed: $e');
+      debugPrint('HealthService: active calories fetch failed: $e');
+    }
+
+    try {
+      final basalCaloriesData = await _health.getHealthDataFromTypes(
+        types: [HealthDataType.BASAL_ENERGY_BURNED],
+        startTime: dayStart,
+        endTime: dayEnd,
+      );
+
+      for (final point in basalCaloriesData) {
+        final value = point.value;
+        if (value is NumericHealthValue) {
+          calories += value.numericValue.toDouble();
+        }
+      }
+    } catch (e) {
+      debugPrint('HealthService: basal calories fetch failed: $e');
     }
 
     return HealthDailyMetrics(

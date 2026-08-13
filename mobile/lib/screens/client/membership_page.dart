@@ -313,10 +313,22 @@ class _MembershipPageState extends State<MembershipPage> {
       return;
     }
 
+    final now = DateTime.now();
+
+    final currentExpiry = _priorityUntil;
+    final isStillActive = currentExpiry != null && currentExpiry.isAfter(now);
+
+    final newExpiry = isStillActive
+        ? DateTime(currentExpiry.year, currentExpiry.month + 1, currentExpiry.day)
+        : DateTime(now.year, now.month + 1, now.day);
+
+    final newExpiryText = _formatDate(newExpiry);
+
     final confirmed = await _showConfirmDialog(
       title: 'Renew Priority',
-      message:
-          'Renewing will start a new 30-day Priority period from today. Do you want to continue?',
+      message: isStillActive
+          ? 'Your subscription will be extended until $newExpiryText. Do you want to continue?'
+          : 'A new 30-day Priority period will start until $newExpiryText. Do you want to continue?',
       confirmText: 'Renew',
     );
 
@@ -327,19 +339,22 @@ class _MembershipPageState extends State<MembershipPage> {
     });
 
     try {
-      final now = DateTime.now();
-
-      await supabase.from('priority_user').upsert({
-        'profile_id': userId,
-        'subscribed_at': now.toIso8601String(),
-        'expires_at': null,
-      });
+      await supabase.from('priority_user').update({
+        'expires_at': newExpiry.toIso8601String(),
+      }).eq('profile_id', userId);
 
       await supabase.from('profiles').update({
         'user_type': 'Priority',
       }).eq('id', userId);
 
-      _showMessage('Priority membership renewed.');
+      if (mounted) {
+        setState(() {
+          _isCancelling = false;
+          _priorityUntil = newExpiry;
+        });
+      }
+
+      _showMessage('Priority membership renewed until $newExpiryText.');
     } catch (error) {
       _showMessage('Failed to renew membership: $error', isError: true);
     } finally {

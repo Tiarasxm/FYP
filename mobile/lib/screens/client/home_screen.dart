@@ -46,7 +46,6 @@ class _HomeScreenState extends State<HomeScreen> {
   int _heartRate = 0;
   DateTime? _heartRateMeasuredAt;
   int _kcalBurned = 0;
-  final int _kcalGoal = 500;
   double _todayVolumeKg = 0;
 
   final List<MenuItem> _homeMenu = const [
@@ -738,7 +737,6 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(width: 14),
               CalorieRing(
                 value: _kcalBurned,
-                goal: _kcalGoal,
               ),
             ],
           ),

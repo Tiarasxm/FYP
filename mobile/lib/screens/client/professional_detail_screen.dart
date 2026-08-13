@@ -186,7 +186,7 @@ class _ProfessionalDetailScreenState extends State<ProfessionalDetailScreen> {
       final data = await Supabase.instance.client
           .from('free_plans')
           .select(
-            'free_plan_id, plan_name, duration_weeks, tag1, tag2, tag3, visibility, status',
+            'free_plan_id, plan_name, duration_weeks, tag1, tag2, tag3, visibility, status, fitness_professional(display_name, profiles!inner(full_name, avatar_url))',
           )
           .eq('professional_id', profId)
           .ilike('visibility', 'public')
@@ -421,6 +421,8 @@ class _ProfessionalDetailScreenState extends State<ProfessionalDetailScreen> {
               style: const TextStyle(
                   fontSize: 12, color: AppColors.textSecondary),
             ),
+            const SizedBox(height: 8),
+            _planCreatorRow(plan),
             const SizedBox(height: 10),
             Wrap(
               spacing: 8,
@@ -430,6 +432,65 @@ class _ProfessionalDetailScreenState extends State<ProfessionalDetailScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _planCreatorRow(Map<String, dynamic> plan) {
+    final profData = plan['fitness_professional'];
+    String? name;
+    String? avatarUrl;
+
+    if (profData is Map) {
+      final displayName = profData['display_name']?.toString().trim();
+      final profiles = profData['profiles'];
+      if (profiles is Map) {
+        final fullName = profiles['full_name']?.toString().trim();
+        avatarUrl = profiles['avatar_url']?.toString().trim();
+        if (displayName != null && displayName.isNotEmpty) {
+          name = displayName;
+        } else if (fullName != null && fullName.isNotEmpty) {
+          name = fullName;
+        }
+      }
+    }
+
+    if (name == null || name.isEmpty) {
+      name = 'ShapeRush';
+    }
+
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 10,
+          backgroundColor: AppColors.cardMuted,
+          backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty
+              ? NetworkImage(avatarUrl)
+              : null,
+          child: avatarUrl == null || avatarUrl.isEmpty
+              ? Text(
+                  name[0].toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textSecondary,
+                  ),
+                )
+              : null,
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
