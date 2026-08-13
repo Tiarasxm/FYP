@@ -300,6 +300,17 @@ class _ExerciseLibraryState extends State<ExerciseLibrary> {
     }
   }
 
+  Future<void> _openExerciseDetail(_ExerciseItem exercise) async {
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return _ExerciseDetailSheet(exercise: exercise);
+      },
+    );
+  }
+
   Future<void> _openEditExercise(_ExerciseItem exercise) async {
     if (exercise.isUsed) {
       _showMessage(
@@ -581,6 +592,9 @@ class _ExerciseLibraryState extends State<ExerciseLibrary> {
 
                                 return _ExerciseCard(
                                   exercise: exercise,
+                                  onTap: () {
+                                    _openExerciseDetail(exercise);
+                                  },
                                   onEdit: () {
                                     _openEditExercise(exercise);
                                   },
@@ -1098,95 +1112,270 @@ class _FilterButton extends StatelessWidget {
 
 class _ExerciseCard extends StatelessWidget {
   final _ExerciseItem exercise;
+  final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   const _ExerciseCard({
     required this.exercise,
+    required this.onTap,
     required this.onEdit,
     required this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(
-        minHeight: 64,
-      ),
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-      decoration: BoxDecoration(
-        color: AppColors.pageBg,
+    return Material(
+      color: AppColors.pageBg,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(10),
+        child: Container(
+          constraints: const BoxConstraints(
+            minHeight: 64,
+          ),
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.fitness_center,
+                  size: 18,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      exercise.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      exercise.isUsed
+                          ? '${exercise.muscleGroup} • ${exercise.equipment} • Used'
+                          : '${exercise.muscleGroup} • ${exercise.equipment}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: exercise.isUsed
+                            ? Colors.orange.shade700
+                            : AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: onEdit,
+                icon: Icon(
+                  Icons.edit_outlined,
+                  size: 20,
+                  color: exercise.isUsed
+                      ? AppColors.border
+                      : AppColors.primary,
+                ),
+              ),
+              IconButton(
+                onPressed: onDelete,
+                icon: Icon(
+                  Icons.delete_outline,
+                  size: 20,
+                  color: exercise.isUsed ? AppColors.border : Colors.redAccent,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
+    );
+  }
+}
+
+class _ExerciseDetailSheet extends StatelessWidget {
+  final _ExerciseItem exercise;
+
+  const _ExerciseDetailSheet({required this.exercise});
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              Icons.fitness_center,
-              size: 18,
-              color: AppColors.textPrimary,
+          SizedBox(
+            width: 110,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
             ),
           ),
-          const SizedBox(width: 12),
           Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Center(
+        child: Container(
+          width: 430,
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.85,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(28),
+            ),
+          ),
+          child: SafeArea(
+            top: false,
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  exercise.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
+                const SizedBox(height: 10),
+                Container(
+                  width: 34,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(20),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  exercise.isUsed
-                      ? '${exercise.muscleGroup} • ${exercise.equipment} • Used'
-                      : '${exercise.muscleGroup} • ${exercise.equipment}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: exercise.isUsed
-                        ? Colors.orange.shade700
-                        : AppColors.textSecondary,
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 40),
+                      const Expanded(
+                        child: Center(
+                          child: Text(
+                            'Exercise Details',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 40,
+                        height: 40,
+                        child: IconButton(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                          },
+                          icon: const Icon(
+                            Icons.close,
+                            size: 24,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Divider(
+                  height: 1,
+                  color: AppColors.border,
+                ),
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _detailRow('Name', exercise.name),
+                        _detailRow('Muscle Group', exercise.muscleGroup),
+                        _detailRow('Equipment', exercise.equipment),
+                        _detailRow(
+                          'Rep Range',
+                          exercise.repMin != null && exercise.repMax != null
+                              ? '${exercise.repMin} - ${exercise.repMax}'
+                              : (exercise.repMin?.toString() ?? '-'),
+                        ),
+                        _detailRow(
+                          'Rest Seconds',
+                          exercise.restSec?.toString() ?? '-',
+                        ),
+                        _detailRow(
+                          'Instructions',
+                          exercise.instructions?.isNotEmpty == true
+                              ? exercise.instructions!
+                              : '-',
+                        ),
+                        if (exercise.isUsed) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.shade50,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              'This exercise is used in a plan or workout history. It cannot be edited or deleted.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.orange.shade700,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          IconButton(
-            onPressed: onEdit,
-            icon: Icon(
-              Icons.edit_outlined,
-              size: 20,
-              color: exercise.isUsed
-                  ? AppColors.border
-                  : AppColors.primary,
-            ),
-          ),
-          IconButton(
-            onPressed: onDelete,
-            icon: Icon(
-              Icons.delete_outline,
-              size: 20,
-              color: exercise.isUsed ? AppColors.border : Colors.redAccent,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

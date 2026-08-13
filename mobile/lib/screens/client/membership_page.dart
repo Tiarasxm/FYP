@@ -303,6 +303,55 @@ class _MembershipPageState extends State<MembershipPage> {
     }
   }
 
+  Future<void> _renewPriority() async {
+    if (isUpdating) return;
+
+    final userId = supabase.auth.currentUser?.id;
+
+    if (userId == null) {
+      _showMessage('User is not signed in.', isError: true);
+      return;
+    }
+
+    final confirmed = await _showConfirmDialog(
+      title: 'Renew Priority',
+      message:
+          'Renewing will start a new 30-day Priority period from today. Do you want to continue?',
+      confirmText: 'Renew',
+    );
+
+    if (!confirmed) return;
+
+    setState(() {
+      isUpdating = true;
+    });
+
+    try {
+      final now = DateTime.now();
+
+      await supabase.from('priority_user').upsert({
+        'profile_id': userId,
+        'subscribed_at': now.toIso8601String(),
+        'expires_at': null,
+      });
+
+      await supabase.from('profiles').update({
+        'user_type': 'Priority',
+      }).eq('id', userId);
+
+      _showMessage('Priority membership renewed.');
+    } catch (error) {
+      _showMessage('Failed to renew membership: $error', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          isUpdating = false;
+        });
+      }
+      _loadMembership();
+    }
+  }
+
   Future<void> _cancelSubscription() async {
     if (isUpdating) return;
 
@@ -431,15 +480,15 @@ class _MembershipPageState extends State<MembershipPage> {
                           : null,
                       buttonText: currentPlan == 'priority'
                           ? (_isCancelling
-                              ? 'Downgrade scheduled'
+                              ? 'Renew Priority'
                               : 'Cancel Subscription')
                           : 'Upgrade to Priority',
                       isUpdating: isUpdating,
-                      onPressed: _isCancelling
-                          ? null
-                          : (currentPlan == 'priority'
-                              ? _cancelSubscription
-                              : _upgradeToPriority),
+                      onPressed: currentPlan == 'priority'
+                          ? (_isCancelling
+                              ? _renewPriority
+                              : _cancelSubscription)
+                          : _upgradeToPriority,
                     ),
                   ],
                 ),

@@ -23,6 +23,7 @@ class _ProfessionalMessagesState extends State<ProfessionalMessages> {
   bool _loading = true;
 
   RealtimeChannel? _profilesChannel;
+  RealtimeChannel? _messagesChannel;
 
   final List<String> _filterOptions = ['All', 'New', 'Consult', 'Follow-up', 'Urgent', 'Weight Loss'];
 
@@ -31,6 +32,7 @@ class _ProfessionalMessagesState extends State<ProfessionalMessages> {
     super.initState();
     _loadRooms();
     _subscribeToProfileChanges();
+    _subscribeToNewMessages();
   }
 
   @override
@@ -38,7 +40,24 @@ class _ProfessionalMessagesState extends State<ProfessionalMessages> {
     if (_profilesChannel != null) {
       Supabase.instance.client.removeChannel(_profilesChannel!);
     }
+    if (_messagesChannel != null) {
+      Supabase.instance.client.removeChannel(_messagesChannel!);
+    }
     super.dispose();
+  }
+
+  void _subscribeToNewMessages() {
+    _messagesChannel = Supabase.instance.client
+        .channel('chat_messages_pro_list')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'chat_messages',
+          callback: (payload) {
+            _loadRooms();
+          },
+        )
+        .subscribe();
   }
 
   void _subscribeToProfileChanges() {

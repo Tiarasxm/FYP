@@ -22,11 +22,35 @@ class _ChatListScreenState extends State<ChatListScreen> {
   bool _loading = true;
 
   final Map<String, String?> _avatarUrlsByProfileId = {};
+  RealtimeChannel? _messagesChannel;
 
   @override
   void initState() {
     super.initState();
     _loadRooms();
+    _subscribeToNewMessages();
+  }
+
+  @override
+  void dispose() {
+    if (_messagesChannel != null) {
+      Supabase.instance.client.removeChannel(_messagesChannel!);
+    }
+    super.dispose();
+  }
+
+  void _subscribeToNewMessages() {
+    _messagesChannel = Supabase.instance.client
+        .channel('chat_messages_client_list')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'chat_messages',
+          callback: (payload) {
+            _loadRooms();
+          },
+        )
+        .subscribe();
   }
 
   Future<void> _loadRooms() async {

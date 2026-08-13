@@ -183,6 +183,8 @@ class _FeedbackPageState extends State<FeedbackPage> {
       });
 
       _showMessage("Feedback submitted successfully.");
+
+      Navigator.pop(context);
     } catch (error) {
       _showMessage("Failed to submit feedback: $error", isError: true);
     } finally {
