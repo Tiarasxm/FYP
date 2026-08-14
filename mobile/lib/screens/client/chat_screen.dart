@@ -381,9 +381,8 @@ class _ChatScreenState extends State<ChatScreen> {
           _avatar(avatarUrl, radius: 14),
           const SizedBox(width: 8),
         ],
-        Flexible(
-          child: Container(
-            width: 260,
+        Container(
+          width: 260,
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: AppColors.cardMuted,
@@ -476,7 +475,6 @@ class _ChatScreenState extends State<ChatScreen> {
               ],
             ),
           ),
-        ),
       ],
     );
   }

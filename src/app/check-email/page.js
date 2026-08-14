@@ -1,20 +1,61 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 import Navbar from "@/app/components/Navbar";
 import Footer from "@/app/components/Footer";
 
 function CheckEmailContent() {
   const searchParams = useSearchParams();
   const email = searchParams.get("email") || "your email";
+  const [status, setStatus] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleResend() {
+    setLoading(true);
+    setStatus("");
+
+    const { error } = await supabase.auth.resend({
+      email,
+      type: "signup",
+      options: {
+        emailRedirectTo: `${window.location.origin}/welcome`,
+      },
+    });
+
+    setLoading(false);
+
+    if (error) {
+      setStatus(`Error: ${error.message}`);
+    } else {
+      setStatus("Confirmation email resent. Check your inbox and spam folder.");
+    }
+  }
 
   return (
-    <p className="mt-5 text-[16px] leading-7 text-black">
-      To keep a trusted and safe community, we&apos;ve sent an email to{" "}
-      <span className="font-bold">{email}</span> for verification,
-      you&apos;ll only do this once.
-    </p>
+    <div className="mt-5">
+      <p className="text-[16px] leading-7 text-black">
+        To keep a trusted and safe community, we&apos;ve sent an email to{" "}
+        <span className="font-bold">{email}</span> for verification,
+        you&apos;ll only do this once.
+      </p>
+
+      <div className="mt-6">
+        <button
+          type="button"
+          onClick={handleResend}
+          disabled={loading}
+          className="text-[14px] font-semibold text-[#6c5cff] hover:text-[#5a4cd9] disabled:opacity-50"
+        >
+          {loading ? "Resending..." : "Resend confirmation email"}
+        </button>
+
+        {status && (
+          <p className="mt-3 text-[14px] text-gray-700">{status}</p>
+        )}
+      </div>
+    </div>
   );
 }
 

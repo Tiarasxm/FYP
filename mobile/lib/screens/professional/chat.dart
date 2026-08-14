@@ -815,6 +815,8 @@ class _PlanMessageBubble extends StatelessWidget {
     }
 
     return Row(
+      mainAxisAlignment:
+          isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (!isMe) ...[
@@ -838,9 +840,8 @@ class _PlanMessageBubble extends StatelessWidget {
           ),
           const SizedBox(width: 8),
         ],
-        Flexible(
-          child: Container(
-            width: 260,
+        Container(
+          width: 260,
             margin: const EdgeInsets.only(bottom: 14),
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -929,7 +930,6 @@ class _PlanMessageBubble extends StatelessWidget {
               ],
             ),
           ),
-        ),
       ],
     );
   }
