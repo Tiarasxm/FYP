@@ -104,18 +104,23 @@ export default function ProfilePage() {
     setSuccessMessage("");
     setErrorMessage("");
 
+    const updates = {
+      full_name: fullName.trim(),
+      gender,
+      date_of_birth: dateOfBirth || null,
+      is_private: isPrivate,
+    };
+
+    if (!isFitnessProfessional) {
+      updates.weight_kg = weightKg === "" ? null : Number(weightKg);
+      updates.height_cm = heightCm === "" ? null : Number(heightCm);
+      updates.activity_level = activityLevel;
+      updates.fitness_goal = fitnessGoal;
+    }
+
     const { error } = await supabase
       .from("profiles")
-      .update({
-        full_name: fullName.trim(),
-        gender,
-        date_of_birth: dateOfBirth || null,
-        weight_kg: weightKg === "" ? null : Number(weightKg),
-        height_cm: heightCm === "" ? null : Number(heightCm),
-        activity_level: activityLevel,
-        fitness_goal: fitnessGoal,
-        is_private: isPrivate,
-      })
+      .update(updates)
       .eq("id", userId);
 
     if (error) {
@@ -129,6 +134,8 @@ export default function ProfilePage() {
   }
 
   const avatarLetter = fullName.trim() ? fullName.trim()[0].toUpperCase() : "?";
+  const isFitnessProfessional =
+    userType.trim().toLowerCase() === "fitness professional";
 
   if (loading) {
     return (
@@ -222,55 +229,59 @@ export default function ProfilePage() {
                 />
               </Field>
 
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Weight (kg)">
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={weightKg}
-                    onChange={(event) => setWeightKg(event.target.value)}
-                    className={inputClass}
-                  />
-                </Field>
+              {!isFitnessProfessional && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Field label="Weight (kg)">
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={weightKg}
+                        onChange={(event) => setWeightKg(event.target.value)}
+                        className={inputClass}
+                      />
+                    </Field>
 
-                <Field label="Height (cm)">
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={heightCm}
-                    onChange={(event) => setHeightCm(event.target.value)}
-                    className={inputClass}
-                  />
-                </Field>
-              </div>
+                    <Field label="Height (cm)">
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={heightCm}
+                        onChange={(event) => setHeightCm(event.target.value)}
+                        className={inputClass}
+                      />
+                    </Field>
+                  </div>
 
-              <Field label="Activity Level">
-                <select
-                  value={activityLevel}
-                  onChange={(event) => setActivityLevel(event.target.value)}
-                  className={inputClass}
-                >
-                  {activityLevelOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+                  <Field label="Activity Level">
+                    <select
+                      value={activityLevel}
+                      onChange={(event) => setActivityLevel(event.target.value)}
+                      className={inputClass}
+                    >
+                      {activityLevelOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
 
-              <Field label="Fitness Goal">
-                <select
-                  value={fitnessGoal}
-                  onChange={(event) => setFitnessGoal(event.target.value)}
-                  className={inputClass}
-                >
-                  {fitnessGoalOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+                  <Field label="Fitness Goal">
+                    <select
+                      value={fitnessGoal}
+                      onChange={(event) => setFitnessGoal(event.target.value)}
+                      className={inputClass}
+                    >
+                      {fitnessGoalOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </>
+              )}
 
               <label className="flex items-center gap-3 text-[14px] text-gray-700">
                 <input
@@ -290,6 +301,14 @@ export default function ProfilePage() {
                 {saving ? "Saving..." : "Save Changes"}
               </button>
             </form>
+
+            {isFitnessProfessional && (
+              <p className="mt-5 text-[12px] text-gray-500">
+                Your professional details — display name, bio, experience,
+                specialisations and certificate — are managed in the
+                ShapeRush app.
+              </p>
+            )}
           </div>
         </div>
       </section>
