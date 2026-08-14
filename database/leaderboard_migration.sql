@@ -47,6 +47,8 @@ grant execute on function public.set_steps_leaderboard_visible(boolean)
 to authenticated;
 
 -- 4. RPC: weekly steps leaderboard (includes avatar_url)
+drop function if exists public.get_steps_leaderboard(date, date);
+
 create or replace function public.get_steps_leaderboard(
   p_start_date date,
   p_end_date date
