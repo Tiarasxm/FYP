@@ -1,7 +1,4 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_theme.dart';
 
@@ -18,10 +15,6 @@ class _FeedbackPageState extends State<FeedbackPage> {
   bool isSubmitting = false;
 
   final TextEditingController feedbackController = TextEditingController();
-  final ImagePicker picker = ImagePicker();
-
-  XFile? selectedImage;
-  Uint8List? selectedImageBytes;
 
   final SupabaseClient supabase = Supabase.instance.client;
 
@@ -40,89 +33,6 @@ class _FeedbackPageState extends State<FeedbackPage> {
         backgroundColor: isError ? Colors.redAccent : null,
       ),
     );
-  }
-
-  String _safeImageExtension(XFile image) {
-    final name = image.name.toLowerCase();
-    final path = image.path.toLowerCase();
-
-    String extension = 'jpg';
-
-    if (name.contains('.')) {
-      extension = name.split('.').last;
-    } else if (path.contains('.')) {
-      extension = path.split('.').last;
-    }
-
-    if (extension == 'jpeg') return 'jpg';
-    if (extension == 'jpg') return 'jpg';
-    if (extension == 'png') return 'png';
-    if (extension == 'webp') return 'webp';
-    if (extension == 'gif') return 'gif';
-
-    return 'jpg';
-  }
-
-  String _contentTypeForExtension(String extension) {
-    if (extension == 'png') return 'image/png';
-    if (extension == 'webp') return 'image/webp';
-    if (extension == 'gif') return 'image/gif';
-
-    return 'image/jpeg';
-  }
-
-  Future<void> _pickImage() async {
-    if (isSubmitting) return;
-
-    try {
-      final image = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 80,
-        maxWidth: 1600,
-      );
-
-      if (image == null) return;
-
-      final bytes = await image.readAsBytes();
-
-      if (!mounted) return;
-
-      setState(() {
-        selectedImage = image;
-        selectedImageBytes = bytes;
-      });
-    } catch (error) {
-      _showMessage('Failed to select image: $error', isError: true);
-    }
-  }
-
-  void _removeImage() {
-    setState(() {
-      selectedImage = null;
-      selectedImageBytes = null;
-    });
-  }
-
-  Future<String?> _uploadFeedbackImage({
-    required String userId,
-    required XFile image,
-    required Uint8List bytes,
-  }) async {
-    final extension = _safeImageExtension(image);
-    final contentType = _contentTypeForExtension(extension);
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final filePath = '$userId/feedback_$timestamp.$extension';
-
-    await supabase.storage.from('feedback-media').uploadBinary(
-          filePath,
-          bytes,
-          fileOptions: FileOptions(
-            contentType: contentType,
-            upsert: false,
-          ),
-        );
-
-    return supabase.storage.from('feedback-media').getPublicUrl(filePath);
   }
 
   Future<void> submitFeedback() async {
@@ -151,22 +61,12 @@ class _FeedbackPageState extends State<FeedbackPage> {
         throw Exception('User is not signed in.');
       }
 
-      String? mediaUrl;
-
-      if (selectedImage != null && selectedImageBytes != null) {
-        mediaUrl = await _uploadFeedbackImage(
-          userId: userId,
-          image: selectedImage!,
-          bytes: selectedImageBytes!,
-        );
-      }
-
       await supabase.from('app_feedback').insert({
         'profile_id': userId,
         'rating': selectedRating,
         'feedback_text': feedbackText,
         'permission_to_publish': permissionToPublish,
-        'media_url': mediaUrl,
+        'media_url': null,
         'status': 'submitted',
         'created_at': DateTime.now().toUtc().toIso8601String(),
         'updated_at': DateTime.now().toUtc().toIso8601String(),
@@ -177,8 +77,6 @@ class _FeedbackPageState extends State<FeedbackPage> {
       setState(() {
         selectedRating = 0;
         permissionToPublish = false;
-        selectedImage = null;
-        selectedImageBytes = null;
         feedbackController.clear();
       });
 
@@ -361,34 +259,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      "3. Add Media",
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      "(optional)",
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _mediaPicker(),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 12),
-
-              _FeedbackSection(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "4. Permission to publish",
+                      "3. Permission to publish",
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -460,82 +331,6 @@ class _FeedbackPageState extends State<FeedbackPage> {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _mediaPicker() {
-    if (selectedImageBytes != null) {
-      return Stack(
-        children: [
-          Container(
-            width: double.infinity,
-            height: 180,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: AppColors.border,
-              ),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Image.memory(
-              selectedImageBytes!,
-              fit: BoxFit.contain,
-            ),
-          ),
-          Positioned(
-            right: 8,
-            top: 8,
-            child: InkWell(
-              onTap: isSubmitting ? null : _removeImage,
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.55),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.close,
-                  color: Colors.white,
-                  size: 18,
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: isSubmitting ? null : _pickImage,
-      child: Container(
-        width: double.infinity,
-        height: 100,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: AppColors.border,
-          ),
-        ),
-        child: const Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.image_outlined,
-              color: AppColors.textMuted,
-            ),
-            SizedBox(height: 8),
-            Text(
-              "Choose an image to upload",
-              style: TextStyle(fontSize: 10),
-            ),
-          ],
         ),
       ),
     );
