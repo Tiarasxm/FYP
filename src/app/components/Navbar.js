@@ -78,7 +78,9 @@ export default function Navbar() {
     router.push("/");
   }
 
-  const isAdmin = userType.trim().toLowerCase() === "admin";
+  const normalizedUserType = userType.trim().toLowerCase();
+  const isAdmin = normalizedUserType === "admin";
+  const isFitnessProfessional = normalizedUserType === "fitness professional";
 
   const displayName = fullName.trim() || email.split("@")[0] || "User";
   const avatarLetter = displayName[0].toUpperCase();
@@ -140,6 +142,23 @@ export default function Navbar() {
                   >
                     Admin Dashboard
                   </Link>
+                ) : isFitnessProfessional ? (
+                  <>
+                    <Link
+                      href="/profile"
+                      onClick={() => setMenuOpen(false)}
+                      className="block px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-50"
+                    >
+                      Profile
+                    </Link>
+                    <Link
+                      href="/welcome"
+                      onClick={() => setMenuOpen(false)}
+                      className="block px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-50"
+                    >
+                      Download
+                    </Link>
+                  </>
                 ) : (
                   <>
                     <Link
