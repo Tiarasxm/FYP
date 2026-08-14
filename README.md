@@ -1,6 +1,6 @@
 # ShapeRush
 
-ShapeRush is a fitness platform that connects users with fitness professionals and helps track workouts, meals, water, and health metrics. It consists of a Next.js website for account management and administration, and a Flutter mobile app for clients and professionals.
+ShapeRush is a fitness platform that connects users with fitness professionals and helps track workouts, meals, water, and health metrics. It consists of a Next.js website for account management and administration, and a Flutter mobile app for users(clients) and professionals.
 
 ## Overview
 
