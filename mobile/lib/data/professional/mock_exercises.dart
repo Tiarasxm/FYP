@@ -1,0 +1,32 @@
+final List<String> muscleGroups = [
+  'All',
+  'Abdominals',
+  'Abductors',
+  'Adductors',
+  'Biceps',
+  'Calves',
+  'Chest',
+  'Forearms',
+  'Full Body',
+  'Glutes',
+  'Hamstrings',
+  'Lats',
+  'Lower Back',
+  'Neck',
+  'Quadriceps',
+  'Shoulders',
+  'Traps',
+  'Triceps',
+  'Upper Back',
+];
+
+final List<String> equipmentTypes = [
+  'All',
+  'None',
+  'Barbell',
+  'Dumbell',
+  'Kettlebell',
+  'Plate',
+  'Resistance Band',
+  'Suspension Band',
+];

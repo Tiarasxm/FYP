@@ -1,0 +1,694 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../models/client/exercise.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/client/sub_screen_scaffold.dart';
+import 'workout_complete_screen.dart';
+
+class ActiveWorkoutScreen extends StatefulWidget {
+  final String planId;
+  final String planTitle;
+  final String planDayId;
+  final String dayLabel;
+  final bool isPersonalized;
+
+  const ActiveWorkoutScreen({
+    super.key,
+    required this.planId,
+    required this.planTitle,
+    required this.planDayId,
+    required this.dayLabel,
+    this.isPersonalized = false,
+  });
+
+  @override
+  State<ActiveWorkoutScreen> createState() => _ActiveWorkoutScreenState();
+}
+
+class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
+  bool _isLoading = true;
+  bool _isFinishing = false;
+
+  final DateTime _startedAt = DateTime.now();
+  Timer? _ticker;
+
+  Timer? _restTimer;
+  int _restRemaining = 0;
+  int _restTotal = 0;
+
+  List<Map<String, dynamic>> _exercises = [];
+  late Map<int, List<ExerciseSet>> _sets;
+
+  @override
+  void initState() {
+    super.initState();
+    _sets = {};
+    _loadExercises();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    _restTimer?.cancel();
+    super.dispose();
+  }
+
+  int? _parseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    return int.tryParse(value.toString());
+  }
+
+  Future<void> _loadExercises() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final response = widget.isPersonalized
+          ? await Supabase.instance.client
+              .from('personalized_plan_exercises')
+              .select(
+                'personalized_plan_exercise_id, exercise_id, sets, rep_min, rep_max, rest_sec, order_index, exercise_library(name, muscle_group, instructions)',
+              )
+              .eq('personalized_plan_day_id', widget.planDayId)
+              .order('order_index')
+          : await Supabase.instance.client
+              .from('plan_exercises')
+              .select(
+                'plan_exercise_id, exercise_id, sets, rep_min, rep_max, rest_sec, order_index, exercise_library(name, muscle_group, instructions)',
+              )
+              .eq('plan_day_id', widget.planDayId)
+              .order('order_index');
+
+      final rows = List<Map<String, dynamic>>.from(response as List);
+
+      final newSets = <int, List<ExerciseSet>>{};
+
+      for (var i = 0; i < rows.length; i++) {
+        final setCount = _parseInt(rows[i]['sets']) ?? 3;
+        final defaultReps = _defaultReps(rows[i]);
+
+        newSets[i] = List.generate(
+          setCount,
+          (_) => ExerciseSet(reps: defaultReps),
+        );
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _exercises = rows;
+        _sets = newSets;
+      });
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load workout: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  String _defaultReps(Map<String, dynamic> exercise) {
+    final repMin = _parseInt(exercise['rep_min']);
+    final repMax = _parseInt(exercise['rep_max']);
+
+    if (repMax != null) return '$repMax';
+    if (repMin != null) return '$repMin';
+
+    return '12';
+  }
+
+  String _exerciseName(Map<String, dynamic> exercise) {
+    final library = exercise['exercise_library'] as Map<String, dynamic>?;
+    return library?['name']?.toString() ?? 'Exercise';
+  }
+
+  String _exerciseInstructions(Map<String, dynamic> exercise) {
+    final library = exercise['exercise_library'] as Map<String, dynamic>?;
+    final instructions = library?['instructions']?.toString().trim() ?? '';
+    return instructions.isNotEmpty ? instructions : 'No instructions available for this exercise.';
+  }
+
+  void _showExerciseInstructions(Map<String, dynamic> exercise) {
+    final name = _exerciseName(exercise);
+    final instructions = _exerciseInstructions(exercise);
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Text(
+          name,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        content: SingleChildScrollView(
+          child: Text(
+            instructions,
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _exerciseMeta(Map<String, dynamic> exercise) {
+    final sets = _parseInt(exercise['sets']) ?? 0;
+    final repMin = _parseInt(exercise['rep_min']);
+    final repMax = _parseInt(exercise['rep_max']);
+    final restSec = _parseInt(exercise['rest_sec']) ?? 60;
+
+    String repsText;
+
+    if (repMin == null && repMax == null) {
+      repsText = '- reps';
+    } else if (repMin != null && (repMax == null || repMin == repMax)) {
+      repsText = '$repMin reps';
+    } else {
+      repsText = '${repMin ?? '-'}-${repMax ?? '-'} reps';
+    }
+
+    return '$sets × $repsText • ${restSec}s rest';
+  }
+
+  String _elapsedText() {
+    final elapsed = DateTime.now().difference(_startedAt);
+    final minutes = elapsed.inMinutes;
+    final seconds = elapsed.inSeconds % 60;
+
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  int get _completedSetCount {
+    int count = 0;
+
+    for (final sets in _sets.values) {
+      count += sets.where((set) => set.done).length;
+    }
+
+    return count;
+  }
+
+  double get _totalVolume {
+    double total = 0;
+
+    for (final sets in _sets.values) {
+      for (final set in sets) {
+        if (!set.done) continue;
+
+        final kg = double.tryParse(set.kg.trim()) ?? 0;
+        final reps = int.tryParse(set.reps.trim()) ?? 0;
+
+        total += kg * reps;
+      }
+    }
+
+    return total;
+  }
+
+  void _startRestTimer(int restSec) {
+    _restTimer?.cancel();
+
+    if (restSec <= 0) return;
+
+    setState(() {
+      _restRemaining = restSec;
+      _restTotal = restSec;
+    });
+
+    _restTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      setState(() {
+        _restRemaining--;
+      });
+
+      if (_restRemaining <= 0) {
+        timer.cancel();
+        setState(() {
+          _restRemaining = 0;
+          _restTotal = 0;
+        });
+      }
+    });
+  }
+
+  void _skipRestTimer() {
+    _restTimer?.cancel();
+    setState(() {
+      _restRemaining = 0;
+      _restTotal = 0;
+    });
+  }
+
+  int? _exerciseRestSec(int exerciseIndex) {
+    if (exerciseIndex < 0 || exerciseIndex >= _exercises.length) return null;
+    return _parseInt(_exercises[exerciseIndex]['rest_sec']);
+  }
+
+  String _formatRestTime(int seconds) {
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    if (m <= 0) return '${s}s';
+    return '${m}m ${s.toString().padLeft(2, '0')}s';
+  }
+
+  Future<void> _finishWorkout() async {
+    if (_isFinishing) return;
+
+    if (_completedSetCount == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please complete at least one set.')),
+      );
+      return;
+    }
+
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You must be signed in.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isFinishing = true;
+    });
+
+    try {
+      final durationSeconds = DateTime.now().difference(_startedAt).inSeconds;
+      final durationMin = durationSeconds <= 0 ? 1 : (durationSeconds / 60).ceil();
+
+      final logRow = await Supabase.instance.client
+          .from('workout_logs')
+          .insert({
+            'profile_id': userId,
+            'free_plan_id': widget.isPersonalized ? null : widget.planId,
+            'personalized_plan_id': widget.isPersonalized ? widget.planId : null,
+            'plan_day_id': widget.planDayId,
+            'performed_at': DateTime.now().toUtc().toIso8601String(),
+            'duration_min': durationMin,
+            'source': 'active_plan',
+          })
+          .select('workout_log_id')
+          .single();
+
+      final workoutLogId = logRow['workout_log_id']?.toString();
+
+      if (workoutLogId == null || workoutLogId.isEmpty) {
+        throw Exception('Missing workout_log_id.');
+      }
+
+      final exerciseRows = <Map<String, dynamic>>[];
+
+      for (var exerciseIndex = 0; exerciseIndex < _exercises.length; exerciseIndex++) {
+        final exercise = _exercises[exerciseIndex];
+        final exerciseId = exercise['exercise_id']?.toString();
+        final sets = _sets[exerciseIndex] ?? [];
+
+        if (exerciseId == null || exerciseId.isEmpty) continue;
+
+        for (var setIndex = 0; setIndex < sets.length; setIndex++) {
+          final set = sets[setIndex];
+
+          if (!set.done) continue;
+
+          final reps = int.tryParse(set.reps.trim());
+          final weight = double.tryParse(set.kg.trim());
+
+          exerciseRows.add({
+            'workout_log_id': workoutLogId,
+            'exercise_id': exerciseId,
+            'sets': setIndex + 1,
+            'reps': reps ?? 0,
+            'weight_kg': weight ?? 0,
+          });
+        }
+      }
+
+      if (exerciseRows.isNotEmpty) {
+        await Supabase.instance.client
+            .from('workout_exercises')
+            .insert(exerciseRows);
+      }
+
+      if (!mounted) return;
+
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => WorkoutCompleteScreen(
+            dayLabel: widget.dayLabel,
+            durationSeconds: durationSeconds,
+            totalVolumeKg: _totalVolume,
+            totalSets: _completedSetCount,
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to finish workout: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isFinishing = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SubScreenScaffold(
+      title: widget.dayLabel,
+      trailing: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: AppColors.primarySoft,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          _elapsedText(),
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: AppColors.primary,
+          ),
+        ),
+      ),
+      header: _restRemaining > 0
+          ? Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _restTimerBanner(),
+            )
+          : null,
+      bottomButton: PrimaryButton(
+        label: _isFinishing ? 'Saving...' : 'Finish Workout',
+        onPressed: _isFinishing ? null : _finishWorkout,
+      ),
+      children: [
+        if (_isLoading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 40),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (_exercises.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 40),
+            child: Center(
+              child: Text(
+                'No exercises in this workout.',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+            ),
+          )
+        else
+          for (var i = 0; i < _exercises.length; i++) ...[
+            _exerciseCard(i),
+            if (i < _exercises.length - 1) const SizedBox(height: 14),
+          ],
+      ],
+    );
+  }
+
+  Widget _exerciseCard(int index) {
+    final exercise = _exercises[index];
+    final sets = _sets[index] ?? [];
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.cardMuted,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.fitness_center,
+                  size: 18,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _exerciseName(exercise),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      _exerciseMeta(exercise),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              GestureDetector(
+                onTap: () => _showExerciseInstructions(exercise),
+                child: const Icon(
+                  Icons.help_outline,
+                  size: 18,
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Row(
+            children: [
+              SizedBox(
+                width: 30,
+                child: Text('SET', style: _headerStyle),
+              ),
+              Expanded(child: Text('KG', style: _headerStyle)),
+              SizedBox(width: 10),
+              Expanded(child: Text('REPS', style: _headerStyle)),
+              SizedBox(width: 40),
+            ],
+          ),
+          const SizedBox(height: 6),
+          for (var s = 0; s < sets.length; s++) _setRow(sets[s], s, index),
+        ],
+      ),
+    );
+  }
+
+  static const _headerStyle = TextStyle(
+    fontSize: 10,
+    fontWeight: FontWeight.w600,
+    color: AppColors.textMuted,
+    letterSpacing: 0.5,
+  );
+
+  Widget _setRow(ExerciseSet set, int number, int exerciseIndex) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 30,
+            child: Text(
+              '${number + 1}',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: _setField(
+              initial: set.kg,
+              onChanged: (value) => set.kg = value,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _setField(
+              initial: set.reps,
+              onChanged: (value) => set.reps = value,
+            ),
+          ),
+          const SizedBox(width: 10),
+          GestureDetector(
+            onTap: () {
+              final wasDone = set.done;
+              setState(() => set.done = !set.done);
+              if (!wasDone && set.done) {
+                final restSec = _exerciseRestSec(exerciseIndex);
+                if (restSec != null && restSec > 0) {
+                  _startRestTimer(restSec);
+                }
+              }
+            },
+            child: Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                color: set.done ? AppColors.primary : Colors.transparent,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: set.done ? AppColors.primary : AppColors.textMuted,
+                  width: 2,
+                ),
+              ),
+              child: set.done
+                  ? const Icon(Icons.check, size: 16, color: Colors.white)
+                  : null,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _restTimerBanner() {
+    final progress = _restTotal > 0 ? _restRemaining / _restTotal : 0.0;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.timer, color: Colors.white, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Rest Timer',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  _formatRestTime(_restRemaining),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: SizedBox(
+              width: 60,
+              height: 6,
+              child: LinearProgressIndicator(
+                value: progress,
+                backgroundColor: Colors.white24,
+                valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: _skipRestTimer,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                'Skip',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _setField({
+    required String initial,
+    required ValueChanged<String> onChanged,
+  }) {
+    return SizedBox(
+      height: 36,
+      child: TextFormField(
+        initialValue: initial,
+        onChanged: onChanged,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        textAlign: TextAlign.center,
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        decoration: InputDecoration(
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(vertical: 8),
+          filled: true,
+          fillColor: AppColors.card,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide.none,
+          ),
+        ),
+      ),
+    );
+  }
+}
