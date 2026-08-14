@@ -82,66 +82,94 @@ class _CreatePlanState extends State<CreatePlan> {
 
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Center(
+      builder: (sheetContext) {
+        return SafeArea(
+          top: false,
           child: Container(
-            width: 430,
-            padding: const EdgeInsets.fromLTRB(18, 10, 18, 24),
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(sheetContext).size.height * 0.65,
+            ),
             decoration: const BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.vertical(
                 top: Radius.circular(28),
               ),
             ),
-            child: SafeArea(
-              top: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 34,
-                    height: 3,
-                    decoration: BoxDecoration(
-                      color: AppColors.border,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 10),
+
+                Container(
+                  width: 34,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Select Tag',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
+                ),
+
+                const SizedBox(height: 16),
+
+                const Text(
+                  'Select Tag',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
                   ),
-                  const SizedBox(height: 14),
-                  if (availableTags.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      child: Text(
-                        'No more tags available.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w600,
-                        ),
+                ),
+
+                const SizedBox(height: 10),
+
+                if (availableTags.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Text(
+                      'No more tags available.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
                       ),
-                    )
-                  else
-                    ...availableTags.map((tag) {
-                      return ListTile(
-                        title: Text(tag),
-                        onTap: () {
-                          setState(() {
-                            selectedTags.add(tag);
-                          });
-                          Navigator.pop(context);
-                        },
-                      );
-                    }),
-                ],
-              ),
+                    ),
+                  )
+                else
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+                      itemCount: availableTags.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 2),
+                      itemBuilder: (context, index) {
+                        final tag = availableTags[index];
+
+                        return ListTile(
+                          dense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 2,
+                          ),
+                          title: Text(
+                            tag,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          onTap: () {
+                            setState(() {
+                              selectedTags.add(tag);
+                            });
+                            Navigator.pop(sheetContext);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+              ],
             ),
           ),
         );
