@@ -179,6 +179,8 @@ to authenticated;
 --   - Caller must have steps_leaderboard_visible = true.
 --   - Result only includes users with steps_leaderboard_visible = true.
 --   - If caller is hidden, this function returns empty rows.
+drop function if exists public.get_steps_leaderboard(date, date);
+
 create or replace function public.get_steps_leaderboard(
   p_start_date date,
   p_end_date date
