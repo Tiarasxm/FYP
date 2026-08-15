@@ -25,11 +25,13 @@ class HealthService {
   static final List<HealthDataType> _dataTypes = [
     HealthDataType.STEPS,
     HealthDataType.HEART_RATE,
+    HealthDataType.RESTING_HEART_RATE,
     HealthDataType.TOTAL_CALORIES_BURNED,
     HealthDataType.ACTIVE_ENERGY_BURNED,
   ];
 
   static final List<HealthDataAccess> _permissions = [
+    HealthDataAccess.READ,
     HealthDataAccess.READ,
     HealthDataAccess.READ,
     HealthDataAccess.READ,
@@ -174,7 +176,7 @@ class HealthService {
 
     try {
       final heartRateData = await _health.getHealthDataFromTypes(
-        types: [HealthDataType.HEART_RATE],
+        types: [HealthDataType.HEART_RATE, HealthDataType.RESTING_HEART_RATE],
         startTime: dayStart,
         endTime: dayEnd,
       );

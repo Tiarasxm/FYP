@@ -685,13 +685,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _loadTodayHealthMetrics(String userId) async {
     final row = await HealthSyncService.fetchTodayMetrics(userId);
 
+    int hr = _parseInt(row?['heart_rate']) ?? 0;
+    if (hr == 0) {
+      final latestHr = await HealthSyncService.fetchLatestHeartRate(userId);
+      hr = latestHr ?? 0;
+    }
+
     if (!mounted) return;
 
     setState(() {
       _steps = _parseInt(row?['steps']) ?? 0;
-      _heartRate = _parseInt(row?['heart_rate']) ?? 0;
-      _heartRateMeasuredAt =
-          DateTime.tryParse(row?['heart_rate_measured_at']?.toString() ?? '');
+      _heartRate = hr;
+      _heartRateMeasuredAt = null;
       _kcalBurned = _parseDouble(row?['calories_burned'])?.round() ?? 0;
     });
   }
@@ -963,10 +968,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       label: 'Heart Rate',
                       value: '$_heartRate',
                       unit: 'bpm',
-                      subtitle: () {
-                        final relative = _relativeTimeText(_heartRateMeasuredAt);
-                        return relative == null ? null : '($relative)';
-                      }(),
                     ),
                     const SizedBox(height: 10),
                     _statTile(

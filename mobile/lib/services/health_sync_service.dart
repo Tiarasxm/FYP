@@ -122,6 +122,37 @@ class HealthSyncService {
     }
   }
 
+  /// Returns the most recent non-null heart rate from the last [days] days.
+  static Future<int?> fetchLatestHeartRate(String userId, {int days = 7}) async {
+    try {
+      final now = DateTime.now();
+      final start = now.subtract(Duration(days: days));
+      String fmt(DateTime d) =>
+          '${d.year.toString().padLeft(4, '0')}-'
+          '${d.month.toString().padLeft(2, '0')}-'
+          '${d.day.toString().padLeft(2, '0')}';
+
+      final client = Supabase.instance.client;
+      final response = await client
+          .from('daily_health_metrics')
+          .select('heart_rate')
+          .eq('profile_id', userId)
+          .gte('metric_date', fmt(start))
+          .lte('metric_date', fmt(now))
+          .not('heart_rate', 'is', null)
+          .order('metric_date', ascending: false)
+          .limit(1);
+
+      if (response is List && response.isNotEmpty) {
+        return (response.first['heart_rate'] as num?)?.toInt();
+      }
+      return null;
+    } catch (e) {
+      debugPrint('HealthSyncService.fetchLatestHeartRate error: $e');
+      return null;
+    }
+  }
+
   /// Reads `daily_health_metrics` rows between [start] and [end] (inclusive).
   static Future<List<Map<String, dynamic>>> fetchMetricsForRange(
     String userId,

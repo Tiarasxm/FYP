@@ -144,7 +144,7 @@ export default function WelcomePage() {
               <h2 className="mt-5 text-[22px] font-bold">Download APK</h2>
 
               <p className="mt-5 text-[14px] leading-6 text-gray-500">
-                Download the latest Android APK (v1.0.0) and install it
+                Download the latest Android APK (v1.0.0+1) and install it
                 manually.
               </p>
 
@@ -154,7 +154,7 @@ export default function WelcomePage() {
                 rel="noopener noreferrer"
                 className="mt-8 w-full h-[44px] bg-[#6c5cff] text-white rounded-lg text-[13px] font-semibold flex items-center justify-center gap-3 hover:bg-[#5b4bea]"
               >
-                Download APK v1.0.0
+                Download APK v1.0.0+1
                 <DownloadIcon />
               </a>
             </div>
